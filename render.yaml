@@ -1,0 +1,17 @@
+# Render Blueprint: one free web service that serves the page, the account API and the WebSocket on /ws.
+services:
+  - type: web
+    name: relikvie-arena
+    runtime: node
+    plan: free
+    region: frankfurt # closest to players in Czechia; cannot be changed after the service is created
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      # Postgres connection string (e.g. from a free Neon database). Without it accounts are lost on every restart.
+      - key: DATABASE_URL
+        sync: false
