@@ -16,7 +16,7 @@ const END_LINGER=12000;
 const MATCH_SECONDS=Number(process.env.MATCH_SECONDS)||0; // optional override of the 6-minute match, handy for testing
 
 const db=await openDB();
-const meta=createMeta(db);
+const meta=createMeta(db,{admins:process.env.ADMIN_NICKS||''});
 console.log('Úložiště:',db.kind);
 
 // ---------- HTTP ----------
@@ -50,9 +50,22 @@ async function api(req,res,p,url){
   if(p==='/api/market')return json(res,200,meta.market(prof,Object.fromEntries(url.searchParams)));
   if(p==='/api/guild'){const idx=presenceIndex();return json(res,200,meta.guildView(prof,id=>statusOf(idx,id)))}
   if(p==='/api/guilds')return json(res,200,{guilds:meta.guildList(url.searchParams.get('q'))});
+  if(p==='/api/report'&&req.method==='POST'){
+    if(limited(ip,'report',20,3600000))throw new HttpError(429,'Příliš mnoho nahlášení. Zkus to později.');
+    const r=meta.report(prof,body,chatContext(prof.id,body.target));
+    if(r.auto)for(const x of socials.get(r.target)||[])note(x,meta.muteText(meta.profById(r.target)),true);
+    return json(res,200,{ok:true});
+  }
+  if(p==='/api/mod'){
+    if(req.method!=='POST')return json(res,200,meta.modView(prof,Object.fromEntries(url.searchParams)));
+    const r=meta.modAction(prof,body);
+    if(r.notify)for(const x of socials.get(r.notify.pid)||[])note(x,r.notify.msg,true);
+    if(r.kick)kickPlayer(r.kick.pid,r.kick.msg);
+    return json(res,200,meta.modView(prof,{nick:body.lookup||''}));
+  }
   const m=p.match(/^\/api\/act\/(\w+)$/);
   if(m&&req.method==='POST'){
-    if(inMatch(prof.id)&&['equip','tree','cls','skin','prof','buildLoad','tactic'].includes(m[1]))throw new HttpError(409,'Během zápasu sestavu měnit nejde.');
+    if(inMatch(prof.id)&&['equip','tree','cls','skin','prof','buildLoad','tactic','masteryBranch'].includes(m[1]))throw new HttpError(409,'Během zápasu sestavu měnit nejde.');
     const gid=prof.guild,{notify,noteTo,...out}=meta.act(prof,m[1],body);
     if(notify)guildChanged([...notify,prof.id],gid,noteTo);
     return json(res,200,out);
@@ -91,7 +104,8 @@ function publicRooms(){
 function inMatch(pid){for(const r of rooms.values())if(r.match&&r.match.state!=='end')for(const c of r.clients.values())if(c.profile?.id===pid&&c.unitId)return true;return false}
 function newCode(){const A='ABCDEFGHJKLMNPQRSTUVWXYZ';let c;do{c=Array.from({length:4},()=>A[Math.floor(Math.random()*A.length)]).join('')}while(rooms.has(c));return c}
 function teamCounts(room){const n=[0,0];for(const c of room.clients.values())n[c.team]++;return n}
-const loadOf=c=>c.profile?meta.loadoutFor(c.profile,c.cls):null;
+// ranked matches cap ability mastery so rating depends on play, not on grinding
+const loadOf=c=>c.profile?meta.loadoutFor(c.profile,c.cls,c.room?.ranked?S.MASTERY.rankedCap:undefined):null;
 
 function lobbyMsg(room,c){
   return{type:'lobby',code:room.code,you:c.cid,host:room.host,state:room.state,diff:room.diff,mode:room.mode,map:room.map,boss:room.boss,solo:!!room.solo,mission:room.mission||null,
@@ -155,6 +169,7 @@ function onSocial(c,m){
       if(m.op==='accept'&&o)for(const x of socials.get(o.id)||[])send(x,{type:'note',msg:`${p.nick} přijal tvou žádost o přátelství.`});
       break}
     case 'say':{
+      if(chatBlocked(c))return;
       const text=S.cleanChat(m.text);if(!text)return;
       const o=m.ch==='dm'?meta.profById(m.to):null;
       if(m.ch==='dm'&&(!o||!meta.isFriend(p,o)))return note(c,'Soukromé zprávy jdou posílat jen přátelům.',true);
@@ -187,8 +202,24 @@ function onSocial(c,m){
       note(c,`Pozvánka odeslána hráči ${o.nick}.`);break}
   }
 }
+// ---------- moderation ----------
+// the reported player's recent messages: world chat, the room either of them is in, their guild, and private ones to the reporter
+function chatContext(reporter,target){
+  const o=meta.findPlayer(target),tid=o?.id;if(!tid)return[];
+  const out=[...worldLog.filter(m=>m.pid===tid)];
+  for(const r of rooms.values())if(r.chat)out.push(...r.chat.filter(m=>m.pid===tid).map(m=>({...m,ch:'room'})));
+  if(o.guild)out.push(...(guildLog.get(o.guild)||[]).filter(m=>m.pid===tid));
+  out.push(...(dmLog.get(dmKey(reporter,tid))||[]).filter(m=>m.pid===tid).map(m=>({...m,ch:'dm'})));
+  return out.sort((a,b)=>a.t-b.t).slice(-15);
+}
+// a banned player is disconnected everywhere: hub connection and game
+function kickPlayer(pid,msg){
+  for(const ws of wss.clients){const c=ws.client;if(!c||c.profile?.id!==pid)continue;send(c,{type:'error',msg});send(c,{type:'note',msg,bad:true});setTimeout(()=>{try{ws.close(4003,'ban')}catch{}},200)}
+}
+function chatBlocked(c){const until=c.profile&&meta.muted(c.profile);if(until){note(c,meta.muteText(c.profile),true);return true}return false}
 function roomSay(c,m){
   const room=c.room;if(!room||room.solo)return;
+  if(chatBlocked(c))return;
   const text=S.cleanChat(m.text);if(!text||!chatOk(c,text))return;
   const team=!!m.team&&S.MODES[room.mode].pvp;
   const msg={type:'chat',ch:'room',from:c.name,pid:c.profile?.id||null,tag:c.profile?meta.tagOf(c.profile.id):null,cid:c.cid,tm:c.team,team,text,t:Date.now()};
@@ -262,7 +293,7 @@ function finishMatch(room){
 
 wss.on('connection',(ws)=>{
   // a client is dropped after 10 s without a pong, so a short network hiccup on mobile does not kick the player
-  const c={ws,cid:nextCid++,name:'Host',cls:'striker',team:0,room:null,unitId:0,alive:true,missed:0,msgs:0,profile:null};
+  const c={ws,cid:nextCid++,name:'Host',cls:'striker',team:0,room:null,unitId:0,alive:true,missed:0,msgs:0,profile:null};ws.client=c;
   ws.on('pong',()=>c.alive=true);
   // an oversized or malformed frame raises an 'error' on the socket; without a handler it would take the whole server down
   ws.on('error',()=>{try{ws.terminate()}catch{}});

@@ -11,8 +11,10 @@ const LISTING_DAYS=7;
 export class HttpError extends Error{constructor(status,msg){super(msg);this.status=status}}
 const fail=(msg,status=400)=>{throw new HttpError(status,msg)};
 
-export function createMeta(db){
-  const doc=db.doc;doc.guilds??={};
+export function createMeta(db,{admins=''}={}){
+  const doc=db.doc;doc.guilds??={};doc.reports??={};doc.modlog??=[];
+  // moderators are named by nick in the ADMIN_NICKS environment variable, never stored in the data
+  const ADMINS=new Set(String(admins).split(',').map(s=>s.trim().toLowerCase()).filter(Boolean));
   const tokenIndex=new Map();
   for(const u of Object.values(doc.users))for(const t of u.tokens||[])tokenIndex.set(t,u.id);
 
@@ -29,6 +31,8 @@ export function createMeta(db){
     p.merchant??={day:null,offers:[],rerolled:false};p.tactic??='dodge';p.builds??=[];p.history??=[];
     p.ranked??={season:null,rating:D.RATING_START,games:0,wins:0,losses:0,peak:D.RATING_START};p.rankedPrev??=null;
     p.social??={friends:[],inReq:[],outReq:[],blocked:[]};
+    p.mod??={muteUntil:0,banUntil:0,warns:0,banNote:''};
+    p.essence??=0;p.frags??=0;p.crystals??={};p.mastery??={};
     p.guild??=null;p.guildInv??=[];p.guildWeek??=null;p.pass??={season:null,xp:0,claimed:[]};
     // a disbanded guild, or a membership that was removed while the save was elsewhere
     if(p.guild&&!isMember(guildById(p.guild),p.id))p.guild=null;
@@ -124,23 +128,97 @@ export function createMeta(db){
     const key=String(nick||'').trim().toLowerCase(),user=Object.hasOwn(doc.users,key)?doc.users[key]:null;
     const h=await hashPass(pass||'',user?.salt||'00');
     if(!user||!timingSafeEqual(Buffer.from(h,'hex'),Buffer.from(user.hash,'hex')))fail('Nesprávná přezdívka nebo heslo.',401);
-    return{token:issueToken(user),profile:view(doc.profiles[user.id])};
+    const p=migrate(doc.profiles[user.id]);if(banned(p))fail(banText(p),403);
+    return{token:issueToken(user),profile:view(p)};
+  }
+  // ---------- moderation ----------
+  const isAdmin=p=>!!p&&ADMINS.has(p.nick.toLowerCase());
+  const FOREVER=8.64e15;
+  const muted=p=>p&&migrate(p).mod.muteUntil>Date.now()?p.mod.muteUntil:0;
+  const banned=p=>p&&migrate(p).mod.banUntil>Date.now()?p.mod.banUntil:0;
+  const when=t=>t>=FOREVER?'natrvalo':'do '+new Date(t).toLocaleString('cs-CZ',{day:'numeric',month:'numeric',hour:'2-digit',minute:'2-digit',timeZone:'Europe/Prague'});
+  const banText=p=>`Účet je zablokovaný ${when(p.mod.banUntil)}.${p.mod.banNote?' Důvod: '+p.mod.banNote:''}`;
+  const muteText=p=>`Máš zákaz chatu ${when(p.mod.muteUntil)}.`;
+  function modlog(by,target,kind,detail){doc.modlog.unshift({t:Date.now(),by,target,kind,detail});doc.modlog.length=Math.min(doc.modlog.length,200)}
+  // ctx: recent messages of the reported player, collected by the server from its chat logs
+  function report(p,{target,reason,note},ctx=[]){
+    const o=profById(target)||profByNick(target);if(!o)fail('Hráč nenalezen.',404);if(o.id===p.id)fail('Sám sebe nahlásit nejde.');
+    if(!Object.hasOwn(D.REPORT_REASONS,reason))fail('Vyber důvod nahlášení.');
+    const now=Date.now(),all=Object.values(doc.reports);
+    if(all.filter(r=>r.from===p.id&&now-r.at<864e5).length>=D.MOD.reportsPerDay)fail('Dnes už jsi nahlásil moc hráčů.',429);
+    if(all.some(r=>r.from===p.id&&r.target===o.id&&r.status==='open'))fail(`${o.nick} už od tebe má nahlášení, které čeká na vyřízení.`,409);
+    const r={id:D.newId(),from:p.id,fromNick:p.nick,target:o.id,targetNick:o.nick,reason,note:D.cleanChat(note).slice(0,300),at:now,status:'open',
+      ctx:(Array.isArray(ctx)?ctx:[]).slice(-15).map(m=>({ch:m.ch,text:String(m.text).slice(0,200),t:m.t}))};
+    doc.reports[r.id]=r;
+    // old closed reports are dropped so the document stays small
+    const closed=all.filter(x=>x.status!=='open').sort((a,b)=>a.at-b.at);for(const x of closed.slice(0,Math.max(0,all.length-800)))delete doc.reports[x.id];
+    // several different players reporting the same person within an hour mutes them until a moderator looks
+    let auto=false;
+    const recent=new Set(all.concat(r).filter(x=>x.target===o.id&&x.status==='open'&&now-x.at<D.MOD.autoWindow*60000).map(x=>x.from));
+    if(recent.size>=D.MOD.autoReporters&&!muted(o)&&!isAdmin(o)){o.mod.muteUntil=now+D.MOD.autoMute*60000;auto=true;modlog('auto',o.nick,'mute',`${recent.size} nahlášení za hodinu`)}
+    db.touch();return{ok:true,auto,target:o.id};
+  }
+  function modView(p,q={}){
+    if(!isAdmin(p))fail('Jen pro moderátory.',403);
+    const st=o=>{migrate(o);return{id:o.id,nick:o.nick,level:o.level,created:o.created,muteUntil:muted(o),banUntil:banned(o),warns:o.mod.warns,
+      reports:Object.values(doc.reports).filter(r=>r.target===o.id).length,admin:isAdmin(o)}};
+    const open=Object.values(doc.reports).filter(r=>r.status==='open').sort((a,b)=>b.at-a.at).slice(0,100).map(r=>({...r,targetState:profById(r.target)?st(profById(r.target)):null}));
+    const look=q.nick?profByNick(q.nick):null;
+    return{open,log:doc.modlog.slice(0,50),player:look?{...st(look),history:Object.values(doc.reports).filter(r=>r.target===look.id).sort((a,b)=>b.at-a.at).slice(0,20)}:null,
+      sanctioned:Object.values(doc.profiles).filter(o=>muted(o)||banned(o)).slice(0,50).map(st)};
+  }
+  // returns what the server must do: kick a banned player, tell the target
+  function modAction(p,{kind,target,minutes,report:rid,note}){
+    if(!isAdmin(p))fail('Jen pro moderátory.',403);
+    const r=typeof rid==='string'&&Object.hasOwn(doc.reports,rid)?doc.reports[rid]:null;
+    const o=profById(target)||(typeof target==='string'?profByNick(target):null)||(r?profById(r.target):null);
+    const close=st=>{if(r){r.status=st;r.by=p.nick;r.closed=Date.now()}};
+    const mins=Math.round(Number(minutes));note=D.cleanChat(note).slice(0,200);
+    const out={ok:true};
+    if(kind==='dismiss'){if(!r)fail('Nahlášení nenalezeno.',404);close('dismissed');modlog(p.nick,r.targetNick,'dismiss','');db.touch();return out}
+    if(!o)fail('Hráč nenalezen.',404);if(isAdmin(o))fail('Moderátora potrestat nejde.');
+    switch(kind){
+      case 'warn':o.mod.warns++;out.notify={pid:o.id,msg:`Varování od moderátora${note?': '+note:''}. Opakované porušení pravidel vede k zákazu chatu nebo zablokování.`};break;
+      case 'mute':if(!(mins>=5&&mins<=43200))fail('Délka zákazu chatu je 5 minut až 30 dní.');o.mod.muteUntil=Date.now()+mins*60000;
+        out.notify={pid:o.id,msg:`Moderátor ti zakázal chat ${when(o.mod.muteUntil)}.${note?' Důvod: '+note:''}`};break;
+      case 'unmute':o.mod.muteUntil=0;out.notify={pid:o.id,msg:'Zákaz chatu byl zrušen.'};break;
+      case 'ban':if(!(mins===0||mins>=60&&mins<=525600))fail('Délka zablokování je 1 hodina až 1 rok, nebo 0 natrvalo.');
+        o.mod.banUntil=mins===0?FOREVER:Date.now()+mins*60000;o.mod.banNote=note;out.kick={pid:o.id,msg:banText(o)};break;
+      case 'unban':o.mod.banUntil=0;o.mod.banNote='';break;
+      default:fail('Neznámá akce.',404);
+    }
+    close(kind);modlog(p.nick,o.nick,kind,kind==='mute'||kind==='ban'?(mins?mins+' min':'natrvalo')+(note?' · '+note:''):note);db.touch();return out;
   }
   function logout(token){const h=sha(token),id=tokenIndex.get(h);if(!id)return;tokenIndex.delete(h);
     const u=Object.values(doc.users).find(x=>x.id===id);if(u)u.tokens=(u.tokens||[]).filter(t=>t!==h);db.touch()}
-  function auth(token){if(!token)return null;const id=tokenIndex.get(sha(token));const p=id?doc.profiles[id]||null:null;if(p){migrate(p);rollGoals(p)}return p}
+  function auth(token){if(!token)return null;const id=tokenIndex.get(sha(token));const p=id?doc.profiles[id]||null:null;if(p){migrate(p);if(banned(p))return null;rollGoals(p)}return p}
 
   function view(p){
     migrate(p);rollGoals(p);
     return{...p,xpNext:p.level>=D.MAX_LEVEL?0:D.xpFor(p.level),echo:D.echoOfWeek(D.weekKey()),
       campaignView:D.MISSIONS.map(m=>({id:m.id,open:missionOpen(p,m),cleared:p.campaign.cleared.includes(m.id)})),echoOpen:echoOpen(p),
       skinState:Object.fromEntries(D.CLASS_KEYS.map(k=>[k,D.SKINS[k].map(s=>({k:s.k,owned:D.skinOwned(p,k,s.k)}))])),
-      listings:Object.values(doc.market).filter(l=>l.seller===p.id).length,achView:achView(p)};
+      listings:Object.values(doc.market).filter(l=>l.seller===p.id).length,achView:achView(p),admin:isAdmin(p),muteUntil:muted(p)};
   }
   const item=(p,id)=>p.inv.find(i=>i.id===id)||fail('Předmět nenalezen.',404);
   // own keys only: an id like "constructor" must not resolve to Object.prototype.constructor
   const listing=id=>typeof id==='string'&&Object.hasOwn(doc.market,id)?doc.market[id]:null;
   function unequip(p,id){for(const s of D.SLOT_KEYS)if(p.eq[s]===id)delete p.eq[s]}
+  // ---------- forge helpers ----------
+  function pay(p,c){
+    if(c.credits&&p.credits<c.credits||c.essence&&p.essence<c.essence||c.fragments&&p.frags<c.fragments)
+      fail(`Potřebuješ ${[c.credits?c.credits+' kreditů':'',c.essence?c.essence+' esence':'',c.fragments?c.fragments+' legendárních fragmentů':''].filter(Boolean).join(', ')}.`);
+    p.credits-=c.credits||0;p.essence-=c.essence||0;p.frags-=c.fragments||0;
+  }
+  function addCrystal(p,key,n=1){if(!D.parseCrystal(key))return;p.crystals[key]=(Object.hasOwn(p.crystals,key)?p.crystals[key]:0)+n}
+  function takeCrystals(p,it){for(const s of it.sock||[])if(s)addCrystal(p,s);if(it.sock)it.sock=it.sock.map(()=>null)}
+  function salvageOne(p,it,out){
+    unequip(p,it.id);takeCrystals(p,it);p.inv=p.inv.filter(i=>i!==it);
+    // upgrades return part of the essence spent on them
+    let e=D.ESSENCE[it.r];for(let n=0;n<(it.up|0);n++)e+=Math.floor((D.upgradeCost(it,n)?.essence||0)/2);
+    p.essence+=e;out.essence+=e;p.frags+=D.FRAGMENTS[it.r];out.frags+=D.FRAGMENTS[it.r];out.n++;
+    if(it.r>=3&&(it.r===4||Math.random()<.5)){const k=D.rollCrystal(it.r===4?2:1);addCrystal(p,k);out.crystals.push(k)}
+  }
   function giveItem(p,it){if(p.inv.length<D.INV_MAX){p.inv.push(it);return true}p.credits+=D.itemValue(it);return false}
 
   // ---------- profile actions ----------
@@ -159,9 +237,79 @@ export function createMeta(db){
       p.credits-=s.req.credits;p.skins.push(cls+':'+skin);p.skin[cls]=skin;
     },
     sell(p,{ids}){
-      if(!Array.isArray(ids)||!ids.length)fail('Vyber předměty k prodeji.');let got=0;
-      for(const id of ids.slice(0,80)){const it=p.inv.find(i=>i.id===id);if(!it)continue;unequip(p,id);p.inv=p.inv.filter(i=>i!==it);got+=D.itemValue(it)}
+      if(!Array.isArray(ids)||!ids.length)fail('Vyber předměty k prodeji.');let got=0,n=0;
+      for(const id of ids.slice(0,80)){const it=p.inv.find(i=>i.id===id);if(!it||it.lock)continue;unequip(p,id);takeCrystals(p,it);p.inv=p.inv.filter(i=>i!==it);got+=D.itemValue(it);n++}
+      if(!n)fail('Zamčené předměty prodat nejde.');
       p.credits+=got;return{credits:got};
+    },
+
+    // a milestone branch of one ability; free to change outside a match
+    masteryBranch(p,{key,tier,choice}){
+      if(typeof key!=='string'||!Object.hasOwn(p.mastery,key))fail('Tuto schopnost ještě nemáš rozvinutou.');
+      tier=Number(tier);if(![0,1,2,3].includes(tier))fail('Neplatný milník.');
+      if(choice!==0&&choice!==1&&choice!==null)fail('Vyber jednu ze dvou větví.');
+      const m=p.mastery[key];if(D.masteryRank(m.xp).rank<D.MASTERY.tiers[tier])fail(`Milník se odemyká na úrovni mistrovství ${D.MASTERY.tiers[tier]}.`);
+      m.br??=[null,null,null,null];m.br[tier]=choice;
+    },
+    // ---------- forge ----------
+    lock(p,{itemId}){const it=item(p,itemId);it.lock=!it.lock;return{lock:it.lock}},
+    salvage(p,{ids}){
+      if(!Array.isArray(ids)||!ids.length)fail('Vyber předměty k rozložení.');
+      const out={essence:0,frags:0,crystals:[],n:0};
+      for(const id of ids.slice(0,80)){const it=p.inv.find(i=>i.id===id);if(!it||it.lock)continue;salvageOne(p,it,out)}
+      if(!out.n)fail('Zamčené předměty rozložit nejde.');return out;
+    },
+    // every unequipped, unlocked, untouched implant up to the given rarity
+    salvageBulk(p,{maxR}){
+      maxR=Number(maxR);if(![0,1,2].includes(maxR))fail('Hromadně jde rozložit nejvýš vzácné implantáty.');
+      const eq=new Set(Object.values(p.eq)),out={essence:0,frags:0,crystals:[],n:0};
+      for(const it of [...p.inv])if(it.r<=maxR&&!eq.has(it.id)&&!it.lock&&!(it.up>0)&&!(it.sock||[]).some(Boolean)&&!it.offer)salvageOne(p,it,out);
+      if(!out.n)fail('Není co rozložit.');return out;
+    },
+    upgrade(p,{itemId}){
+      const it=item(p,itemId);if(it.offer)fail('Nejdřív rozhodni o přeladění.');
+      const c=D.upgradeCost(it);if(!c)fail(`Implantát má nejvyšší stupeň +${D.UPGRADE_MAX}.`);
+      if(p.level<c.level)fail(`Další vylepšení vyžaduje úroveň ${c.level}.`);
+      pay(p,c);it.up=(it.up|0)+1;return{up:it.up};
+    },
+    retune(p,{itemId,i}){
+      const it=item(p,itemId);if(it.offer)fail('Nejdřív rozhodni o předchozím přeladění.');
+      i=Number(i);if(!Number.isInteger(i)||i<0||i>=it.aff.length)fail('Vyber vlastnost.');
+      const c=D.retuneCost(it);if(p.level<c.level)fail(`Přeladění vyžaduje úroveň ${c.level}.`);
+      const pool=D.affixPool(it.slot).filter(k=>!it.aff.some(a=>a.k===k));if(!pool.length)fail('Pro tento implantát není jiná vlastnost.');
+      pay(p,c);const k=pool[Math.floor(Math.random()*pool.length)];it.offer={i,k,v:D.rollAffix(k,it.lvl,it.r)};return{offer:it.offer};
+    },
+    retuneResolve(p,{itemId,accept}){
+      const it=item(p,itemId);if(!it.offer)fail('Žádné přeladění nečeká.');if(typeof accept!=='boolean')fail('Vyber původní nebo novou vlastnost.');
+      if(accept)it.aff[it.offer.i]={k:it.offer.k,v:it.offer.v};delete it.offer;return{accepted:accept};
+    },
+    socketOpen(p,{itemId}){
+      const it=item(p,itemId);it.sock??=[];const n=it.sock.length;
+      if(n>=D.SOCKETS_MAX[it.r])fail(D.SOCKETS_MAX[it.r]?'Implantát už má všechny zdířky.':'Běžný implantát zdířku mít nemůže.');
+      pay(p,D.SOCKET_COST[n]);it.sock.push(null);return{sockets:it.sock.length};
+    },
+    socketSet(p,{itemId,idx,crystal}){
+      const it=item(p,itemId),c=D.parseCrystal(crystal);idx=Number(idx);
+      if(!it.sock||!Number.isInteger(idx)||idx<0||idx>=it.sock.length)fail('Neplatná zdířka.');if(it.sock[idx])fail('Zdířka je obsazená. Krystal nejdřív vyjmi.');
+      if(!c||!Object.hasOwn(p.crystals,crystal)||!(p.crystals[crystal]>0))fail('Tento krystal nemáš.');
+      if(it.sock.some(s=>s&&D.parseCrystal(s).type===c.type))fail('Dva krystaly stejného druhu v jednom implantátu být nemůžou.');
+      p.crystals[crystal]--;if(!p.crystals[crystal])delete p.crystals[crystal];it.sock[idx]=crystal;return{};
+    },
+    socketTake(p,{itemId,idx}){
+      const it=item(p,itemId);idx=Number(idx);const key=it.sock?.[idx];const c=key&&D.parseCrystal(key);if(!c)fail('Zdířka je prázdná.');
+      pay(p,{credits:30*c.tier});it.sock[idx]=null;addCrystal(p,key);return{};
+    },
+    crystalCombine(p,{key}){
+      const c=D.parseCrystal(key);if(!c)fail('Neznámý krystal.');if(c.tier>=5)fail('Krystal má nejvyšší stupeň.');
+      if((Object.hasOwn(p.crystals,key)?p.crystals[key]:0)<3)fail('Ke spojení potřebuješ tři stejné krystaly.');
+      pay(p,{credits:D.CRYSTAL_COMBINE[c.tier-1]});p.crystals[key]-=3;if(!p.crystals[key])delete p.crystals[key];
+      const nk=D.crystalKey(c.type,c.tier+1);addCrystal(p,nk);return{crystal:nk};
+    },
+    distill(p){pay(p,{essence:D.DISTILL.essence});const k=D.rollCrystal(1);addCrystal(p,k);return{crystal:k}},
+    craft(p,{kind,slot}){
+      const C=Object.hasOwn(D.CRAFT,kind)?D.CRAFT[kind]:null;if(!C)fail('Neznámý recept.');if(!D.SLOTS[slot])fail('Vyber slot.');
+      if(p.inv.length>=D.INV_MAX)fail('Inventář je plný.');
+      pay(p,C);const it=D.rollItem(p.level,{slot,minR:C.minR,boost:.3});p.inv.push(it);return{item:it};
     },
     crate(p,{type}){
       const c=D.CRATES[type];if(!c)fail('Neznámý zásobník.');if(p.credits<c.price)fail('Nemáš dost kreditů.');
@@ -171,7 +319,8 @@ export function createMeta(db){
     marketList(p,{itemId,price}){
       price=Math.round(+price);if(!(price>=10&&price<=1e6))fail('Cena musí být 10 až 1 000 000 kreditů.');
       if(Object.values(doc.market).filter(l=>l.seller===p.id).length>=10)fail('Najednou můžeš prodávat nejvýš 10 předmětů.');
-      const it=item(p,itemId);unequip(p,it.id);p.inv=p.inv.filter(i=>i!==it);
+      const it=item(p,itemId);if(it.lock)fail('Zamčený implantát nejdřív odemkni.');if(it.offer)fail('Nejdřív rozhodni o přeladění.');
+      unequip(p,it.id);p.inv=p.inv.filter(i=>i!==it);
       const l={id:D.newId(),seller:p.id,sellerNick:p.nick,item:it,price,created:Date.now()};doc.market[l.id]=l;return{listing:l};
     },
     marketCancel(p,{id}){
@@ -547,6 +696,17 @@ export function createMeta(db){
     const bump=(g,def)=>{if(!g||!def||g.claimed)return;const before=g.prog;g.prog=def.max?Math.max(g.prog,delta[def.stat]||0):Math.min(def.target,g.prog+(delta[def.stat]||0));
       if(before<def.target&&g.prog>=def.target)done.push(def.name)};
     for(const g of p.goals.list)bump(g,D.GOALS[g.id]);bump(p.goals.weekly,D.WEEKLY_GOALS[p.goals.weekly?.id]);
+    // ability mastery: one XP per use (an ultimate counts more), capped per ability and match
+    const masteryUps=[];
+    for(const [key,n] of Object.entries(u.mcount||{})){
+      if(typeof key!=='string'||!(n>0))continue;
+      const m=Object.hasOwn(p.mastery,key)?p.mastery[key]:(p.mastery[key]={xp:0,br:[null,null,null,null]});
+      const before=D.masteryRank(m.xp).rank;m.xp+=Math.min(D.MASTERY.matchCap,Math.round(n*(key.endsWith(':ult')?D.MASTERY.ultXp:1)));
+      const after=D.masteryRank(m.xp).rank;if(after>before)masteryUps.push({key,name:D.masteryName(key),rank:after,milestone:D.MASTERY.tiers.some(t=>t>before&&t<=after)});
+    }
+    // crystals for sockets: more often after a win and after bosses, tier II possible on hard and against bosses
+    const crystals=[];if(Math.random()<(.12+(res==='win'?.1:0)+(res==='win'&&M.bossKills?.15:0))*part)crystals.push(D.rollCrystal(M.diffKey==='hard'||M.bossKills?2:1));
+    for(const k of crystals)addCrystal(p,k);
     // guild: XP for the guild, the weekly goal and the member bonus
     const guild=guildMatch(p,xp,cr,res==='win');if(guild){xp+=guild.bx;cr+=guild.bc}
     // apply
@@ -564,7 +724,7 @@ export function createMeta(db){
       score:M.D.pvp?[M.score[u.team],M.score[1-u.team]]:null,dur:Math.round(M.time),xp,cr,mvp,rk});
     p.history.length=Math.min(p.history.length,D.HISTORY_MAX);
     db.touch();
-    return{xp,credits:cr,items,res,levelUps,sold,skin,camp,goalsDone:done,record,mvp,guild,pass,achNew:achDiff(p,achBefore)};
+    return{xp,credits:cr,items,res,levelUps,sold,skin,camp,goalsDone:done,record,mvp,guild,pass,crystals,masteryUps,achNew:achDiff(p,achBefore)};
   }
 
   // ---------- achievements ----------
@@ -591,5 +751,5 @@ export function createMeta(db){
   }
 
   return{register,login,logout,auth,view,act,market,top,rewardsFor,rankedResult,canStartMission,friendOp,friendsView,isFriend,blocks,profById,
-    guildView,guildList,tagOf,guildMembers:gid=>{const g=guildById(gid);return g?memberIds(g):[]},loadoutFor:(p,k)=>D.computeLoadout(p,k)};
+    guildView,guildList,tagOf,report,findPlayer:t=>profById(t)||profByNick(t),modView,modAction,muted,muteText,isAdmin,guildMembers:gid=>{const g=guildById(gid);return g?memberIds(g):[]},loadoutFor:(p,k,cap)=>D.computeLoadout(p,k,cap)};
 }

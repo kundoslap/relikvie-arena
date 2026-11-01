@@ -80,6 +80,42 @@ export function rollItem(level=1,o={}){
   return{id:newId(),slot,r,lvl:level,aff,u,name};
 }
 export const itemValue=it=>Math.round([6,18,50,150,500][it.r]*(1+it.lvl*.08));
+export const rollAffix=(k,level,r)=>Math.round(AFFIX_BASE[k]*(1+level*.045)*RARITIES[r].mult*rnd(.7,1)*10)/10;
+export const affixPool=slot=>AFFIX_POOLS[slot]||[];
+
+// ---------- forge (from the original Relikvie: essence, upgrades +1..+5, re-tuning) and sockets with crystals ----------
+export const ESSENCE=[1,3,8,22,40],FRAGMENTS=[0,0,0,0,3];
+// upgrade n -> n+1: minimum level, credits and essence; each rank adds 6 % to every affix of the item
+export const UPGRADES=[{level:5,credits:40,essence:3},{level:10,credits:80,essence:6},{level:15,credits:140,essence:10},{level:20,credits:220,essence:16},{level:25,credits:320,essence:25}];
+export const UPGRADE_STEP=.06,UPGRADE_MAX=UPGRADES.length;
+export const upgradeCost=(it,n=it.up|0)=>{const U=UPGRADES[n];if(!U)return null;const k=[1,1,1.3,1.6,2][it.r];return{level:U.level,credits:Math.round(U.credits*k),essence:Math.round(U.essence*k)}};
+export const retuneCost=it=>({level:10,credits:[30,40,60,80,100][it.r],essence:[2,3,5,8,12][it.r]});
+export const upgradeMult=it=>1+UPGRADE_STEP*Math.min(UPGRADE_MAX,it.up|0);
+// sockets: how many a rarity can have and what opening the next one costs
+export const SOCKETS_MAX=[0,1,1,2,3];
+export const SOCKET_COST=[{credits:100,essence:10},{credits:300,essence:25},{credits:700,essence:50}];
+export const CRYSTALS={
+  ruby:{name:'Rubín',stat:'atk',color:'#ff4f6d',v:[1.5,2.5,4,6,9]},
+  emerald:{name:'Smaragd',stat:'hp',color:'#5dffa8',v:[2,3.5,5,7.5,11]},
+  sapphire:{name:'Safír',stat:'tech',color:'#4fb4ff',v:[1.5,2.5,4,6,9]},
+  topaz:{name:'Topas',stat:'cdr',color:'#ffc66d',v:[1,1.6,2.4,3.5,5]},
+  onyx:{name:'Onyx',stat:'def',color:'#c9d1e6',v:[1,1.6,2.4,3.5,5]},
+  amethyst:{name:'Ametyst',stat:'ult',color:'#c08bff',v:[2,3,4.5,6.5,9]}
+};
+export const CRYSTAL_TIERS=['I','II','III','IV','V'];
+export const CRYSTAL_COMBINE=[20,50,120,300]; // credits to merge three of tier n into one of n+1
+export const crystalKey=(type,tier)=>`${type}:${tier}`;
+export function parseCrystal(key){const [type,t]=String(key).split(':'),tier=+t;return Object.hasOwn(CRYSTALS,type)&&Number.isInteger(tier)&&tier>=1&&tier<=5?{type,tier,C:CRYSTALS[type],v:CRYSTALS[type].v[tier-1]}:null}
+export const crystalName=key=>{const c=parseCrystal(key);return c?`${c.C.name} ${CRYSTAL_TIERS[c.tier-1]}`:'?'};
+export const rollCrystal=(maxTier=1)=>crystalKey(pick(Object.keys(CRYSTALS)),1+Math.floor(Math.random()*maxTier));
+export const DISTILL={essence:40}; // a random tier I crystal for essence
+export const CRAFT={epic:{essence:150,credits:300,minR:3},legendary:{fragments:30,credits:1000,minR:4}};
+// the effective affixes of an item: upgrades scale the rolled ones, crystals add their own
+export function itemStats(it){
+  const m=upgradeMult(it),out=it.aff.map(a=>({k:a.k,v:Math.round(a.v*m*10)/10}));
+  for(const s of it.sock||[]){const c=s&&parseCrystal(s);if(c)out.push({k:c.C.stat,v:c.v,crystal:s})}
+  return out;
+}
 export const INV_MAX=80;
 export const CRATES={
   basic:{name:'Zásobník',desc:'Náhodný implantát tvé úrovně.',price:150,boost:0,minR:0},
@@ -191,9 +227,9 @@ export function validateTree(k,alloc,level){
 export function safeTree(k,alloc,level){try{return validateTree(k,alloc,level)}catch{return null}}
 
 // Sums items, the class tree and the profession into one loadout for the simulation.
-export function computeLoadout(p,k){
+export function computeLoadout(p,k,cap=MASTERY.max){
   const mods={},uniq=[];const add=(key,v)=>mods[key]=(mods[key]||0)+v;
-  for(const s of SLOT_KEYS){const id=p?.eq?.[s];const it=id&&p.inv?.find(i=>i.id===id);if(!it)continue;for(const a of it.aff)add(a.k,a.v);if(it.u)uniq.push(it.u)}
+  for(const s of SLOT_KEYS){const id=p?.eq?.[s];const it=id&&p.inv?.find(i=>i.id===id);if(!it)continue;for(const a of itemStats(it))add(a.k,a.v);if(it.u)uniq.push(it.u)}
   const alloc=p?.tree?.[k]||{};
   for(const br of TREES[k]||[])for(const n of br.nodes){const r=alloc[n.id]|0;if(r)for(const [fk,fv] of Object.entries(n.fx))add(fk,fv*r)}
   const skin=p&&skinOwned(p,k,p.skin?.[k])?p.skin[k]:'default';
@@ -201,7 +237,10 @@ export function computeLoadout(p,k){
   for(const id of prof.pass)for(const [fk,fv] of Object.entries(PASSIVES[id].fx||{}))add(fk,fv);
   if(prof.cap)for(const [fk,fv] of Object.entries(SCHOOLS[prof.cap].cap.fx))add(fk,fv);
   const tactic=TACTICS[p?.tactic]&&(p.level||1)>=TACTICS[p.tactic].lvl?p.tactic:'dodge';
-  return{mods,uniq,skin,level:p?.level||1,prof,title:p?.title||null,tactic};
+  // ultimate mastery charges the ultimate faster: +1 % per rank, +10 % with the Rychlé nabití branch
+  const mastery=masteryLoadout(p,cap),um=mastery[k+':ult'];
+  if(um)add('ult',um.r*MASTERY.ultPerRank+(um.b[0]===0?10:0));
+  return{mods,uniq,skin,level:p?.level||1,prof,title:p?.title||null,tactic,mastery};
 }
 
 // ---------- professions ----------
@@ -448,6 +487,40 @@ export const guildBonus=l=>Math.min(10,l-1);
 export const guildWeekTarget=n=>Math.max(15,n*4);
 export const guildWeekReward=l=>({credits:250+30*l,minR:l>=6?3:2});
 
+// ---------- ability mastery (from the original Relikvie) ----------
+// Every class skill, profession skill and ultimate has a mastery rank 0–20 earned by using it in matches.
+// Each rank: −0.5 % energy cost and −0.5 % cooldown (ultimate: +1 % charge). Ranks 5, 10, 15 and 20 unlock a milestone
+// with a choice of two branches. Ranked matches cap the rank at 5 (the original's calibrated mastery).
+export const MASTERY={max:20,tiers:[5,10,15,20],perRank:.005,ultPerRank:1,rankedCap:5,ultXp:8,matchCap:80};
+export const masteryXpFor=n=>12+6*n; // XP from rank n to n+1, one XP per use
+export const masteryRank=xp=>{let n=0;while(n<MASTERY.max&&xp>=masteryXpFor(n)){xp-=masteryXpFor(n);n++}return{rank:n,into:xp,need:n<MASTERY.max?masteryXpFor(n):0}};
+export const MASTERY_BRANCHES=[
+  [{k:'thrift',name:'Úspora',desc:'Stojí o 10 % méně energie.'},{k:'tempo',name:'Spád',desc:'Čekání je o 8 % kratší.'}],
+  [{k:'ward',name:'Ochranný impuls',desc:'Použití ti dá štít 4 % max. HP.'},{k:'surge',name:'Nápor',desc:'Po použití máš na 2 s o 15 % rychlejší pohyb.'}],
+  [{k:'mend',name:'Záchranný impuls',desc:'Použití tě vyléčí o 3 % max. HP.'},{k:'battery',name:'Zpětný tok',desc:'Použití vrátí 5 energie.'}],
+  [{k:'echo',name:'Ozvěna',desc:'15% šance, že se nespustí čekání.'},{k:'focus',name:'Soustředění',desc:'Další jiná schopnost do 3 s stojí o 20 % méně energie.'}]
+];
+export const MASTERY_ULT_BRANCHES=[
+  [{k:'charge',name:'Rychlé nabití',desc:'Ultimátka se nabíjí o 10 % rychleji.'},{k:'start',name:'Připravenost',desc:'Zápas začínáš s ultimátkou nabitou na 25 %.'}],
+  [{k:'ward',name:'Ochranný impuls',desc:'Ultimátka ti dá štít 8 % max. HP.'},{k:'surge',name:'Nápor',desc:'Po ultimátce máš na 3 s o 20 % rychlejší pohyb.'}],
+  [{k:'mend',name:'Záchranný impuls',desc:'Ultimátka tě vyléčí o 6 % max. HP.'},{k:'battery',name:'Zpětný tok',desc:'Ultimátka vrátí 20 energie.'}],
+  [{k:'echo',name:'Ozvěna',desc:'Po ultimátce zůstane 25 % jejího nabití.'},{k:'focus',name:'Soustředění',desc:'Ultimátka zkrátí čekání všech schopností o 2 s.'}]
+];
+// mastery keys: "striker:c0" for class skills, "striker:ult" for ultimates, the plain id for profession skills
+export const masteryKey=(cls,id)=>id==='ult'?cls+':ult':id&&id[0]==='c'&&id.length===2?cls+':'+id:id;
+export function masteryName(key){
+  const [a,b]=String(key).split(':');
+  if(b==='ult')return CLASSES[a]?.ult.name||key;if(b)return CLASSES[a]?.skills[+b[1]]?.name||key;return PROF_SKILLS[a]?.name||key;
+}
+// the abilities a player can master with a class: three class skills, the ultimate and profession skills they can slot
+export function masteryKeys(p,k){return[...[0,1,2].map(i=>k+':c'+i),k+':ult',...availableSkills(p,k).filter(id=>!(id[0]==='c'&&id.length===2))]}
+// what goes into a match: rank and chosen branches per ability (ranks capped for ranked matches)
+export function masteryLoadout(p,cap=MASTERY.max){
+  const out={};for(const [key,m] of Object.entries(p?.mastery||{})){const r=Math.min(cap,masteryRank(m.xp|0).rank);if(!r)continue;
+    out[key]={r,b:(m.br||[]).map((v,i)=>r>=MASTERY.tiers[i]&&(v===0||v===1)?v:null)}}
+  return out;
+}
+
 // ---------- season pass ----------
 // Free for every account, one per ranked season (calendar month). Pass XP comes from match XP and claimed goals.
 export const PASS={tiers:30,xp:500,goalXp:100,weeklyXp:400,bonusXp:150};
@@ -503,6 +576,10 @@ export const ACH=[
 export const achById=id=>ACH.find(a=>a.id===id);
 // tiers reached by a progress value
 export const achReached=(a,val)=>a.t.filter(x=>val>=x).length;
+
+// ---------- moderation ----------
+export const REPORT_REASONS={abuse:'Urážky a obtěžování',spam:'Spam',cheat:'Podvádění',name:'Nevhodná přezdívka nebo název klanu',other:'Jiné'};
+export const MOD={reportsPerDay:10,autoReporters:3,autoWindow:60,autoMute:60};
 
 // ---------- friends and chat ----------
 export const FRIENDS_MAX=100,CHAT_LEN=200;

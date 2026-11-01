@@ -153,9 +153,10 @@ function renderDock(){
   const P=X.pick,pb=$('#chatPick');
   if(P&&X.want){const f=isFriend(P.pid),out=X.fr.outReq.some(x=>x.id===P.pid);
     pb.hidden=false;pb.innerHTML=`<b>${esc(P.nick)}</b>${f?'<button type="button" class="ghost sm" data-pk="dm">Soukromá zpráva</button>':out?'<small class="help">žádost čeká</small>':'<button type="button" class="ghost sm" data-pk="add">Přidat do přátel</button>'}
-      <button type="button" class="ghost sm" data-pk="block">Zablokovat</button><button type="button" class="ghost sm" data-pk="x" aria-label="Zavřít">×</button>`;
+      <button type="button" class="ghost sm" data-pk="report">Nahlásit</button><button type="button" class="ghost sm" data-pk="block">Zablokovat</button><button type="button" class="ghost sm" data-pk="x" aria-label="Zavřít">×</button>`;
     pb.querySelectorAll('[data-pk]').forEach(b=>b.onclick=()=>{const k=b.dataset.pk;
-      if(k==='dm')openDM(P.pid);else if(k==='add')fr('add',P.nick);else if(k==='block'){fr('block',P.pid);X.world=X.world.filter(m=>m.pid!==P.pid);X.room=X.room.filter(m=>m.pid!==P.pid)}
+      if(k==='report')reportDialog(P.pid,P.nick);
+      else if(k==='dm')openDM(P.pid);else if(k==='add')fr('add',P.nick);else if(k==='block'){fr('block',P.pid);X.world=X.world.filter(m=>m.pid!==P.pid);X.room=X.room.filter(m=>m.pid!==P.pid)}
       X.pick=null;renderDock()});
   }else pb.hidden=true;
   const can=X.tab==='room'?!!X.roomCode:connected();
@@ -169,6 +170,27 @@ function bindDock(){
   $('#chatForm').onsubmit=e=>{e.preventDefault();const t=D.cleanChat($('#chatIn').value);if(!t)return;
     if(X.tab==='room')X.host?.sendRoom(t,false);else if(X.tab==='world'||X.tab==='guild')sendS({type:'say',ch:X.tab,text:t});else sendS({type:'say',ch:'dm',to:X.tab.slice(3),text:t});
     $('#chatIn').value=''};
+}
+
+// ---------- reporting ----------
+// a small dialog; the server attaches the reported player's recent messages itself
+export function reportDialog(pid,nick){
+  if(!X.want)return toast('Nahlašovat můžou jen přihlášení hráči.',true);
+  document.querySelector('#reportDlg')?.remove();
+  const d=document.createElement('div');d.id='reportDlg';d.className='overlay';
+  d.innerHTML=`<div class="center"><form class="card" style="width:min(460px,100%)" autocomplete="off"><h2 class="sec">Nahlásit · ${esc(nick)}</h2>
+    <div class="flist">${Object.entries(D.REPORT_REASONS).map(([k,n],i)=>`<label class="setrow"><span>${n}</span><input type="radio" name="rr" value="${k}" ${i?'':'checked'}></label>`).join('')}</div>
+    <label class="field">Co se stalo (nepovinné)<input name="note" maxlength="300" placeholder="Krátký popis pro moderátora"></label>
+    <p class="help">K nahlášení se automaticky přiloží poslední zprávy hráče z chatu. Zneužívání nahlašování se trestá.</p>
+    <div class="btns"><button class="go" type="submit">Odeslat</button><button class="ghost" type="button" data-x>Zrušit</button></div></form></div>`;
+  document.body.appendChild(d);
+  d.querySelector('[data-x]').onclick=()=>d.remove();
+  d.addEventListener('pointerdown',e=>{if(e.target===d||e.target.classList.contains('center'))d.remove()});
+  d.querySelector('form').onsubmit=async e=>{e.preventDefault();const f=e.target;
+    try{const r=await fetch('/api/report',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+X.want},body:JSON.stringify({target:pid,reason:f.rr.value,note:f.note.value})});
+      const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||'Nahlášení se nepodařilo odeslat.');
+      d.remove();toast(`Díky, ${nick} je nahlášen. Moderátor se na to podívá.`)}
+    catch(err){toast(err.message,true)}};
 }
 
 // ---------- invites ----------

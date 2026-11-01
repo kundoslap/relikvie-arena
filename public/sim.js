@@ -1,6 +1,6 @@
 // Relikvie Aréna — authoritative simulation. Runs on the server and, for offline matches, in the browser.
 // Pure logic: no rendering. Visual effects leave the simulation as events in M.events.
-import {CLASSES,CLASS_KEYS,MAPS,MODES,NPCS,BOSSES,BOSS_KEYS,ENDLESS_MODS,ECHO_MODS,TACTICS,BOT_TACTIC,rollItem,skillDef} from './data.js';
+import {CLASSES,CLASS_KEYS,MAPS,MODES,NPCS,BOSSES,BOSS_KEYS,ENDLESS_MODS,ECHO_MODS,TACTICS,BOT_TACTIC,rollItem,skillDef,MASTERY,masteryKey} from './data.js';
 export * from './data.js';
 
 export const MATCH_TIME=360, RELIC_EVERY=40, TICK=1/30, TEAM_SIZE=3;
@@ -45,6 +45,9 @@ export function addUnit(M,k,team,ctrl,name,load){
   if(load){u.mods={...(load.mods||{})};u.uniq=new Set(load.uniq||[]);u.skin=load.skin||'default';u.level=load.level||1;u.title=load.title||null;
     if(load.prof&&Array.isArray(load.prof.skills)&&load.prof.skills.length===3&&load.prof.skills.every(id=>skillDef(k,id))){u.prof=load.prof;u.pass=new Set(load.prof.pass||[])}}
   u.tactic=TACTICS[load?.tactic]?load.tactic:ctrl==='bot'?BOT_TACTIC[k]:'dodge';u.tcd=0;
+  // ability mastery: ranks and branches per ability, and how often each was used (the server turns that into mastery XP)
+  u.mast=load?.mastery&&typeof load.mastery==='object'?load.mastery:{};u.mcount={};
+  if(u.mast[k+':ult']?.b?.[0]===1)u.ult=25;
   if(M.emod.has('swift'))u.mods.cdr=(u.mods.cdr||0)+25;
   u.maxHp=Math.round(u.C.hp*(1+m(u,'hp')/100));u.radius=k==='guardian'?.85:.7;
   resetUnit(u,M);M.units.push(u);M.rosterVer++;return u;
@@ -393,25 +396,45 @@ function tactical(M,u,pt){
   }
   u.tcd=T.cd;fx(M,{t:'atk',i:u.id,s:4});return true;
 }
+// milestone effects that trigger on a successful use (the ultimate has stronger versions)
+function masteryAfter(M,u,i,br){
+  const ult=i===3;
+  if(br[1]===0)addShield(u,u.maxHp*(ult?.08:.04),null);
+  if(br[1]===1){const k=ult?1.2:1.15;u.st.hasteK=u.st.haste>0?Math.max(u.st.hasteK||1,k):k;u.st.haste=Math.max(u.st.haste||0,ult?3:2)}
+  if(br[2]===0)heal(M,u,u.maxHp*(ult?.06:.03),null,true);
+  if(br[2]===1)u.energy=Math.min(100,u.energy+(ult?20:5));
+  if(ult&&br[3]===0)u.ult=25;
+  if(ult&&br[3]===1)u.cds=u.cds.map(c=>Math.max(0,c-2));
+  if(!ult&&br[3]===1)u.mfocus={t:M.time+3,i};
+}
 export function cast(M,u,i,pt){
   if(i===4)return tactical(M,u,pt||{x:u.aimX,z:u.aimZ});
   if(u.kind!=='hero'||u.dead||u.st.stun>0||u.st.silence>0||u.dash||M.state!=='play')return false;
   let s=null,id=null;
+  if(i!==3)id=u.prof.skills[i];
+  // mastery of this ability: cheaper and faster with rank, plus the chosen milestone branches
+  const mk=masteryKey(u.clsKey,i===3?'ult':id),ms=u.mast?.[mk],mr=ms?.r||0,br=ms?.b||[];
+  const focus=u.mfocus&&u.mfocus.t>M.time&&u.mfocus.i!==i;
+  const costMul=Math.max(.5,1-mr*MASTERY.perRank-(br[0]===0?.1:0)-(focus?.2:0))*(u.pass.has('overcharge')?.9:1);
   if(i===3){if(u.ult<100)return false}
-  else{id=u.prof.skills[i];s=skillDef(u.clsKey,id);if(!s||u.cds[i]>0)return false;
-    if(u.energy<s.cost*(u.pass.has('overcharge')?.9:1))return false}
+  else{s=skillDef(u.clsKey,id);if(!s||u.cds[i]>0)return false;
+    if(u.energy<s.cost*costMul)return false}
   const P=pt||{x:u.aimX,z:u.aimZ};
   const pm=u.prof.mod===id,pa=pm&&u.prof.proto!=='b',pb=pm&&u.prof.proto==='b';
   const res=i===3?SK[u.clsKey][3](M,u,P):id[0]==='c'&&id.length===2?SK[u.clsKey][+id[1]](M,u,P):SKP[id](M,u,P,u.prof.branch===id?1.15:1,pa,pb);
   if(res===false)return false;
   if(i===3)u.ult=0;
-  else{u.energy-=s.cost*(u.pass.has('overcharge')?.9:1);
+  else{u.energy-=s.cost*costMul;
     let cd=s.cd*(1-Math.min(45,m(u,'cdr'))/100)*(u.st.relic>0&&u.clsKey==='technician'?.7:1)*(u.prof.branch===id?.85:1);
     if(id==='c1'&&u.clsKey==='technician'&&m(u,'restoreCd'))cd=Math.max(2,cd-4);
     if(id==='feint'&&pa)cd=Math.max(2,cd-4);
     if(id==='rend'&&pb)cd=Math.max(2,cd-2);
     if(u.uniq.has('mirror')&&Math.random()<.25){cd=0;fx(M,{t:'txt',x:r2(u.x),z:r2(u.z),s:'Zrcadlení',c:'info'})}
+    cd*=1-mr*MASTERY.perRank-(br[0]===1?.08:0);
+    if(br[3]===0&&cd>0&&Math.random()<.15){cd=0;fx(M,{t:'txt',x:r2(u.x),z:r2(u.z),s:'Ozvěna',c:'info'})}
     u.cds[i]=cd}
+  masteryAfter(M,u,i,br);
+  if(mk&&u.ctrl==='human')u.mcount[mk]=(u.mcount[mk]||0)+1;
   if(u.pass.has('shadowstep')&&!(u.st.haste>0&&u.st.hasteK>1.2)){u.st.haste=2;u.st.hasteK=1.2}
   fx(M,{t:'atk',i:u.id,s:i});return true;
 }

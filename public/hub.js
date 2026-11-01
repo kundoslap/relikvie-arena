@@ -97,7 +97,7 @@ export function showAuth(){
 async function logout(){Social.disconnect();try{await api('/api/logout',{})}catch{}H.token=null;store.set('token',null);H.profile=null;H.guest=false;showAuth()}
 
 // ---------- hub frame ----------
-const TABS=[['play','Hrát'],['campaign','Kampaň'],['goals','Cíle'],['pass','Průkaz'],['ach','Úspěchy'],['hero','Postava'],['prof','Profese'],['tree','Dovednosti'],['inv','Inventář'],['market','Tržiště'],['shop','Obchod'],['friends','Přátelé'],['guild','Klan'],['stats','Statistiky'],['top','Žebříček']];
+const TABS=[['play','Hrát'],['campaign','Kampaň'],['goals','Cíle'],['pass','Průkaz'],['ach','Úspěchy'],['hero','Postava'],['prof','Profese'],['tree','Dovednosti'],['mastery','Mistrovství'],['inv','Inventář'],['forge','Dílna'],['market','Tržiště'],['shop','Obchod'],['friends','Přátelé'],['guild','Klan'],['stats','Statistiky'],['top','Žebříček']];
 export function showHub(tab){if(tab)H.tab=tab;if(H.profile&&!H.offline)Social.connect(H.token);H.cb.showOnly('hub');renderHub()}
 export function tutorialDone(){if(H.profile&&!H.profile.tutorial)act('tutorialDone',{},j=>j.already?'':`Odměna za výcvik: +${num(j.credits)} kreditů a ${j.item.name}.`)}
 export function joinRoom(code){H.cb.join(code,{cls:H.cls,name:H.profile?H.profile.nick:H.guestName||'Host'})}
@@ -113,10 +113,11 @@ export function renderHub(){
   $('#sndBtn').onclick=()=>{const P=$('#sndPop');P.hidden=!P.hidden;if(!P.hidden){P.innerHTML=Snd.panelHTML();Snd.bindPanel(P)}};
   $('#logoutBtn')&&($('#logoutBtn').onclick=logout);
   $('#loginBtn')&&($('#loginBtn').onclick=()=>{H.guest=false;showAuth()});
-  $('#hubNav').innerHTML=TABS.map(([k,n])=>{const off=!p&&k!=='play'&&!(k==='top'&&!H.offline);return`<button type="button" data-t="${k}" ${H.tab===k?'aria-current="page"':''} ${off?'disabled title="Jen s účtem"':''}>${n}${k==='friends'?navBadge():k==='ach'&&p?.achView?.ready?` <b>${p.achView.ready}</b>`:k==='pass'&&passReady(p)?` <b>${passReady(p)}</b>`:''}</button>`}).join('');
+  if(H.tab==='mod'&&!p?.admin)H.tab='play';
+  $('#hubNav').innerHTML=TABS.concat(p?.admin?[['mod','Moderace']]:[]).map(([k,n])=>{const off=!p&&k!=='play'&&!(k==='top'&&!H.offline);return`<button type="button" data-t="${k}" ${H.tab===k?'aria-current="page"':''} ${off?'disabled title="Jen s účtem"':''}>${n}${k==='friends'?navBadge():k==='ach'&&p?.achView?.ready?` <b>${p.achView.ready}</b>`:k==='pass'&&passReady(p)?` <b>${passReady(p)}</b>`:''}</button>`}).join('');
   $('#hubNav').querySelectorAll('button').forEach(b=>b.onclick=()=>{H.tab=b.dataset.t;renderHub()});
   if(H.tab!=='hero')H.cb.preview(null);
-  ({play:tabPlay,campaign:tabCampaign,goals:tabGoals,hero:tabHero,prof:tabProf,inv:tabInv,tree:tabTree,market:tabMarket,shop:tabShop,friends:tabFriends,guild:tabGuild,ach:tabAch,pass:tabPass,stats:tabStats,top:tabTop})[H.tab]();
+  ({play:tabPlay,campaign:tabCampaign,goals:tabGoals,hero:tabHero,prof:tabProf,inv:tabInv,tree:tabTree,market:tabMarket,shop:tabShop,forge:tabForge,mastery:tabMastery,friends:tabFriends,guild:tabGuild,ach:tabAch,pass:tabPass,mod:tabMod,stats:tabStats,top:tabTop})[H.tab]();
 }
 const sndBtn=()=>`<button class="ghost sm" id="sndBtn" type="button" aria-label="Nastavení zvuku">${Snd.settings().mute?'Zvuk ✕':'Zvuk'}</button><button class="ghost sm" id="cfgBtn" type="button">Nastavení</button>`;
 Snd.onChange(()=>{const b=$('#sndBtn');if(b)b.textContent=Snd.settings().mute?'Zvuk ✕':'Zvuk'});
@@ -149,9 +150,10 @@ const classCards=()=>`<div class="classes">${Object.entries(D.CLASSES).map(([k,c
 const bindClassCards=()=>document.querySelectorAll('#hubBody .cc').forEach(b=>b.onclick=()=>setCls(b.dataset.k));
 export function itemCard(it,o={}){
   if(!it)return`<div class="item empty"><b>${o.slot?D.SLOTS[o.slot].name:'Prázdné'}</b><small>Prázdný slot</small></div>`;
-  return`<button type="button" class="item r${it.r}" data-id="${it.id}" aria-pressed="${!!o.sel}">${o.eq?'<span class="eqd">VYBAVENO</span>':''}<b>${esc(it.name)}</b><small>${D.RARITIES[it.r].name} · ${D.SLOTS[it.slot].name} · úr. ${it.lvl}</small></button>`;
+  return`<button type="button" class="item r${it.r}" data-id="${it.id}" aria-pressed="${!!o.sel}">${o.eq?'<span class="eqd">VYBAVENO</span>':''}<b>${esc(it.name)}${it.up?` <span class="iup">+${it.up}</span>`:''}${it.lock?' <span class="ilk" title="Zamčeno">🔒</span>':''}</b><small>${D.RARITIES[it.r].name} · ${D.SLOTS[it.slot].name} · úr. ${it.lvl}</small>${sockDots(it)}</button>`;
 }
-const affixes=it=>it.aff.map(a=>D.fmtStat(a.k,a.v)).join(' · ');
+const sockDots=it=>it.sock?.length?`<span class="socks">${it.sock.map(s=>{const c=s&&D.parseCrystal(s);return`<i style="${c?`--c:${c.C.color}`:''}" class="${c?'on':''}" title="${c?D.crystalName(s):'Prázdná zdířka'}"></i>`}).join('')}</span>`:'';
+const affixes=it=>D.itemStats(it).map(a=>D.fmtStat(a.k,a.v)).join(' · ')+(it.up?` · +${it.up}`:'');
 const isEq=it=>H.profile&&Object.values(H.profile.eq).includes(it.id);
 
 // ---------- Hrát ----------
@@ -249,19 +251,60 @@ function friendList(){
   const b=(k,id,n,cls='ghost sm')=>`<button type="button" class="${cls}" data-f="${k}" data-id="${esc(id)}">${n}</button>`;
   $('#frList').innerHTML=`<section class="panel"><div class="row"><h3>Přátelé · ${on} online</h3><small class="help">${F.friends.length} / ${D.FRIENDS_MAX}</small></div>
       ${Social.connected()?'':'<p class="help">Připojuji k serveru přátel…</p>'}
-      <div class="flist">${F.friends.map(f=>row(f,`${f.code?b('join',f.code,'Připojit','go sm'):''}${b('dm',f.id,'Zpráva')}${b('remove',f.id,'Odebrat')}`,`${Social.statusText(f)} · ${info(f)}`)).join('')
+      <div class="flist">${F.friends.map(f=>row(f,`${f.code?b('join',f.code,'Připojit','go sm'):''}${b('dm',f.id,'Zpráva')}${b('remove',f.id,'Odebrat')}${b('report',f.id,'Nahlásit')}`,`${Social.statusText(f)} · ${info(f)}`)).join('')
         ||'<p class="help">Zatím nemáš žádné přátele. Pošli žádost přes přezdívku nahoře.</p>'}</div></section>
     <div style="display:grid;gap:22px">
-    ${F.inReq.length?`<section class="panel"><h3>Žádosti o přátelství</h3><div class="flist">${F.inReq.map(f=>row(f,`${b('accept',f.id,'Přijmout','go sm')}${b('decline',f.id,'Odmítnout')}${b('block',f.id,'Blokovat')}`,info(f))).join('')}</div></section>`:''}
+    ${F.inReq.length?`<section class="panel"><h3>Žádosti o přátelství</h3><div class="flist">${F.inReq.map(f=>row(f,`${b('accept',f.id,'Přijmout','go sm')}${b('decline',f.id,'Odmítnout')}${b('block',f.id,'Blokovat')}${b('report',f.id,'Nahlásit')}`,info(f))).join('')}</div></section>`:''}
     ${F.outReq.length?`<section class="panel"><h3>Odeslané žádosti</h3><div class="flist">${F.outReq.map(f=>row(f,b('decline',f.id,'Zrušit'),'čeká na odpověď')).join('')}</div></section>`:''}
     ${F.blocked.length?`<section class="panel"><h3>Zablokovaní</h3><p class="help">Jejich zprávy ani žádosti nevidíš.</p><div class="flist">${F.blocked.map(f=>row(f,b('unblock',f.id,'Odblokovat'),'')).join('')}</div></section>`:''}
     </div>`;
   document.querySelectorAll('#frList [data-f]').forEach(x=>x.onclick=()=>{const k=x.dataset.f,id=x.dataset.id;
     if(k==='join')return joinRoom(id);
+    if(k==='report')return Social.reportDialog(id,[...F.friends,...F.inReq].find(f=>f.id===id)?.nick||'hráče');
     if(k==='dm')return Social.openDM(id);
     // removing and blocking ask for a second click
     if((k==='remove'||k==='block')&&!x.dataset.sure){x.dataset.sure='1';x.textContent='Opravdu?';setTimeout(()=>{if(x.isConnected){delete x.dataset.sure;x.textContent=k==='remove'?'Odebrat':'Blokovat'}},3000);return}
     Social.fr(k,id)});
+}
+
+// ---------- Moderace (only for nicks in ADMIN_NICKS) ----------
+const MOD_UI={nick:''};
+const tShort=t=>new Date(t).toLocaleString('cs-CZ',{day:'numeric',month:'numeric',hour:'2-digit',minute:'2-digit'});
+const until=t=>t>=8e15?'natrvalo':'do '+tShort(t);
+async function tabMod(){
+  if(!$('#modBody'))$('#hubBody').innerHTML='<div id="modBody" style="display:grid;gap:22px"><section class="panel"><p class="help">Načítám…</p></section></div>';
+  try{renderMod(await api('/api/mod?nick='+encodeURIComponent(MOD_UI.nick)))}catch(e){$('#modBody')&&($('#modBody').innerHTML=`<section class="panel"><p class="err">${esc(e.message)}</p></section>`)}
+}
+async function modAct(body,msg){try{renderMod(await api('/api/mod',{...body,lookup:MOD_UI.nick}));if(msg)toast(msg)}catch(e){toast(e.message,true)}}
+function renderMod(v){
+  if(H.tab!=='mod'||!$('#modBody'))return;
+  const state=s=>s?`${s.muteUntil?`<span class="bad">zákaz chatu ${until(s.muteUntil)}</span> `:''}${s.banUntil?`<span class="bad">zablokován ${until(s.banUntil)}</span> `:''}${s.warns?`varování ${s.warns}× · `:''}nahlášení celkem ${s.reports}`:'';
+  const acts=(target,rid='')=>`<div class="btns modacts" data-t="${target}" data-r="${rid}">
+    ${rid?'<button class="ghost sm" type="button" data-m="dismiss">Zamítnout</button>':''}
+    <button class="ghost sm" type="button" data-m="warn">Varovat</button>
+    <button class="ghost sm" type="button" data-m="mute" data-min="60">Chat 1 h</button><button class="ghost sm" type="button" data-m="mute" data-min="1440">Chat 24 h</button><button class="ghost sm" type="button" data-m="mute" data-min="10080">Chat 7 dní</button>
+    <button class="ghost sm" type="button" data-m="ban" data-min="10080">Blok 7 dní</button><button class="ghost sm" type="button" data-m="ban" data-min="43200">Blok 30 dní</button><button class="ghost sm bad" type="button" data-m="ban" data-min="0">Blok natrvalo</button></div>`;
+  const P=v.player;
+  $('#modBody').innerHTML=`<section class="panel"><div class="row"><h3>Moderace</h3><small class="help">${v.open.length} nevyřízených nahlášení</small></div>
+      <form class="inline" id="modFind" autocomplete="off"><label class="field">Najít hráče<input id="modNick" maxlength="16" value="${esc(MOD_UI.nick)}"></label><button class="ghost" type="submit">Hledat</button></form>
+      <label class="field">Poznámka k trestu (uvidí ji hráč)<input id="modNote" maxlength="200" placeholder="Např. urážky v chatu"></label>
+      ${P?`<div class="rep"><div><b>${esc(P.nick)}</b> <small class="help">úr. ${P.level} · účet od ${new Date(P.created).toLocaleDateString('cs-CZ')}${P.admin?' · moderátor':''}</small></div><small class="help">${state(P)}</small>
+        ${P.admin?'':acts(P.id)}<div class="btns">${P.muteUntil?`<button class="go sm" type="button" data-q="unmute" data-id="${P.id}">Zrušit zákaz chatu</button>`:''}${P.banUntil?`<button class="go sm" type="button" data-q="unban" data-id="${P.id}">Odblokovat</button>`:''}</div>
+        ${P.history.length?`<div class="lbl">Nahlášení</div>${P.history.map(r=>`<small class="help">${tShort(r.at)} · ${esc(D.REPORT_REASONS[r.reason]||r.reason)} · od ${esc(r.fromNick)} · ${r.status==='open'?'čeká':esc(r.status)}${r.note?` · „${esc(r.note)}“`:''}</small>`).join('')}`:''}</div>`:MOD_UI.nick?'<p class="help">Hráč nenalezen.</p>':''}
+    </section>
+    <section class="panel"><h3>Nahlášení</h3>${v.open.map(r=>`<div class="rep"><div class="row"><div><b>${esc(r.targetNick)}</b> · ${esc(D.REPORT_REASONS[r.reason]||r.reason)}<small class="help" style="display:block">nahlásil ${esc(r.fromNick)} · ${tShort(r.at)}${r.targetState?' · '+state(r.targetState):''}</small></div></div>
+        ${r.note?`<p class="help">„${esc(r.note)}“</p>`:''}
+        ${r.ctx.length?`<div class="ctx">${r.ctx.map(m=>`<div><small>${tShort(m.t)} · ${m.ch==='world'?'svět':m.ch==='room'?'místnost':m.ch==='guild'?'klan':'soukromě'}</small> ${esc(m.text)}</div>`).join('')}</div>`:'<small class="help">Bez zpráv v chatu.</small>'}
+        ${r.targetState?.admin?'<button class="ghost sm" type="button" data-q="dismiss" data-r="'+r.id+'">Zamítnout</button>':acts(r.target,r.id)}</div>`).join('')||'<p class="help">Žádné nevyřízené nahlášení.</p>'}</section>
+    <div class="grid2" style="align-items:start">
+      <section class="panel"><h3>Potrestaní</h3><div class="flist">${v.sanctioned.map(s=>`<div class="fr"><span><b>${esc(s.nick)}</b><small>${state(s)}</small></span><div class="btns">${s.muteUntil?`<button class="ghost sm" type="button" data-q="unmute" data-id="${s.id}">Zrušit chat</button>`:''}${s.banUntil?`<button class="ghost sm" type="button" data-q="unban" data-id="${s.id}">Odblokovat</button>`:''}</div></div>`).join('')||'<p class="help">Nikdo.</p>'}</div></section>
+      <section class="panel"><h3>Záznam</h3><div class="tline">${v.log.map(l=>`<div><small>${tShort(l.t)}</small><span>${esc(l.by)} · ${esc(l.kind)} · ${esc(l.target)}${l.detail?' · '+esc(l.detail):''}</span></div>`).join('')||'<small class="help">Zatím nic.</small>'}</div></section></div>`;
+  $('#modFind').onsubmit=e=>{e.preventDefault();MOD_UI.nick=$('#modNick').value.trim();tabMod()};
+  const NAMES={dismiss:'Nahlášení zamítnuto.',warn:'Varování odesláno.',mute:'Zákaz chatu udělen.',ban:'Hráč zablokován.',unmute:'Zákaz chatu zrušen.',unban:'Hráč odblokován.'};
+  document.querySelectorAll('#modBody .modacts [data-m]').forEach(b=>b.onclick=()=>{const box=b.parentElement,kind=b.dataset.m;
+    if(kind==='ban'&&!sure(b,b.textContent))return;
+    modAct({kind,target:box.dataset.t,report:box.dataset.r||undefined,minutes:b.dataset.min?+b.dataset.min:undefined,note:$('#modNote').value},NAMES[kind])});
+  document.querySelectorAll('#modBody [data-q]').forEach(b=>b.onclick=()=>modAct({kind:b.dataset.q,target:b.dataset.id,report:b.dataset.r},NAMES[b.dataset.q]));
 }
 
 // ---------- Sezónní průkaz ----------
@@ -528,9 +571,10 @@ function tabInv(){
   const p=H.profile,I=H.inv;
   const list=p.inv.filter(i=>(!I.slot||i.slot===I.slot)&&i.r>=I.minR).sort((a,b)=>b.r-a.r||b.lvl-a.lvl);
   const sel=p.inv.find(i=>i.id===I.sel);
-  const cheap=p.inv.filter(i=>i.r===0&&!isEq(i));
+  const cheap=p.inv.filter(i=>i.r===0&&!isEq(i)&&!i.lock);
   $('#hubBody').innerHTML=`<section class="panel"><div class="row"><h3>Inventář · ${p.inv.length} / ${D.INV_MAX}</h3>
-      <button class="ghost sm" id="sellCommon" type="button" ${cheap.length?'':'disabled'}>Prodat běžné nevybavené (${cheap.length}) za ${num(cheap.reduce((a,i)=>a+D.itemValue(i),0))} kr.</button></div>
+      <div class="btns"><span class="res">${num(p.essence|0)} <small>ESENCE</small></span><span class="res">${p.frags|0} <small>FRAGMENTŮ</small></span>
+      <button class="ghost sm" id="sellCommon" type="button" ${cheap.length?'':'disabled'}>Prodat běžné nevybavené (${cheap.length}) za ${num(cheap.reduce((a,i)=>a+D.itemValue(i),0))} kr.</button></div></div>
       <div class="row"><div class="seg" id="fSlot"><button type="button" data-s="" aria-pressed="${!I.slot}">Vše</button>${D.SLOT_KEYS.map(s=>`<button type="button" data-s="${s}" aria-pressed="${I.slot===s}">${D.SLOTS[s].name}</button>`).join('')}</div>
       <div class="seg" id="fR">${D.RARITIES.map((r,i)=>`<button type="button" data-r="${i}" aria-pressed="${I.minR===i}">${i?r.name+' +':'Všechny'}</button>`).join('')}</div></div></section>
     <div class="grid2"><section class="panel"><div class="items">${list.map(it=>itemCard(it,{sel:it.id===I.sel,eq:isEq(it)})).join('')||'<p class="help">Žádné předměty v tomto filtru. Implantáty padají z NPC, bossů a po zápasech. Koupit je můžeš v Obchodě nebo na Tržišti.</p>'}</div></section>
@@ -539,20 +583,93 @@ function tabInv(){
   document.querySelectorAll('#fR button').forEach(b=>b.onclick=()=>{I.minR=+b.dataset.r;tabInv()});
   document.querySelectorAll('#hubBody .item[data-id]').forEach(b=>b.onclick=()=>{I.sel=b.dataset.id;tabInv()});
   $('#sellCommon').onclick=()=>act('sell',{ids:cheap.map(i=>i.id)},j=>`Prodáno za ${num(j.credits)} kreditů.`);
-  if(sel){
-    const eq=isEq(sel);
-    $('#eqBtn').onclick=()=>act('equip',{slot:sel.slot,itemId:eq?null:sel.id},eq?'Implantát sundán.':'Implantát vybaven.');
-    $('#sellBtn').onclick=()=>{I.sel=null;act('sell',{ids:[sel.id]},j=>`Prodáno za ${num(j.credits)} kreditů.`)};
-    $('#listBtn').onclick=()=>{const price=+$('#listPrice').value;I.sel=null;act('marketList',{itemId:sel.id,price},`Nabídnuto na tržišti za ${num(price)} kreditů.`)};
-  }
+  if(sel)bindItemDetail(sel);
 }
+const costTxt=c=>[c.credits?`${num(c.credits)} kr.`:'',c.essence?`${num(c.essence)} esence`:'',c.fragments?`${c.fragments} fragmentů`:''].filter(Boolean).join(' + ');
 function itemDetail(it){
-  const eq=isEq(it),v=D.itemValue(it);
-  return`<div class="idet r${it.r}"><h4>${esc(it.name)}</h4><small class="help">${D.RARITIES[it.r].name} · ${D.SLOTS[it.slot].name} · úroveň ${it.lvl}${eq?' · vybaveno':''}</small>
-    <ul>${it.aff.map(a=>`<li>${D.fmtStat(a.k,a.v)}</li>`).join('')}</ul>${it.u?`<p class="uq">${D.UNIQUES[it.u].desc}</p>`:''}
-    <div class="btns"><button class="go sm" id="eqBtn" type="button">${eq?'Sundat':'Vybavit'}</button><button class="ghost sm" id="sellBtn" type="button">Prodat za ${num(v)} kr.</button></div>
-    <div class="inline"><label class="field">Cena na tržišti<input id="listPrice" type="number" min="10" max="1000000" value="${Math.max(10,v*3)}"></label><button class="ghost sm" id="listBtn" type="button">Nabídnout</button></div>
-    <p class="help">Tržiště si z prodeje bere ${D.MARKET_FEE*100} %. Nabídka vyprší po 7 dnech a předmět se ti vrátí.</p></div>`;
+  const p=H.profile,eq=isEq(it),v=D.itemValue(it),st=D.itemStats(it),m=D.upgradeMult(it);
+  const uc=D.upgradeCost(it),rc=D.retuneCost(it),ns=it.sock?.length||0,smax=D.SOCKETS_MAX[it.r];
+  const next=uc?D.itemStats({...it,up:(it.up|0)+1}):null;
+  const owned=Object.entries(p.crystals||{}).filter(([,n])=>n>0).sort();
+  const essOut=D.ESSENCE[it.r]+Array.from({length:it.up|0},(_,n)=>Math.floor((D.upgradeCost(it,n)?.essence||0)/2)).reduce((a,b)=>a+b,0);
+  return`<div class="idet r${it.r}"><h4>${esc(it.name)}${it.up?` <span class="iup">+${it.up}</span>`:''}</h4><small class="help">${D.RARITIES[it.r].name} · ${D.SLOTS[it.slot].name} · úroveň ${it.lvl}${eq?' · vybaveno':''}${it.lock?' · zamčeno':''}</small>
+    <ul>${it.aff.map((a,i)=>`<li>${D.fmtStat(a.k,Math.round(a.v*m*10)/10)}${next?` <small class="help">→ ${Math.round(a.v*(m+D.UPGRADE_STEP)*10)/10}</small>`:''}${p.level>=rc.level&&!it.offer&&it.aff.length?` <button class="ghost xs" type="button" data-rt="${i}" title="Přeladit za ${costTxt(rc)}">přeladit</button>`:''}</li>`).join('')}
+      ${st.filter(a=>a.crystal).map(a=>`<li style="color:${D.parseCrystal(a.crystal).C.color}">${D.fmtStat(a.k,a.v)} <small class="help">· ${D.crystalName(a.crystal)}</small></li>`).join('')}</ul>${it.u?`<p class="uq">${D.UNIQUES[it.u].desc}</p>`:''}
+    ${it.offer?`<div class="rew"><b>Přeladění · ${D.fmtStat(it.aff[it.offer.i].k,it.aff[it.offer.i].v)} → <span style="color:var(--green)">${D.fmtStat(it.offer.k,it.offer.v)}</span></b><small class="help">Hodnoty jsou bez vylepšení, to se počítá navíc.</small>
+      <div class="btns"><button class="go sm" type="button" id="rtYes">Vzít novou</button><button class="ghost sm" type="button" id="rtNo">Nechat původní</button></div></div>`:''}
+    <div class="btns"><button class="go sm" id="eqBtn" type="button">${eq?'Sundat':'Vybavit'}</button><button class="ghost sm" id="lockBtn" type="button">${it.lock?'Odemknout':'Zamknout'}</button>
+      ${it.lock?'':`<button class="ghost sm" id="sellBtn" type="button">Prodat za ${num(v)} kr.</button><button class="ghost sm" id="salvBtn" type="button">Rozložit · ${essOut} esence${D.FRAGMENTS[it.r]?` + ${D.FRAGMENTS[it.r]} fragmenty`:''}</button>`}</div>
+    <div class="forge"><div class="lbl">Dílna</div>
+      ${uc?`<div class="frow"><span>Vylepšit na <b>+${(it.up|0)+1}</b> (+${D.UPGRADE_STEP*100} % ke všem vlastnostem)<small>${costTxt(uc)}${p.level<uc.level?` · od úrovně ${uc.level}`:''}</small></span><button class="go sm" id="upBtn" type="button" ${p.level<uc.level||it.offer?'disabled':''}>Vylepšit</button></div>`:`<div class="frow"><span>Nejvyšší stupeň <b>+${D.UPGRADE_MAX}</b></span></div>`}
+      <div class="frow"><span>Přeladění vlastnosti<small>${p.level>=rc.level?`U vlastnosti klikni na „přeladit“ · ${costTxt(rc)} · nabídne náhodnou jinou vlastnost`:`Od úrovně ${rc.level}`}</small></span></div>
+      <div class="frow"><span>Zdířky ${ns} / ${smax}<small>${smax?(ns<smax?`Další zdířka: ${costTxt(D.SOCKET_COST[ns])}`:'Všechny zdířky otevřené'):'Běžný implantát zdířky nemá'}</small></span>${ns<smax?'<button class="ghost sm" id="sockOpen" type="button">Otevřít</button>':''}</div>
+      ${ns?`<div class="sockrow">${it.sock.map((s,i)=>{const c=s&&D.parseCrystal(s);return c?`<div class="sock on" style="--c:${c.C.color}"><b>${D.crystalName(s)}</b><small>${D.fmtStat(c.C.stat,c.v)}</small><button class="ghost xs" type="button" data-take="${i}">Vyjmout · ${30*c.tier} kr.</button></div>`
+        :`<div class="sock"><b>Prázdná zdířka</b>${owned.length?`<select data-put="${i}"><option value="">Zasadit krystal…</option>${owned.map(([k,n])=>`<option value="${k}">${D.crystalName(k)} (${n}×) · ${D.fmtStat(D.parseCrystal(k).C.stat,D.parseCrystal(k).v)}</option>`).join('')}</select>`:'<small class="help">Nemáš krystaly. Padají ze zápasů a z rozložených epických implantátů.</small>'}</div>`}).join('')}</div>`:''}
+    </div>
+    ${it.lock?'':`<div class="inline"><label class="field">Cena na tržišti<input id="listPrice" type="number" min="10" max="1000000" value="${Math.max(10,v*3)}"></label><button class="ghost sm" id="listBtn" type="button">Nabídnout</button></div>
+    <p class="help">Tržiště si z prodeje bere ${D.MARKET_FEE*100} %. Nabídka vyprší po 7 dnech a předmět se ti vrátí. Vylepšení i krystaly v zdířkách se prodávají s implantátem.</p>`}</div>`;
+}
+function bindItemDetail(sel){
+  const I=H.inv,eq=isEq(sel),id=sel.id;
+  $('#eqBtn').onclick=()=>act('equip',{slot:sel.slot,itemId:eq?null:id},eq?'Implantát sundán.':'Implantát vybaven.');
+  $('#lockBtn').onclick=()=>act('lock',{itemId:id},j=>j.lock?'Implantát zamčen: nejde prodat ani rozložit.':'Implantát odemčen.');
+  $('#sellBtn')&&($('#sellBtn').onclick=()=>{I.sel=null;act('sell',{ids:[id]},j=>`Prodáno za ${num(j.credits)} kreditů.`)});
+  $('#salvBtn')&&($('#salvBtn').onclick=e=>{if(sel.r>=3&&!sure(e.currentTarget,e.currentTarget.textContent))return;I.sel=null;act('salvage',{ids:[id]},salvMsg)});
+  $('#listBtn')&&($('#listBtn').onclick=()=>{const price=+$('#listPrice').value;I.sel=null;act('marketList',{itemId:id,price},`Nabídnuto na tržišti za ${num(price)} kreditů.`)});
+  $('#upBtn')&&($('#upBtn').onclick=()=>act('upgrade',{itemId:id},j=>`Vylepšeno na +${j.up}.`));
+  document.querySelectorAll('[data-rt]').forEach(b=>b.onclick=()=>act('retune',{itemId:id,i:+b.dataset.rt}));
+  $('#rtYes')&&($('#rtYes').onclick=()=>act('retuneResolve',{itemId:id,accept:true},'Nová vlastnost nastavena.'));
+  $('#rtNo')&&($('#rtNo').onclick=()=>act('retuneResolve',{itemId:id,accept:false},'Původní vlastnost zůstala.'));
+  $('#sockOpen')&&($('#sockOpen').onclick=()=>act('socketOpen',{itemId:id},'Zdířka otevřena.'));
+  document.querySelectorAll('[data-put]').forEach(s=>s.onchange=()=>s.value&&act('socketSet',{itemId:id,idx:+s.dataset.put,crystal:s.value},'Krystal zasazen.'));
+  document.querySelectorAll('[data-take]').forEach(b=>b.onclick=()=>act('socketTake',{itemId:id,idx:+b.dataset.take},'Krystal vyjmut a vrácen do zásoby.'));
+}
+const salvMsg=j=>`Rozloženo ${j.n}× · +${num(j.essence)} esence${j.frags?` · +${j.frags} fragmentů`:''}${j.crystals.length?` · krystal ${j.crystals.map(D.crystalName).join(', ')}`:''}.`;
+
+// ---------- Mistrovství ----------
+function tabMastery(){
+  const p=H.profile,k=H.mcls&&D.CLASSES[H.mcls]?H.mcls:H.cls,M=D.MASTERY;
+  const card=key=>{
+    const ult=key.endsWith(':ult'),m=p.mastery?.[key]||{xp:0,br:[]},R=D.masteryRank(m.xp|0),r=R.rank,B=ult?D.MASTERY_ULT_BRANCHES:D.MASTERY_BRANCHES;
+    const kind=ult?'Ultimátka':key.includes(':')?'Schopnost povolání':'Schopnost profese';
+    const bonus=ult?`+${r*M.ultPerRank} % nabíjení ultimátky`:`−${(r*M.perRank*100).toFixed(1).replace('.',',')} % energie a čekání`;
+    return`<div class="mst${r>=M.max?' done':''}"><div class="row"><div><small class="help">${kind}</small><b>${esc(D.masteryName(key))}</b></div><span class="rkb sm" style="--c:${r>=20?'var(--gold)':r>=10?'#c08bff':'#4fb4ff'}">${r} / ${M.max}</span></div>
+      ${r<M.max?`<div class="xpbar" style="width:100%"><i style="width:${R.into/R.need*100}%"></i></div><small class="help">${R.into} / ${R.need} do úrovně ${r+1} · ${ult?`každé použití ${M.ultXp} bodů`:'každé použití 1 bod'}</small>`:'<small class="help" style="color:var(--gold)">Plné mistrovství</small>'}
+      <small class="help">Teď: ${r?bonus:'zatím bez bonusu'}</small>
+      <div class="msl">${M.tiers.map((t,i)=>`<div class="msr${r>=t?'':' lock'}"><small>Úr. ${t}</small>${B[i].map((b,j)=>`<button type="button" class="chip" data-mk="${esc(key)}" data-t="${i}" data-c="${j}" aria-pressed="${m.br?.[i]===j}" ${r>=t?'':'disabled'} title="${esc(b.desc)}">${b.name}<small>${b.desc}</small></button>`).join('')}</div>`).join('')}</div></div>`};
+  const keys=D.masteryKeys(p,k),total=keys.reduce((a,key)=>a+D.masteryRank(p.mastery?.[key]?.xp|0).rank,0);
+  $('#hubBody').innerHTML=`<section class="panel"><div class="row"><div><h3>Mistrovství schopností</h3><p class="help">Schopnost sílí tím, jak ji používáš v zápasech s účtem: každá úroveň (0–${M.max}) zlevní energii a zkrátí čekání o ${(M.perRank*100).toLocaleString('cs-CZ')} %, ultimátce zrychlí nabíjení o ${M.ultPerRank} %. Na úrovních ${M.tiers.join(', ')} si vybereš jednu ze dvou větví; měnit je můžeš zdarma mimo zápas. V hodnocené hře se počítá nejvýš úroveň ${M.rankedCap}.</p></div>
+      <span class="rkb" style="--c:var(--gold)">${total} / ${keys.length*M.max}</span></div>
+      <div class="seg" id="mCls">${D.CLASS_KEYS.map(c=>`<button type="button" data-k="${c}" aria-pressed="${c===k}">${D.CLASSES[c].name}</button>`).join('')}</div></section>
+    <div class="msts">${keys.map(card).join('')}</div>
+    ${keys.length<=4?'<p class="help">Schopnosti profese se tu objeví, až si zvolíš profesi (od úrovně 10).</p>':''}`;
+  document.querySelectorAll('#mCls button').forEach(b=>b.onclick=()=>{H.mcls=b.dataset.k;tabMastery()});
+  document.querySelectorAll('[data-mk]').forEach(b=>b.onclick=()=>{const cur=b.getAttribute('aria-pressed')==='true';
+    act('masteryBranch',{key:b.dataset.mk,tier:+b.dataset.t,choice:cur?null:+b.dataset.c},cur?'Větev zrušena.':'Větev zvolena.')});
+}
+
+// ---------- Dílna: essence, bulk salvage, crystals, crafting ----------
+function tabForge(){
+  const p=H.profile,eqs=new Set(Object.values(p.eq)),C=p.crystals||{};
+  const bulk=r=>p.inv.filter(i=>i.r<=r&&!eqs.has(i.id)&&!i.lock&&!(i.up>0)&&!(i.sock||[]).some(Boolean)&&!i.offer);
+  const essOf=list=>list.reduce((a,i)=>a+D.ESSENCE[i.r],0);
+  const types=Object.entries(D.CRYSTALS);
+  $('#hubBody').innerHTML=`<section class="panel"><div class="row"><h3>Dílna</h3><div class="btns"><span class="res">${num(p.credits)} <small>KREDITŮ</small></span><span class="res">${num(p.essence|0)} <small>ESENCE</small></span><span class="res">${p.frags|0} <small>LEGENDÁRNÍCH FRAGMENTŮ</small></span></div></div>
+      <p class="help">Rozložením implantátu získáš esenci (běžný ${D.ESSENCE[0]}, neobvyklý ${D.ESSENCE[1]}, vzácný ${D.ESSENCE[2]}, epický ${D.ESSENCE[3]}, legendární ${D.ESSENCE[4]} a ${D.FRAGMENTS[4]} fragmenty). Epické a legendární navíc můžou dát krystal. Esence a kredity platí vylepšení +1 až +${D.UPGRADE_MAX}, přeladění vlastností a otevírání zdířek; to děláš u konkrétního implantátu v Inventáři. Zamčené implantáty nejde prodat ani rozložit.</p></section>
+    <div class="grid2" style="align-items:start">
+      <section class="panel"><h3>Hromadné rozložení</h3><p class="help">Jen nevybavené, nezamčené a neupravené implantáty (bez vylepšení a krystalů).</p>
+        <div class="list">${[0,1,2].map(r=>{const L=bulk(r);return`<div class="lrow r${r}"><div><b>Do ${['běžných','neobvyklých','vzácných'][r]} včetně</b><small>${L.length} implantátů · +${num(essOf(L))} esence</small></div><span></span><button class="ghost sm" type="button" data-bulk="${r}" ${L.length?'':'disabled'}>Rozložit</button></div>`}).join('')}</div></section>
+      <section class="panel"><h3>Výroba</h3>
+        ${Object.entries(D.CRAFT).map(([k,c])=>`<div class="rew"><b class="r${c.minR}" style="color:var(--rc)">${k==='epic'?'Epický':'Legendární'} implantát</b><small class="help">Cena ${costTxt(c)} · implantát tvé úrovně ve zvoleném slotu${k==='legendary'?' s unikátním efektem':''}.</small>
+          <div class="btns">${D.SLOT_KEYS.map(s=>`<button class="ghost sm" type="button" data-craft="${k}" data-slot="${s}">${D.SLOTS[s].name}</button>`).join('')}</div></div>`).join('')}</section></div>
+    <section class="panel"><div class="row"><h3>Krystaly</h3><button class="ghost sm" type="button" id="distill">Destilovat náhodný krystal I · ${D.DISTILL.essence} esence</button></div>
+      <p class="help">Krystaly se zasazují do zdířek implantátů (neobvyklý a vzácný 1, epický 2, legendární 3; zdířky se otevírají v Inventáři). Do jednoho implantátu jde každý druh jen jednou. Tři stejné krystaly spojíš do vyššího stupně. Padají ze zápasů (častěji po výhře a po bossech) a z rozložených epických a legendárních implantátů.</p>
+      <div class="cryst">${types.map(([t,c])=>`<div class="cr" style="--c:${c.color}"><b>${c.name}</b><small>${D.STATS[c.stat].name}</small>
+        ${D.CRYSTAL_TIERS.map((n,i)=>{const k=D.crystalKey(t,i+1),have=Object.hasOwn(C,k)?C[k]:0;return`<div class="crt${have?'':' none'}"><span>${n} · +${c.v[i]}${D.STATS[c.stat].unit}</span><b>${have}×</b>${i<4&&have>=3?`<button class="ghost xs" type="button" data-comb="${k}" title="Spojit 3 za ${D.CRYSTAL_COMBINE[i]} kr.">3 → ${D.CRYSTAL_TIERS[i+1]}</button>`:''}</div>`}).join('')}</div>`).join('')}</div></section>`;
+  document.querySelectorAll('[data-bulk]').forEach(b=>b.onclick=e=>{if(!sure(e.currentTarget,'Rozložit'))return;act('salvageBulk',{maxR:+b.dataset.bulk},salvMsg)});
+  document.querySelectorAll('[data-craft]').forEach(b=>b.onclick=()=>act('craft',{kind:b.dataset.craft,slot:b.dataset.slot},j=>`Vyrobeno: ${j.item.name}.`));
+  document.querySelectorAll('[data-comb]').forEach(b=>b.onclick=()=>act('crystalCombine',{key:b.dataset.comb},j=>`Nový krystal: ${D.crystalName(j.crystal)}.`));
+  $('#distill').onclick=()=>act('distill',{},j=>`Destilován krystal: ${D.crystalName(j.crystal)}.`);
 }
 
 // ---------- Dovednosti ----------
@@ -676,6 +793,8 @@ export function showRewards(m){
     ${m.camp?.echo?'<div class="lvup">Ozvěna jádra pokořena · bonus týdne</div>':''}
     ${m.record?`<div class="lvup">Nový rekord v Nekonečnu · vlna ${m.record}</div>`:''}
     ${m.mvp?'<div class="lvup">MVP zápasu · +15 % zkušeností a kreditů</div>':''}
+    ${m.masteryUps?.length?`<p class="help">Mistrovství: ${m.masteryUps.map(x=>`<b style="color:#c08bff">${esc(x.name)} ${x.rank}</b>${x.milestone?' · nový milník':''}`).join(', ')}${m.masteryUps.some(x=>x.milestone)?' · větev si vyber na kartě Mistrovství.':''}</p>`:''}
+    ${m.crystals?.length?`<p class="help">Krystal: ${m.crystals.map(k=>`<b style="color:${D.parseCrystal(k)?.C.color}">${D.crystalName(k)}</b>`).join(', ')} · zasadíš ho do zdířky v Inventáři.</p>`:''}
     ${m.pass?.gain?`<p class="help">Sezónní průkaz: <b style="color:#3fffd2">+${num(m.pass.gain)} bodů</b> · stupeň ${m.pass.tier} / ${D.PASS.tiers}</p>${m.pass.tier>m.pass.before?`<div class="lvup" style="color:#3fffd2">Nový stupeň průkazu ${m.pass.tier}! Odměnu vyzvedneš na kartě Průkaz.</div>`:''}`:''}
     ${m.achNew?.length?`<div class="achnew">${m.achNew.map(a=>`<span style="--c:${D.ACH_TIERS[a.tier].color}">Úspěch · ${esc(a.name)} · ${D.ACH_TIERS[a.tier].name}</span>`).join('')}<small class="help">Odměnu vyzvedneš v Úspěších.</small></div>`:''}
     ${m.guild?`<p class="help">Klan <b class="cg">[${esc(m.guild.tag)}]</b>: +${num(m.guild.gx)} zkušeností klanu${m.guild.bx||m.guild.bc?` · klanový bonus už v odměně: +${num(m.guild.bx)} zkušeností, +${num(m.guild.bc)} kreditů`:''}</p>${m.guild.up?`<div class="lvup">Klan dosáhl úrovně ${m.guild.up}!</div>`:''}`:''}

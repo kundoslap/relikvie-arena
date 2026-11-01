@@ -76,6 +76,15 @@ Stačí aktualizace: v repozitáři na GitHubu **Add file → Upload files**, p�
 
 Funguje to v počítači i v mobilu.
 
+## Moderátoři (správa nahlášení)
+
+Kdo smí řešit nahlášení a trestat hráče, určuje proměnná `ADMIN_NICKS`. Do souborů na GitHubu se nic nepíše.
+
+1. Na Renderu otevři svou službu **relikvie-arena** → vlevo **Environment**.
+2. **Add Environment Variable**: klíč `ADMIN_NICKS`, hodnota tvoje herní přezdívka (víc moderátorů odděl čárkou, např. `Petan,Kamos`).
+3. **Save Changes**. Render službu sám restartuje.
+4. Po přihlášení uvidíš v hubu kartu **Moderace**.
+
 ## Co je dobré vědět
 
 - **Uspávání:** služba zdarma se po 15 minutách bez návštěvy uspí. První otevření pak trvá asi minutu, než se server probudí. Během hraní se neuspí.

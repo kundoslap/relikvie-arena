@@ -15,3 +15,6 @@ services:
       # Postgres connection string (e.g. from a free Neon database). Without it accounts are lost on every restart.
       - key: DATABASE_URL
         sync: false
+      # moderator nicks, comma separated (e.g. "Petan"); they get the Moderace tab
+      - key: ADMIN_NICKS
+        sync: false
