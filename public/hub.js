@@ -267,7 +267,7 @@ function friendList(){
   const b=(k,id,n,cls='ghost sm')=>`<button type="button" class="${cls}" data-f="${k}" data-id="${esc(id)}">${n}</button>`;
   $('#frList').innerHTML=`<section class="panel"><div class="row"><h3>Přátelé · ${on} online</h3><small class="help">${F.friends.length} / ${D.FRIENDS_MAX}</small></div>
       ${Social.connected()?'':'<p class="help">Připojuji k serveru přátel…</p>'}
-      <div class="flist">${F.friends.map(f=>row(f,`${f.code?b('join',f.code,'Připojit','go sm'):''}${b('dm',f.id,'Zpráva')}${b('remove',f.id,'Odebrat')}${b('report',f.id,'Nahlásit')}`,`${Social.statusText(f)} · ${info(f)}`)).join('')
+      <div class="flist">${F.friends.map(f=>row(f,`${f.code?b('join',f.code,'Připojit','go sm'):''}${f.watch?b('watch',f.id,'Sledovat'):''}${b('dm',f.id,'Zpráva')}${b('remove',f.id,'Odebrat')}${b('report',f.id,'Nahlásit')}`,`${Social.statusText(f)} · ${info(f)}`)).join('')
         ||'<p class="help">Zatím nemáš žádné přátele. Pošli žádost přes přezdívku nahoře.</p>'}</div></section>
     <div style="display:grid;gap:22px">
     ${F.inReq.length?`<section class="panel"><h3>Žádosti o přátelství</h3><div class="flist">${F.inReq.map(f=>row(f,`${b('accept',f.id,'Přijmout','go sm')}${b('decline',f.id,'Odmítnout')}${b('block',f.id,'Blokovat')}${b('report',f.id,'Nahlásit')}`,info(f))).join('')}</div></section>`:''}
@@ -276,6 +276,7 @@ function friendList(){
     </div>`;
   document.querySelectorAll('#frList [data-f]').forEach(x=>x.onclick=()=>{const k=x.dataset.f,id=x.dataset.id;
     if(k==='join')return joinRoom(id);
+    if(k==='watch')return H.cb.spectate(id);
     if(k==='report')return Social.reportDialog(id,[...F.friends,...F.inReq].find(f=>f.id===id)?.nick||'hráče');
     if(k==='dm')return Social.openDM(id);
     // removing and blocking ask for a second click

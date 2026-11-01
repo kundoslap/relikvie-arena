@@ -37,6 +37,8 @@ Proměnné prostředí:
 
 **Povolání:** Lovec (nápor a přesnost), Strážce (výdrž a obrana), Technik (energie a obnova) a **Žhář** (oheň a kontrola prostoru). Žhář střílí žhavé projektily, které zapalují (hoření 6 HP/s), má Plamennou vlnu (kužel ohně do 6 m s hořením), Žhnoucí půdu (hořící oblast 3,5 m na 4 s), Fázový plamen (přesun o 7 m, za sebou nechá oheň) a ultimátku Inferno (tři výbuchy ohně kolem sebe do 7 m). Jeho relikvie zdvojnásobí hoření a zvětší ohnivé oblasti. Hoření odstraní Dekontaminace a Obnova. Strom má větve Výheň, Popel a Inferno, vzhledy Uhlíková maska, Modrý plamen, relikviový a neonový z průkazu. V soubojích botů 1 na 1 vychází Žhář zhruba na 50 % výher.
 
+**Sledování zápasů přátel:** když přítel hraje (kromě hodnocené hry), v seznamu přátel je tlačítko Sledovat. Divák vidí zápas živě pohledem sledovaného hráče (jeho zdraví, schopnosti, mlhu války i týmové pingy), klávesami Q/E nebo šipkami v liště přepíná mezi hrdiny a na konci uvidí výsledek. Divák nemůže hrát ani pingovat, nepočítá se mezi hráče a místnost jich unese nejvýš 8. Sledovat můžou jen přihlášení přátelé.
+
 **Pingy a rychlé zprávy:** klávesa G položí ping tam, kam míříš: „Sem“, a když míříš na soupeře, „Útok na…“ (značka ho sleduje); Alt+G je varování „Pozor“. Ping vidí jen tvůj tým, v aréně i na minimapě, se zvukem. Klávesa V otevře rychlé zprávy (1–7: Útok!, Ustupte!, Potřebuju pomoc!, Bráním!, Díky!, Dobrá hra!, Haha!), které se ukážou bublinou nad hlavou všem. Boti v týmu na pingy reagují: jdou na označené místo, útočí na označeného soupeře a z varování ustoupí. Na mobilu jsou tlačítka Ping a Zprávy, klávesy jdou přemapovat v Nastavení. Nejvýš 6 signálů za 8 s.
 
 **Taktické akce** (klávesa T, pro všechna povolání, volí se v Postavě): Úhyb (skok a krátká nezranitelnost), Dekontaminace (odstraní mor nanitů, krvácení, zpomalení a umlčení, 4 s ochrana), Nouzové přebití (+45 energie), Signální maják (soupeři v oblasti dostávají o 25 % víc a nemůžou se maskovat) a Polní bariéra (štít 22 % HP). Odemykají se na úrovních 1–12, boti je používají taky.
@@ -82,6 +84,8 @@ Proměnné prostředí:
 - Žebříček hráčů.
 
 **Hra s lidmi:** Rychlá hra tě přidá do otevřené místnosti zvoleného režimu, nebo založí novou, která se sama spustí do 20 s (zbytek doplní boti). Místnost můžeš založit jako veřejnou, pak ji ostatní vidí v seznamu veřejných místností. Soukromá funguje dál přes kód.
+
+**Návrat po výpadku spojení:** když hráči během zápasu spadne spojení (přepnutí z Wi-Fi na mobilní data, tunel, zavřený nebo znovu načtený panel), server mu drží místo 60 s a za jeho hrdinu mezitím hraje bot (v seznamu jako „(odpojen)“). Hra se sama připojuje znovu a ukazuje lištu „Spojení přerušeno · obnovuji…“. Po návratu ovládá stejného hrdinu se vším, co v zápase získal. Spojení, ze kterého 5 s nic nepřišlo, hra považuje za přerušené, i když to prohlížeč ještě nehlásí. Funguje to i po znovunačtení stránky (klíč pro návrat je jen v daném panelu prohlížeče) a pro hosty. Místo zanikne, když hráč odejde z menu, spustí jinou hru, dostane blokaci, nebo zápas skončí. Kdo se do konce zápasu nevrátí, dostane odměny do účtu stejně, v hodnocené hře se ale počítá jako odchod (prohra). Délku držení mění proměnná prostředí `REJOIN_SECONDS`.
 
 **Hodnocená hra:** Souboj 1 proti 1 nebo Aréna 3 proti 3 o hodnocení Elo (start 1000, prvních 10 umisťovacích zápasů mění hodnocení rychleji). Hledání páruje hráče s podobným hodnocením a týmy rozdělí vyrovnaně podle součtu hodnocení, chybějící místa doplní boti. Zápas se hodnotí, jen když na každé straně hraje aspoň jeden hráč s účtem, takže proti botům se hodnocení nahnat nedá. Kdo odejde před koncem, prohrává. Divize: Bronz, Stříbro (1100), Zlato (1250), Platina (1400), Diamant (1550), Neon (1700). Sezóna trvá kalendářní měsíc: na jejím konci dostaneš odměnu podle nejlepší dosažené divize (kredity, od Zlata implantát, od Diamantu titul) a nová sezóna začne s polovičním odstupem od 1000. Žebříček ukazuje pořadí aktuální sezóny.
 
@@ -138,8 +142,12 @@ Návod krok za krokem pro Render a databázi Neon (obojí zdarma, bez instalace 
 
 ## Síťový model a bezpečnost
 
-- Server simuluje 30× za sekundu a každému hráči posílá vlastní snapshot. Neviditelné soupeře a cizí kořist v něm nevidíš.
-- Ostatní jednotky se vykreslují se zpožděním 100 ms a interpolují se. Vlastní pohyb klient předpovídá a srovnává se serverem.
+- Server simuluje 30× za sekundu a každému hráči posílá vlastní snapshot 15× za sekundu (proměnná prostředí `SNAP_EVERY`, výchozí 2 = každý druhý krok). Události mezi snapshoty se nasbírají a pošlou s dalším. Neviditelné soupeře a cizí kořist v něm nevidíš.
+- Spojení je komprimované (permessage-deflate), jeden hráč tak potřebuje kolem 16 kB/s místo dřívějších 30 kB/s.
+- Ostatní jednotky se interpolují podle času serveru, ne podle okamžiku, kdy zpráva dorazila. Klient průběžně odhaduje posun hodin a kolísání sítě a podle něj volí zpoždění vykreslování (90–320 ms). Výkyvy sítě se tak neprojeví jako cukání. V náhledu sítě je vidět ping i výkyvy. Vlastní pohyb klient předpovídá a srovnává se serverem.
+- Návrat po výpadku: každý hráč dostane v místnosti náhodný klíč pro návrat (jen pro sebe). S ním se nové spojení vrátí na původní místo; staré, napůl mrtvé spojení server zavře, aniž by místo uvolnil. Bez klíče se do cizího místa dostat nejde.
+- Automatická kvalita: když hra běží pod 30 snímků za sekundu déle než 6 s, sníží se rozlišení vykreslování.
+- `/api/status` ukazuje i zatížení serveru: `load.tickMs` (průměrný čas výpočtu kroku), `load.lateMs` (zpoždění smyčky) a `load.snapHz`. Když server nestíhá, zapíše do logu varování „Server nestíhá…“.
 - O zásazích, kořisti, odměnách, cenách a pravidlech stromu rozhoduje jen server. Sestavu během zápasu měnit nejde.
 - Kompenzace pingu: ke každému vstupu klient přidá čas světa, který právě vidí. Server si pamatuje polohy jednotek za posledních 0,4 s a základní útoky, střely a Rozpolcení vyhodnocuje proti poloze cíle v okamžiku, kdy na něj hráč mířil. Mířit dopředu tak není potřeba. Kompenzuje se nejvýš 300 ms, při horším spojení zbytek zpoždění zůstává.
 - Chat: server text čistí (řídicí a neviditelné znaky, délka), omezuje rychlost a doručuje podle blokování. Týmové zprávy dostane jen vlastní tým. Příliš velká zpráva jen zavře spojení odesílatele.

@@ -4,6 +4,7 @@ import http from 'node:http';
 import {readFile} from 'node:fs/promises';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
+import {randomBytes} from 'node:crypto';
 import {WebSocketServer} from 'ws';
 import * as S from './public/sim.js';
 import {openDB} from './db.js';
@@ -43,7 +44,8 @@ async function api(req,res,p,url){
   }
   if(p==='/api/top')return json(res,200,meta.top());
   if(p==='/api/rooms')return json(res,200,{rooms:publicRooms(),online:wss.clients.size});
-  if(p==='/api/status')return json(res,200,{ok:true,storage:db.kind,rooms:rooms.size,players:wss.clients.size});
+  if(p==='/api/status')return json(res,200,{ok:true,storage:db.kind,rooms:rooms.size,players:wss.clients.size,
+    matches:[...rooms.values()].filter(r=>r.state==='match').length,load:{tickMs:LOAD.tickMs,lateMs:LOAD.lateMs,snapHz:30/SNAP_EVERY}});
   const prof=meta.auth(token);if(!prof)throw new HttpError(401,'Přihlášení vypršelo. Přihlas se znovu.');
   if(p==='/api/logout'){meta.logout(token);return json(res,200,{ok:true})}
   if(p==='/api/me')return json(res,200,{profile:meta.view(prof)});
@@ -87,7 +89,8 @@ const server=http.createServer(async(req,res)=>{
 });
 
 // ---------- rooms ----------
-const wss=new WebSocketServer({server,path:'/ws',maxPayload:4096});
+// messages over 512 bytes (snapshots, rosters) are compressed; level 1 keeps the CPU cost low on a small server
+const wss=new WebSocketServer({server,path:'/ws',maxPayload:4096,perMessageDeflate:{threshold:512,zlibDeflateOptions:{level:1,memLevel:7},concurrencyLimit:10}});
 const rooms=new Map();
 let nextCid=1;
 
@@ -109,12 +112,18 @@ const loadOf=c=>c.profile?meta.loadoutFor(c.profile,c.cls,c.room?.ranked?S.MASTE
 
 function lobbyMsg(room,c){
   return{type:'lobby',code:room.code,you:c.cid,host:room.host,state:room.state,diff:room.diff,mode:room.mode,map:room.map,boss:room.boss,solo:!!room.solo,mission:room.mission||null,
-    pub:!!room.pub,ranked:!!room.ranked,
+    pub:!!room.pub,ranked:!!room.ranked,rk:c.rk,
     autoIn:room.quick&&room.state==='lobby'&&!(room.ranked&&room.clients.size<2)?Math.max(0,Math.ceil((room.autoAt-Date.now())/1000)):0,
-    players:humans(room).map(x=>({cid:x.cid,name:x.name,cls:x.cls,team:x.team,lv:x.profile?.level||0,tag:x.profile?meta.tagOf(x.profile.id):null,rt:room.ranked?x.profile?.ranked?.rating??null:null}))};
+    players:humans(room).map(x=>({cid:x.cid,name:x.name,cls:x.cls,team:x.team,off:x.gone?1:0,lv:x.profile?.level||0,tag:x.profile?meta.tagOf(x.profile.id):null,rt:room.ranked?x.profile?.ranked?.rating??null:null}))};
 }
 function broadcastLobby(room){for(const c of room.clients.values())send(c,lobbyMsg(room,c))}
-function broadcast(room,m){const s=JSON.stringify(m);for(const c of room.clients.values())send(c,s)}
+function broadcast(room,m){const s=JSON.stringify(m);for(const c of room.clients.values())send(c,s);for(const c of room.specs||[])send(c,s)}
+// ---------- spectators ----------
+// A friend can watch a running (not ranked) match: no unit, the snapshots of the hero they follow, at most 8 per room.
+const SPEC_MAX=8;
+function endSpectate(c,msg){const r=c.specRoom;if(!r)return;r.specs?.delete(c);c.specRoom=null;c.specTarget=0;if(msg)send(c,{type:'specEnd',msg})}
+function specInfo(r,c){const heroes=r.match.units.filter(u=>u.kind==='hero').map(u=>({i:u.id,n:u.name,t:u.team,h:u.ctrl==='human'?1:0}));
+  return{type:'specStart',code:r.code,mode:r.mode,target:c.specTarget,heroes}}
 function sendRoster(room){room.rosterVer=room.match.rosterVer;broadcast(room,{type:'roster',units:S.roster(room.match),info:S.matchInfo(room.match)})}
 
 // ---------- friends, presence and chat ----------
@@ -130,7 +139,8 @@ function presenceIndex(){const idx=new Map();for(const r of rooms.values())for(c
 function statusOf(idx,pid){
   const r=idx.get(pid);
   if(r){const open=!r.solo&&!r.ranked&&r.clients.size<maxPlayers(r)&&!(r.match&&r.match.state==='end');
-    return{st:r.state==='match'?'match':'lobby',mode:r.mode,mission:r.mission||null,ranked:!!r.ranked,solo:!!r.solo,code:open?r.code:null,n:r.clients.size,max:maxPlayers(r)}}
+    return{st:r.state==='match'?'match':'lobby',mode:r.mode,mission:r.mission||null,ranked:!!r.ranked,solo:!!r.solo,code:open?r.code:null,n:r.clients.size,max:maxPlayers(r),
+      watch:!!(r.state==='match'&&!r.ranked&&r.match&&r.match.state!=='end'&&(r.specs?.size||0)<SPEC_MAX)}}
   return{st:socials.get(pid)?.size?'online':'offline'};
 }
 function pushFriends(pid,idx=presenceIndex()){
@@ -214,7 +224,8 @@ function chatContext(reporter,target){
 }
 // a banned player is disconnected everywhere: hub connection and game
 function kickPlayer(pid,msg){
-  for(const ws of wss.clients){const c=ws.client;if(!c||c.profile?.id!==pid)continue;send(c,{type:'error',msg});send(c,{type:'note',msg,bad:true});setTimeout(()=>{try{ws.close(4003,'ban')}catch{}},200)}
+  dropHeld(pid);
+  for(const ws of wss.clients){const c=ws.client;if(!c||c.profile?.id!==pid)continue;c.kicked=true;send(c,{type:'error',msg});send(c,{type:'note',msg,bad:true});setTimeout(()=>{try{ws.close(4003,'ban')}catch{}},200)}
 }
 function chatBlocked(c){const until=c.profile&&meta.muted(c.profile);if(until){note(c,meta.muteText(c.profile),true);return true}return false}
 function roomSay(c,m){
@@ -267,10 +278,42 @@ function leave(c){
   room.clients.delete(c.cid);c.room=null;
   if(room.match){const u=room.match.units.find(x=>x.id===c.unitId);if(u){u.ctrl='bot';u.name=c.name+' (bot)';u.queue=[];u.bag=[];room.match.rosterVer++}}
   c.unitId=0;
-  if(!room.clients.size){rooms.delete(room.code);return}
+  if(!room.clients.size){for(const s of [...room.specs||[]])endSpectate(s,'Hráči zápas opustili.');rooms.delete(room.code);return}
   if(room.host===c.cid)room.host=room.clients.keys().next().value;
   broadcastLobby(room);
 }
+// ---------- coming back after a dropped connection ----------
+// When the connection of a player in a running match drops (Wi-Fi to mobile data, a tunnel, a reload), the seat is held
+// for REJOIN_MS: a bot plays the hero meanwhile and the player returns with the rejoin key from the lobby message.
+// Starting something else, leaving on purpose, the end of the match or a ban give the seat up.
+const REJOIN_MS=(Number(process.env.REJOIN_SECONDS)||60)*1000;
+function hold(c){
+  const room=c.room,M=room?.match,u=M&&M.state!=='end'&&M.units.find(x=>x.id===c.unitId&&x.ctrl==='human');
+  if(!u)return false;
+  c.gone=Date.now();u.ctrl='bot';u.queue=[];u.bag=[];u.name=c.name+' (odpojen)';M.rosterVer++;
+  broadcastLobby(room);return true;
+}
+function resume(c,m){
+  const r=rooms.get(String(m.code||'').toUpperCase().trim()),rk=typeof m.rk==='string'?m.rk:'';
+  const old=rk&&r&&[...r.clients.values()].find(x=>x.rk===rk),M=r?.match;
+  const u=old&&M&&M.state!=='end'&&M.units.find(x=>x.id===old.unitId&&x.kind==='hero');
+  if(!u)return send(c,{type:'resumeFail',msg:'Do zápasu se už vrátit nejde: skončil, nebo se server restartoval.'});
+  // the old socket may still look open (half dead after a network switch): it is detached first, so its close changes nothing
+  Object.assign(c,{cid:old.cid,name:old.name,cls:old.cls,team:old.team,profile:old.profile,unitId:old.unitId,rk:old.rk,room:r,gone:0});
+  if(old!==c){old.room=null;old.unitId=0;old.gone=0;try{old.ws.terminate()}catch{}}
+  r.clients.set(c.cid,c);
+  u.ctrl='human';u.name=c.name;u.queue=[];M.rosterVer++;
+  send(c,lobbyMsg(r,c));
+  if(r.chat?.length)send(c,{type:'chatHist',list:r.chat.filter(x=>!meta.blocks(c.profile,{id:x.pid}))});
+  send(c,{type:'roster',units:S.roster(M),info:S.matchInfo(M)});
+  broadcastLobby(r);
+}
+// a held seat ends after REJOIN_MS, or as soon as the match is over and the room is back in the lobby
+setInterval(()=>{const now=Date.now();
+  for(const r of [...rooms.values()])for(const c of [...r.clients.values()])if(c.gone&&(now-c.gone>REJOIN_MS||r.state!=='match'))leave(c);
+},1000).unref();
+// starting something new gives up a held seat of the same account elsewhere
+function dropHeld(pid){if(!pid)return;for(const r of [...rooms.values()])for(const c of [...r.clients.values()])if(c.gone&&c.profile?.id===pid)leave(c)}
 function finishMatch(room){
   const M=room.match;room.endSent=true;
   const stats=S.stats(M),pvp=M.D.pvp,mvp=[...stats].sort((a,b)=>S.mvpScore(b,pvp)-S.mvpScore(a,pvp))[0]?.i||0;
@@ -281,15 +324,17 @@ function finishMatch(room){
     const present=e=>{const c=room.clients.get(e.cid);return!!(c&&c.profile?.id===e.pid&&M.units.some(x=>x.id===c.unitId&&x.ctrl==='human'))};
     rk=meta.rankedResult(M,room.rankedEntries.map(e=>({...e,present:present(e)})));room.rankedEntries=null;
   }
+  // a player whose connection dropped shortly before the end still gets the rewards into the account
   for(const c of room.clients.values()){
-    const u=M.units.find(x=>x.id===c.unitId&&x.ctrl==='human');if(!u)continue;
+    const u=M.units.find(x=>x.id===c.unitId&&(x.ctrl==='human'||c.gone));if(!u)continue;
     if(!c.profile){send(c,{type:'rewards',guest:true});continue}
     const loot=M.loot.filter(L=>L.owner===u.id).map(L=>L.item);
     const mine=rk&&!rk.none?rk[c.profile.id]||null:null;
     const r=meta.rewardsFor(M,u,c.profile,loot,u.id===mvp,mine?mine.delta:null);
     send(c,{type:'rewards',...r,ranked:mine,rankedNone:rk?.none||null,profile:meta.view(c.profile)});
   }
-  setTimeout(()=>{if(room.match!==M)return;room.match=null;room.state='lobby';room.autoAt=Date.now()+QUICK_WAIT;for(const c of room.clients.values())c.unitId=0;broadcastLobby(room)},room.solo?4000:END_LINGER);
+  setTimeout(()=>{if(room.match!==M)return;room.match=null;room.state='lobby';room.autoAt=Date.now()+QUICK_WAIT;for(const c of room.clients.values())c.unitId=0;
+    for(const c of [...room.specs||[]])endSpectate(c,'Zápas skončil.');broadcastLobby(room)},room.solo?4000:END_LINGER);
 }
 
 wss.on('connection',(ws)=>{
@@ -305,7 +350,7 @@ wss.on('connection',(ws)=>{
     // a thrown error in one message must not crash the server for everyone
     try{onMessage(c,m)}catch(e){console.error('Chyba při zpracování zprávy',m.type,e)}
   });
-  ws.on('close',()=>{leave(c);if(c.social){const set=socials.get(c.profile.id);set?.delete(c);if(set&&!set.size)socials.delete(c.profile.id)}});
+  ws.on('close',()=>{if(c.kicked||!hold(c))leave(c);endSpectate(c);if(c.social){const set=socials.get(c.profile.id);set?.delete(c);if(set&&!set.size)socials.delete(c.profile.id)}});
   c.hb=setInterval(()=>{if(!c.alive){if(++c.missed>=10){ws.terminate();return}}else c.missed=0;c.alive=false;c.msgs=0;try{ws.ping()}catch{}},1000);
   ws.on('close',()=>clearInterval(c.hb));
 });
@@ -324,9 +369,24 @@ function onMessage(c,m){
         send(c,{type:'social',ok:true,me:p.id,world:worldLog.filter(x=>!meta.blocks(p,{id:x.pid})),dms});
         send(c,guildInfo(p.id));pushFriends(p.id);break}
       case 'say':if(m.ch==='room')roomSay(c,m);break;
+      case 'spectate':{
+        if(room)leave(c);endSpectate(c);
+        c.profile=meta.auth(m.token);if(!c.profile)return send(c,{type:'error',msg:'Sledovat zápasy můžou jen přihlášení hráči.'});
+        const f=meta.profById(m.friend);if(!f||!meta.isFriend(c.profile,f))return send(c,{type:'error',msg:'Sledovat můžeš jen přátele.'});
+        const r=roomOf(f.id),fc=r&&[...r.clients.values()].find(x=>x.profile?.id===f.id);
+        if(!r||!r.match||r.state!=='match'||r.match.state==='end'||!fc?.unitId)return send(c,{type:'error',msg:`${f.nick} teď nehraje žádný zápas.`});
+        if(r.ranked)return send(c,{type:'error',msg:'Hodnocené zápasy sledovat nejde.'});
+        r.specs??=new Set();if(r.specs.size>=SPEC_MAX)return send(c,{type:'error',msg:'Zápas už sleduje moc diváků.'});
+        r.specs.add(c);c.specRoom=r;c.specTarget=fc.unitId;c.name=c.profile.nick;
+        send(c,specInfo(r,c));send(c,{type:'roster',units:S.roster(r.match),info:S.matchInfo(r.match)});
+        break}
+      case 'specTarget':{
+        const r=c.specRoom;if(!r?.match)break;const u=r.match.units.find(x=>x.id===(m.target|0)&&x.kind==='hero');if(!u)break;
+        c.specTarget=u.id;send(c,specInfo(r,c));break}
+      case 'resume':if(room)leave(c);endSpectate(c);resume(c,m);break;
       case 'hello':{
-        if(room)leave(c);
-        c.profile=meta.auth(m.token);
+        if(room)leave(c);endSpectate(c);
+        c.profile=meta.auth(m.token);dropHeld(c.profile?.id);c.rk=randomBytes(12).toString('hex');
         c.name=c.profile?c.profile.nick:cleanName(m.name)+' (host)';
         c.cls=S.CLASSES[m.cls]?m.cls:(c.profile?.cls||'striker');
         if(c.profile&&c.profile.cls!==c.cls){c.profile.cls=c.cls;db.touch()}
@@ -396,22 +456,34 @@ function onMessage(c,m){
         if(!room||!room.match)break;const u=room.match.units.find(x=>x.id===c.unitId);if(!u||u.ctrl!=='human')break;
         const num=v=>Number.isFinite(+v)?Math.max(-60,Math.min(60,+v)):0;S.signal(room.match,u,String(m.k||'').slice(0,12),num(m.x),num(m.z));break}
       case 'ping':send(c,{type:'pong',t:m.t});break;
-      case 'leave':leave(c);send(c,{type:'left'});break;
+      case 'leave':leave(c);endSpectate(c);send(c,{type:'left'});break;
     }
 }
 
 // fixed-step loop for every running match
+// The simulation runs 30 times a second; players get a snapshot every SNAP_EVERY ticks (15 per second) with the
+// events of the skipped tick included. The client interpolates on server time, so this stays smooth and halves
+// the traffic and the serialisation work on a small server.
+const SNAP_EVERY=Math.max(1,Number(process.env.SNAP_EVERY)||2);
+// load metrics for /api/status: work per tick and how late the loop runs (a starved CPU shows up here first)
+const LOAD={tickMs:0,lateMs:0,ticks:0,work:0,late:0,since:performance.now()};
 let last=performance.now(),acc=0;
 setInterval(()=>{
-  const now=performance.now();acc+=Math.min(250,now-last);last=now;
-  while(acc>=S.TICK*1000){acc-=S.TICK*1000;
+  const now=performance.now(),gap=now-last;acc+=Math.min(250,gap);last=now;LOAD.late=Math.max(LOAD.late,gap-1000/60);
+  const w0=performance.now();
+  while(acc>=S.TICK*1000){acc-=S.TICK*1000;LOAD.ticks++;
     for(const room of rooms.values()){
       const M=room.match;if(room.state!=='match'||!M)continue;
       try{
         S.step(M);room.tick++;
         if(M.rosterVer!==room.rosterVer)sendRoster(room);
-        const ev=M.events;M.events=[];
+        room.evq=room.evq?room.evq.concat(M.events):M.events;M.events=[];
+        if(room.tick%SNAP_EVERY===0||M.state==='end'){
+        const ev=room.evq;room.evq=null;
         for(const c of room.clients.values())send(c,S.snapshotFor(M,c.unitId,ev));
+        // spectators see what the followed hero sees (fog, invisibility and team pings included)
+        if(room.specs)for(const c of room.specs){if(!M.units.some(u=>u.id===c.specTarget)){const h=M.units.find(u=>u.kind==='hero');if(h){c.specTarget=h.id;send(c,specInfo(room,c))}}send(c,S.snapshotFor(M,c.specTarget,ev))}
+        }
         if(room.tick%30===0)broadcast(room,{type:'stats',stats:S.stats(M)});
         if(M.state==='end'&&!room.endSent)finishMatch(room);
       }catch(e){
@@ -423,6 +495,10 @@ setInterval(()=>{
       }
     }
   }
+  LOAD.work+=performance.now()-w0;
+  if(now-LOAD.since>=5000){LOAD.tickMs=+(LOAD.work/Math.max(1,LOAD.ticks)).toFixed(3);LOAD.lateMs=Math.round(LOAD.late);
+    if(LOAD.late>150)console.warn(`Server nestíhá: smyčka se opozdila o ${LOAD.lateMs} ms (${rooms.size} místností)`);
+    LOAD.work=0;LOAD.ticks=0;LOAD.late=0;LOAD.since=now}
 },1000/60);
 
 // quick-play rooms count down in the lobby and start on their own

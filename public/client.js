@@ -181,7 +181,18 @@ function clearWorld(){
   tutMarker(null);$('#hud').classList.remove('tut');$('#tut').hidden=true;clearSignals();
   relicMesh.visible=false;relicLight.intensity=0;
 }
-function renderTime(){return G.mode==='on'?performance.now()-100:(G.M?(G.M.time+G.acc)*1000-TICK*1000:0)}
+// Online, everything is placed on the server's clock: snapshots are stamped with server time, and the client keeps an
+// estimate of the offset between the server clock and its own. Network jitter then changes only how full the buffer
+// is, not where units are drawn. The buffer (delay) grows with measured jitter and shrinks again on a calm connection.
+const NET={off:null,jit:0,delay:120};
+function clockSample(serverMs){
+  const s=serverMs-performance.now();
+  if(NET.off==null||s>NET.off+500||s<NET.off-2000){NET.off=s;NET.jit=0;return}
+  // the offset follows the fastest arrivals (the upper envelope) and drifts down slowly if the clocks drift
+  NET.off=Math.max(s,NET.off-.05);NET.jit+=((NET.off-s)-NET.jit)*.05;
+  const want=Math.min(320,Math.max(90,1000/15*1.2+NET.jit*2.2+15));NET.delay+=(want-NET.delay)*(want>NET.delay?.2:.01);
+}
+function renderTime(){return G.mode==='on'?(NET.off==null?0:performance.now()+NET.off-NET.delay):(G.M?(G.M.time+G.acc)*1000-TICK*1000:0)}
 // Server time of the world currently on screen; the server uses it to judge hits where the player saw the targets.
 function viewTime(){
   const rt=renderTime(),S=G.snaps;if(!S.length)return 0;
@@ -194,7 +205,7 @@ function syncMap(map,list,make,update){
   for(const [id,m] of map)if(!seen.has(id)){scene.remove(m);m.traverse(o=>{if(o.geometry&&![BEAM_GEO,BOX_Z,WALL_GEO,DISC_GEO,RING_GEO].includes(o.geometry))o.geometry.dispose();o.material&&o.material.dispose()});map.delete(id)}
 }
 function ingest(s){
-  s.recv=G.mode==='on'?performance.now():s.t*1000;
+  s.recv=s.t*1000;if(G.mode==='on')clockSample(s.recv);
   s.um=new Map(s.u.map(u=>[u.i,u]));
   G.snaps.push(s);if(G.snaps.length>40)G.snaps.shift();
   G.last=s;
@@ -213,6 +224,7 @@ function ingest(s){
     const gem=new THREE.Mesh(new THREE.OctahedronGeometry(.35),new THREE.MeshBasicMaterial({color:HDR(c,2.6)}));gem.position.y=1;g.add(col,gem);g.userData.gem=gem;return g},()=>{});
 }
 function reconcile(s){
+  if(G.spec){G.pred=null;G.hist=[];return}
   const me=s.me,mu=me&&s.um.get(me.i),info=me&&G.roster.get(me.i);
   if(!me||!mu||mu.d||mu.hid||(mu.fl&128)||!info||info.kind!=='h'){G.pred=null;G.hist=[];return}
   const p=G.pred||{radius:info.k==='guardian'?.85:.7,dash:null,st:{},mods:{}};
@@ -314,8 +326,9 @@ addEventListener('keydown',e=>{
   if(e.code==='Escape'&&inGame()){setPause(!G.paused);return}
   if((e.code==='Enter'||e.code==='NumpadEnter')&&inGame()&&G.mode==='on'&&!G.solo&&!G.paused){
     e.preventDefault();for(const k in keys)keys[k]=false;mouseDown=false;Social.openMatchChat(e.shiftKey);return}
+  if(G.spec&&inGame()&&!G.paused&&!e.repeat&&(e.code==='KeyQ'||e.code==='KeyE')){e.preventDefault();specSwitch(e.code==='KeyQ'?-1:1);return}
   // quick messages: the wheel opens with its key, numbers pick a message
-  if(inGame()&&!G.paused&&!e.repeat){
+  if(inGame()&&!G.paused&&!e.repeat&&!G.spec){
     if(!$('#wheel').hidden&&/^(Digit|Numpad)[1-7]$/.test(e.code)){e.preventDefault();sendSignal(WHEEL[+e.code.slice(-1)-1]);toggleWheel(false);return}
     if(e.code===Cfg.key('wheel')){e.preventDefault();toggleWheel();return}
     if(e.code===Cfg.key('ping')){e.preventDefault();sendSignal(e.altKey?'danger':'here',aimPoint());return}
@@ -345,7 +358,7 @@ function autoAim(){const me=myPos(),mine=G.roster.get(G.you);let best=null,bd=20
   const f=views.get(G.you)?.f||0;return best?{x:best.x,z:best.z}:{x:me.x+Math.sin(f)*6,z:me.z+Math.cos(f)*6}}
 const aimPoint=()=>isTouch?autoAim():{x:mouseWorld.x,z:mouseWorld.z};
 function inputTick(){
-  if(!G.you)return;
+  if(!G.you||G.spec)return;
   let mx=0,mz=0;
   if(!G.paused){
     const K=a=>keys[Cfg.key(a)];
@@ -472,16 +485,51 @@ function stepLocal(dt){
 
 // ---------- online ----------
 function wsSend(m){if(G.ws&&G.ws.readyState===1)G.ws.send(JSON.stringify(m))}
-function closeWs(){if(G.ws){const ws=G.ws;G.ws=null;try{ws.send(JSON.stringify({type:'leave'}))}catch{}try{ws.close()}catch{}}clearInterval(G.pingT)}
-function connect(hello){
-  Hub.netError('');closeWs();
+function closeWs(){if(G.ws){const ws=G.ws;G.ws=null;try{ws.send(JSON.stringify({type:'leave'}))}catch{}try{ws.close()}catch{}}clearInterval(G.pingT);stopResume()}
+// drops the socket without leaving the room, so the server keeps the seat for a comeback
+function dropWs(){const ws=G.ws;G.ws=null;clearInterval(G.pingT);if(ws){ws.onclose=null;try{ws.close()}catch{}}}
+// ---------- coming back after a dropped connection ----------
+// The server holds the seat of a dropped player for a minute (a bot plays the hero meanwhile). The client retries with
+// the rejoin key from the lobby message, also after a reload of the tab. A socket that stays silent for 5 s in a match
+// counts as dropped too: after a switch from Wi-Fi to mobile data the browser often notices the dead connection late.
+const REJOIN_KEY='relikvie.rejoin',REJOIN_MS=60000;
+const R={key:null,until:0,tries:0,timer:0};
+function saveRejoin(k){R.key=k;try{k?sessionStorage.setItem(REJOIN_KEY,JSON.stringify({...k,t:Date.now()})):sessionStorage.removeItem(REJOIN_KEY)}catch{}}
+function reconBar(text){let el=$('#reconBar');if(!el){el=document.createElement('div');el.id='reconBar';el.setAttribute('role','status');document.body.append(el)}el.hidden=!text;el.textContent=text||''}
+function stopResume(){R.until=0;R.tries=0;clearTimeout(R.timer);reconBar('')}
+function netLost(){
+  if(!R.key||G.ended||G.spec)return false;
+  if(!R.until)R.until=Date.now()+REJOIN_MS;tryResume();return true;
+}
+function tryResume(){
+  clearTimeout(R.timer);
+  if(Date.now()>R.until)return giveUp('Spojení se nepodařilo obnovit. Za tvou postavu dohraje bot.');
+  R.tries++;reconBar(`Spojení přerušeno · obnovuji… (pokus ${R.tries})`);
+  connect({type:'resume',code:R.key.code,rk:R.key.rk},true);
+}
+function giveUp(msg){
+  // after a reload the hub is still on screen: only a note, no jump
+  if(G.mode!=='on'&&$('#lobby').hidden){closeWs();saveRejoin(null);Hub.toast(msg,true);return}
+  saveRejoin(null);toHub();Hub.netError(msg);
+}
+function resumeAfterReload(){
+  let k=null;try{k=JSON.parse(sessionStorage.getItem(REJOIN_KEY)||'null')}catch{}
+  if(!k||!k.code||!k.rk||Date.now()-k.t>REJOIN_MS||G.ws)return;
+  R.key={code:k.code,rk:k.rk};R.until=Date.now()+15000;tryResume();
+}
+function connect(hello,resuming){
+  Hub.netError('');if(resuming)dropWs();else closeWs();NET.off=null;NET.delay=120;NET.jit=0;
   let ws;
   try{ws=new WebSocket((location.protocol==='https:'?'wss://':'ws://')+location.host+'/ws')}
   catch{Hub.netError('Online hra běží jen ze spuštěného serveru Relikvie Aréna.');return}
   G.ws=ws;
-  ws.onopen=()=>{ws.send(JSON.stringify({...hello,token:Hub.token()}));G.pingT=setInterval(()=>wsSend({type:'ping',t:performance.now()}),2000)};
-  ws.onmessage=ev=>{let m;try{m=JSON.parse(ev.data)}catch{return}onNet(m)};
+  ws.onopen=()=>{ws.send(JSON.stringify({...hello,token:Hub.token()}));G.lastMsg=performance.now();
+    G.pingT=setInterval(()=>{wsSend({type:'ping',t:performance.now()});
+      if(G.ws===ws&&G.mode==='on'&&!G.ended&&performance.now()-G.lastMsg>5000){dropWs();if(!netLost()){toHub();Hub.netError('Spojení se serverem se přerušilo.')}}},2000)};
+  ws.onmessage=ev=>{G.lastMsg=performance.now();let m;try{m=JSON.parse(ev.data)}catch{return}onNet(m)};
   ws.onclose=()=>{clearInterval(G.pingT);if(G.ws!==ws)return;G.ws=null;
+    if(R.until){R.timer=setTimeout(tryResume,Math.min(4000,600*R.tries));return}
+    if(G.mode==='on'&&netLost())return;
     if(G.mode==='on'||!$('#lobby').hidden){toHub();Hub.netError('Spojení se serverem se přerušilo.')}
     else Hub.netError('Nepodařilo se připojit k serveru.')};
 }
@@ -490,6 +538,8 @@ function onNet(m){
     case 'error':Hub.netError(m.msg);if(G.mode!=='on'&&$('#lobby').hidden)closeWs();break;
     case 'lobby':
       G.lobby=m;G.solo=m.solo;Social.roomReset(m.solo?null:m.code);
+      saveRejoin(m.state==='match'&&m.rk&&!G.ended?{code:m.code,rk:m.rk}:null);
+      if(R.until){stopResume();Hub.toast('Spojení obnoveno, jsi zpět ve hře.')}
       if(!m.solo){try{history.replaceState(null,'','?room='+m.code)}catch{}}
       if(m.state==='match'){if(G.mode!=='on')enterOnlineMatch()}
       else if(m.solo){if(G.ended)closeWs()}
@@ -497,12 +547,15 @@ function onNet(m){
       break;
     case 'roster':if(G.mode!=='on')enterOnlineMatch();if(m.info&&(m.info.map!==G.info.map||m.info.mode!==G.info.mode||!pointMeshes.length&&m.info.mode==='control'))setInfo(m.info);G.info=m.info||G.info;onRoster(m.units);break;
     case 's':if(G.mode==='on')ingest(m);break;
+    case 'specStart':{const first=!G.spec;G.spec=m;if(G.mode!=='on'){enterOnlineMatch();G.spec=m}if(first)Hub.toast('Sledování zápasu · Q/E přepíná hráče, Esc menu');renderSpecBar();break}
+    case 'specEnd':{const msg=m.msg;toHub();Hub.toast(msg||'Sledování skončilo.');break}
     case 'stats':G.stats=m.stats;break;
-    case 'end':showEnd(m);Hub.showRewards(null);break;
+    case 'end':saveRejoin(null);showEnd(m);Hub.showRewards(null);break;
+    case 'resumeFail':giveUp(m.msg);break;
     case 'rewards':Hub.showRewards(m);if(m.profile)Hub.setProfile(m.profile);if(m.levelUps?.length||m.achNew?.length)setTimeout(()=>Snd.play('levelUp',null,{ui:true}),1400);break;
     case 'chat':Social.roomMsg(m);break;
     case 'chatHist':Social.roomHist(m.list||[]);break;
-    case 'pong':G.ping=Math.round(performance.now()-m.t);$('#netInfo').textContent=`online · ping ${G.ping} ms`;break;
+    case 'pong':G.ping=Math.round(performance.now()-m.t);$('#netInfo').textContent=`online · ping ${G.ping} ms · výkyvy ${Math.round(NET.jit)} ms`;break;
   }
 }
 function enterOnlineMatch(){
@@ -520,7 +573,8 @@ const hubCallbacks={
   join:(code,o)=>connect({type:'hello',cls:o.cls,name:o.name,room:code}),
   quick:o=>connect({type:'hello',quick:true,mode:o.mode,diff:o.diff,cls:o.cls,name:o.name}),
   ranked:(mode,o)=>connect({type:'hello',ranked:true,mode,cls:o.cls,name:o.name}),
-  tutorial:o=>{closeWs();startTutorial(o)}
+  tutorial:o=>{closeWs();startTutorial(o)},
+  spectate:pid=>connect({type:'spectate',friend:pid})
 };
 function renderLobby(){
   const L=G.lobby;if(!L)return;
@@ -566,7 +620,16 @@ $('#copyBtn').onclick=async()=>{const url=location.origin+location.pathname+'?ro
 
 // ---------- screens ----------
 function showOnly(id){for(const k of ['auth','hub','lobby','hud','end','pause'])$('#'+k).hidden=k!==id;$('#board').hidden=true;if(id!=='hub')setPreview(null);Social.screen(id)}
-function toHub(){closeWs();G.lobby=null;Social.roomReset(null);try{history.replaceState(null,'',location.pathname)}catch{}startAttract();Hub.showHub()}
+// ---------- spectating ----------
+function renderSpecBar(){
+  const el=$('#specBar'),S2=G.spec;if(!S2){el.hidden=true;$('#hud').classList.remove('spec');return}
+  const h=S2.heroes.find(x=>x.i===S2.target);
+  el.hidden=false;$('#hud').classList.add('spec');
+  el.innerHTML=`<button class="ghost sm" type="button" data-sp="-1" aria-label="Předchozí hráč">◀ Q</button><div><small>SLEDUJEŠ · ${esc(MODES[S2.mode]?.name||'')}</small><b class="t${h?.t??0}">${esc(h?.n||'?')}</b></div><button class="ghost sm" type="button" data-sp="1" aria-label="Další hráč">E ▶</button><button class="ghost sm" type="button" id="specLeave">Odejít</button>`;
+  el.querySelectorAll('[data-sp]').forEach(b=>b.onclick=()=>specSwitch(+b.dataset.sp));$('#specLeave').onclick=()=>toHub();
+}
+function specSwitch(d){const S2=G.spec;if(!S2)return;const H=S2.heroes,i=H.findIndex(x=>x.i===S2.target),n=H[(i+d+H.length)%H.length];if(n)wsSend({type:'specTarget',target:n.i})}
+function toHub(){closeWs();saveRejoin(null);G.lobby=null;G.spec=null;renderSpecBar();Social.roomReset(null);try{history.replaceState(null,'',location.pathname)}catch{}startAttract();Hub.showHub()}
 function setPause(p){
   if(!inGame())return;G.paused=p;mouseDown=false;
   $('#pause').hidden=!p;
@@ -808,6 +871,18 @@ function drawPreview(dt,t){if(!PV)return;if(!PV.cv.isConnected){setPreview(null)
   const w=PV.cv.clientWidth;if(w&&PV.cv.width!==Math.round(w*Math.min(devicePixelRatio,2)))PV.r.setSize(w,w,false);
   PV.m.root.rotation.y+=dt*.6;PV.m.anim?.(dt,t,0,0);if(PV.m.drone)PV.m.drone.position.set(Math.sin(t*2)*.85,2.3,Math.cos(t*2)*.85);PV.r.render(PV.sc,PV.cam)}
 
+// ---------- automatic quality ----------
+// When the device cannot keep 30 FPS in a match for 6 s, the render resolution steps down (to 60 % at least) and the
+// player is told once; everything stays adjustable in Settings. Frames while the tab is hidden do not count.
+const AQ={t:0,n:0,told:false};
+function autoQuality(dt){
+  if(!inGame()||G.paused||document.hidden||dt>=.05){AQ.t=0;AQ.n=0;return}
+  AQ.t+=dt;AQ.n++;if(AQ.t<6)return;
+  const fps=AQ.n/AQ.t;AQ.t=0;AQ.n=0;
+  if(fps<30&&Cfg.get('scale')>.6){Cfg.set('scale',Math.max(.6,Math.round((Cfg.get('scale')-.15)*100)/100));
+    if(!AQ.told){AQ.told=true;Hub.toast(`Hra běžela jen ${Math.round(fps)} FPS, snížil jsem rozlišení. Změníš ho v Nastavení → Grafika.`)}}
+}
+
 // ---------- sound per frame: listener, music mood, low-health heartbeat ----------
 let heartT=0,lastMood='';
 function soundFrame(dt){
@@ -853,6 +928,7 @@ function frame(){
   else relicLight.intensity=Math.max(0,relicLight.intensity-dt*20);
   G.shake=Cfg.get('shake')?Math.max(0,G.shake-dt*2.2):0;
   if(!$('#fps').hidden){fpsN++;fpsT+=dt;if(fpsT>=.5){$('#fps').textContent=`${Math.round(fpsN/fpsT)} FPS`;fpsN=0;fpsT=0}}
+  autoQuality(dt);
   if(G.mode==='menu'){menuAngle+=dt*.06;camera.position.set(Math.cos(menuAngle)*46,30,Math.sin(menuAngle)*46);camera.lookAt(-6,0,0)}
   else{const p=myPos();camPos.lerp(new V3(p.x,0,p.z),1-Math.exp(-dt*6));const far=(camera.aspect<1?1.45:1)*Cfg.get('zoom'),boss=G.info.mode==='boss'||G.last?.bs?1.12:1;
     const sx=(Math.random()-.5)*G.shake*.9,sz=(Math.random()-.5)*G.shake*.9;
@@ -868,7 +944,7 @@ Cfg.setup();applyCfg();
 Social.setup({join:code=>Hub.joinRoom(code),sendRoom:(text,team)=>wsSend({type:'say',ch:'room',text,team}),pvp:()=>!!MODES[G.info?.mode||G.lobby?.mode]?.pvp});
 Social.onChange(()=>{if(!$('#lobby').hidden&&G.lobby)Social.lobbyFriends($('#lobbyFriends'),G.lobby)});
 applyTouch();startAttract();frame();
-Hub.init(hubCallbacks);
+Hub.init(hubCallbacks).then(resumeAfterReload);
 // installable app: the service worker keeps a copy of the game for offline training
 if('serviceWorker' in navigator&&(location.protocol==='https:'||location.hostname==='localhost'))navigator.serviceWorker.register('/sw.js').catch(e=>console.warn('Service worker:',e.message));
 window.__arena=G;
