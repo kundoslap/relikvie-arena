@@ -99,6 +99,87 @@ function broadcastLobby(room){for(const c of room.clients.values())send(c,lobbyM
 function broadcast(room,m){const s=JSON.stringify(m);for(const c of room.clients.values())send(c,s)}
 function sendRoster(room){room.rosterVer=room.match.rosterVer;broadcast(room,{type:'roster',units:S.roster(room.match),info:S.matchInfo(room.match)})}
 
+// ---------- friends, presence and chat ----------
+// The hub keeps a second, "social" connection open for as long as the player is signed in. It carries the friend list
+// with live status, world chat, private messages and invites. Room chat goes over the game connection.
+const socials=new Map(); // profile id -> Set of social connections
+const worldLog=[];        // last world chat messages, sent to everyone who connects
+const dmLog=new Map();    // "idA|idB" -> last private messages of two friends (kept while the server runs)
+const WORLD_KEEP=60,DM_KEEP=40,ROOM_KEEP=30;
+const dmKey=(a,b)=>a<b?a+'|'+b:b+'|'+a;
+function roomOf(pid){for(const r of rooms.values())for(const c of r.clients.values())if(c.profile?.id===pid)return r;return null}
+function presenceIndex(){const idx=new Map();for(const r of rooms.values())for(const c of r.clients.values())if(c.profile)idx.set(c.profile.id,r);return idx}
+function statusOf(idx,pid){
+  const r=idx.get(pid);
+  if(r){const open=!r.solo&&!r.ranked&&r.clients.size<maxPlayers(r)&&!(r.match&&r.match.state==='end');
+    return{st:r.state==='match'?'match':'lobby',mode:r.mode,mission:r.mission||null,ranked:!!r.ranked,solo:!!r.solo,code:open?r.code:null,n:r.clients.size,max:maxPlayers(r)}}
+  return{st:socials.get(pid)?.size?'online':'offline'};
+}
+function pushFriends(pid,idx=presenceIndex()){
+  const set=socials.get(pid),p=set?.size&&meta.profById(pid);if(!p)return;
+  const s=JSON.stringify({type:'friends',...meta.friendsView(p,id=>statusOf(idx,id))});
+  for(const c of set)if(c.lastFriends!==s){c.lastFriends=s;send(c,s)}
+}
+// status changes (joining a room, a match starting, going offline) reach friends within two seconds
+setInterval(()=>{const idx=presenceIndex();for(const pid of socials.keys())pushFriends(pid,idx)},2000).unref();
+const note=(c,msg,bad)=>send(c,{type:'note',msg,bad:!!bad});
+// at most 5 messages in 6 s per connection, and the same text not twice in a row within 4 s
+function chatOk(c,text){
+  const now=Date.now();c.chatT=(c.chatT||[]).filter(t=>now-t<6000);
+  if(c.chatT.length>=5){note(c,'Píšeš moc rychle, chvíli počkej.',true);return false}
+  if(c.lastText===text&&now-c.lastTextAt<4000)return false;
+  c.chatT.push(now);c.lastText=text;c.lastTextAt=now;return true;
+}
+const pushLog=(arr,m,keep)=>{arr.push(m);if(arr.length>keep)arr.shift()};
+function onSocial(c,m){
+  const p=c.profile;
+  switch(m.type){
+    case 'fr':{
+      let ids;try{ids=meta.friendOp(p,String(m.op||''),typeof m.arg==='string'?m.arg.slice(0,40):'')}catch(e){if(!(e instanceof HttpError))throw e;return note(c,e.message,true)}
+      const idx=presenceIndex();for(const id of ids)pushFriends(id,idx);
+      const o=ids[1]&&meta.profById(ids[1]);
+      if(m.op==='add'&&o){if(p.social.friends.includes(o.id))note(c,`${o.nick} je teď tvůj přítel.`);else{note(c,`Žádost odeslána hráči ${o.nick}.`);
+        for(const x of socials.get(o.id)||[])if(o.social.inReq.includes(p.id))send(x,{type:'note',msg:`${p.nick} ti poslal žádost o přátelství.`})}}
+      if(m.op==='accept'&&o)for(const x of socials.get(o.id)||[])send(x,{type:'note',msg:`${p.nick} přijal tvou žádost o přátelství.`});
+      break}
+    case 'say':{
+      const text=S.cleanChat(m.text);if(!text)return;
+      const o=m.ch==='dm'?meta.profById(m.to):null;
+      if(m.ch==='dm'&&(!o||!meta.isFriend(p,o)))return note(c,'Soukromé zprávy jdou posílat jen přátelům.',true);
+      if(!chatOk(c,text))return;
+      if(m.ch==='world'){
+        const msg={type:'chat',ch:'world',from:p.nick,pid:p.id,lv:p.level,text,t:Date.now()};pushLog(worldLog,msg,WORLD_KEEP);
+        const s=JSON.stringify(msg);for(const set of socials.values())for(const x of set)if(!meta.blocks(x.profile,p))send(x,s);
+      }else if(m.ch==='dm'){
+        const msg={type:'chat',ch:'dm',from:p.nick,pid:p.id,text,t:Date.now()},k=dmKey(p.id,o.id);
+        if(!dmLog.has(k))dmLog.set(k,[]);pushLog(dmLog.get(k),msg,DM_KEEP);
+        for(const x of socials.get(p.id)||[])send(x,{...msg,with:o.id});
+        if(!meta.blocks(o,p))for(const x of socials.get(o.id)||[])send(x,{...msg,with:p.id});
+        if(!socials.get(o.id)?.size)note(c,`${o.nick} není online. Zprávu uvidí, až se připojí.`);
+      }
+      break}
+    case 'invite':{
+      const o=meta.profById(m.to);if(!o||!meta.isFriend(p,o))return note(c,'Zvát můžeš jen přátele.',true);
+      const r=roomOf(p.id);
+      if(!r)return note(c,'Nejdřív založ místnost nebo se do nějaké připoj.',true);
+      if(r.solo||r.ranked)return note(c,r.ranked?'Do hodnocené hry zvát nejde.':'Do sólo hry zvát nejde.',true);
+      if(r.clients.size>=maxPlayers(r))return note(c,'Místnost je plná.',true);
+      if(!socials.get(o.id)?.size)return note(c,`${o.nick} není online.`,true);
+      const now=Date.now();c.invT??={};if(now-(c.invT[o.id]||0)<5000)return;c.invT[o.id]=now;
+      if(!meta.blocks(o,p))for(const x of socials.get(o.id))send(x,{type:'invite',from:p.nick,pid:p.id,code:r.code,mode:r.mode,mission:r.mission||null,state:r.state});
+      note(c,`Pozvánka odeslána hráči ${o.nick}.`);break}
+  }
+}
+function roomSay(c,m){
+  const room=c.room;if(!room||room.solo)return;
+  const text=S.cleanChat(m.text);if(!text||!chatOk(c,text))return;
+  const team=!!m.team&&S.MODES[room.mode].pvp;
+  const msg={type:'chat',ch:'room',from:c.name,pid:c.profile?.id||null,cid:c.cid,tm:c.team,team,text,t:Date.now()};
+  if(!team)pushLog(room.chat??=[],msg,ROOM_KEEP);
+  const s=JSON.stringify(msg);
+  for(const x of room.clients.values())if((!team||x.team===c.team)&&!meta.blocks(x.profile,c.profile))send(x,s);
+}
+
 function startMatch(room){
   const pvp=S.MODES[room.mode].pvp;
   if(room.ranked){
@@ -166,6 +247,8 @@ wss.on('connection',(ws)=>{
   // a client is dropped after 10 s without a pong, so a short network hiccup on mobile does not kick the player
   const c={ws,cid:nextCid++,name:'Host',cls:'striker',team:0,room:null,unitId:0,alive:true,missed:0,msgs:0,profile:null};
   ws.on('pong',()=>c.alive=true);
+  // an oversized or malformed frame raises an 'error' on the socket; without a handler it would take the whole server down
+  ws.on('error',()=>{try{ws.terminate()}catch{}});
   ws.on('message',(buf)=>{
     if(++c.msgs>120)return; // per-second budget, reset by the heartbeat
     let m;try{m=JSON.parse(buf)}catch{return}
@@ -173,14 +256,25 @@ wss.on('connection',(ws)=>{
     // a thrown error in one message must not crash the server for everyone
     try{onMessage(c,m)}catch(e){console.error('Chyba při zpracování zprávy',m.type,e)}
   });
-  ws.on('close',()=>leave(c));
+  ws.on('close',()=>{leave(c);if(c.social){const set=socials.get(c.profile.id);set?.delete(c);if(set&&!set.size)socials.delete(c.profile.id)}});
   c.hb=setInterval(()=>{if(!c.alive){if(++c.missed>=10){ws.terminate();return}}else c.missed=0;c.alive=false;c.msgs=0;try{ws.ping()}catch{}},1000);
   ws.on('close',()=>clearInterval(c.hb));
 });
 
 function onMessage(c,m){
     const room=c.room;
+    if(c.social)return onSocial(c,m);
     switch(m.type){
+      case 'social':{
+        // the hub's social connection: one per tab, signed in only, never joins a room
+        if(room)return;
+        const p=meta.auth(m.token);if(!p)return send(c,{type:'social',ok:false});
+        c.social=true;c.profile=p;c.name=p.nick;
+        if(!socials.has(p.id))socials.set(p.id,new Set());socials.get(p.id).add(c);
+        const dms={};for(const [k,list] of dmLog){const [a,b]=k.split('|'),o=a===p.id?b:b===p.id?a:null;if(o&&p.social.friends.includes(o))dms[o]=list}
+        send(c,{type:'social',ok:true,me:p.id,world:worldLog.filter(x=>!meta.blocks(p,{id:x.pid})),dms});
+        pushFriends(p.id);break}
+      case 'say':if(m.ch==='room')roomSay(c,m);break;
       case 'hello':{
         if(room)leave(c);
         c.profile=meta.auth(m.token);
@@ -220,6 +314,7 @@ function onMessage(c,m){
           if(r.clients.size>=maxPlayers(r))return send(c,{type:'error',msg:`Místnost je plná (${maxPlayers(r)} hráčů).`})}
         const n=teamCounts(r);c.team=S.MODES[r.mode].pvp&&n[1]<n[0]?1:0;
         r.clients.set(c.cid,c);c.room=r;
+        if(r.chat?.length)send(c,{type:'chatHist',list:r.chat.filter(x=>!meta.blocks(c.profile,{id:x.pid}))});
         if(r.ranked&&r.clients.size>=2)r.autoAt=Date.now()+RANKED_WAIT;
         if(r.state==='match'&&r.match&&r.match.state!=='end'){if(joinMatch(r,c)){broadcastLobby(r);sendRoster(r)}}
         else if(r.solo)startMatch(r);

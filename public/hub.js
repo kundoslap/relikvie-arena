@@ -1,5 +1,6 @@
 // Relikvie Aréna — hub: sign-in, character, inventory, skill tree, market, shop, leaderboard and match rewards.
 import * as D from './data.js';
+import * as Social from './social.js';
 
 const $=s=>document.querySelector(s);
 export const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -38,7 +39,7 @@ if(!H.play||typeof H.play!=='object')H.play={mode:'arena',map:'core',boss:'colle
 async function api(path,body){
   const r=await fetch(path,{method:body?'POST':'GET',headers:{'Content-Type':'application/json',...(H.token?{Authorization:'Bearer '+H.token}:{})},body:body?JSON.stringify(body):undefined});
   let j={};try{j=await r.json()}catch{}
-  if(!r.ok){if(r.status===401&&H.token&&!path.includes('/login')){H.token=null;store.set('token',null);H.profile=null;showAuth()}throw new Error(j.error||'Chyba serveru.')}
+  if(!r.ok){if(r.status===401&&H.token&&!path.includes('/login')){Social.disconnect();H.token=null;store.set('token',null);H.profile=null;showAuth()}throw new Error(j.error||'Chyba serveru.')}
   return j;
 }
 async function act(name,body,okMsg){
@@ -91,11 +92,12 @@ export function showAuth(){
     catch(err){$('#authErr').textContent=err.message}
   };
 }
-async function logout(){try{await api('/api/logout',{})}catch{}H.token=null;store.set('token',null);H.profile=null;H.guest=false;showAuth()}
+async function logout(){Social.disconnect();try{await api('/api/logout',{})}catch{}H.token=null;store.set('token',null);H.profile=null;H.guest=false;showAuth()}
 
 // ---------- hub frame ----------
-const TABS=[['play','Hrát'],['campaign','Kampaň'],['goals','Cíle'],['hero','Postava'],['prof','Profese'],['tree','Dovednosti'],['inv','Inventář'],['market','Tržiště'],['shop','Obchod'],['stats','Statistiky'],['top','Žebříček']];
-export function showHub(tab){if(tab)H.tab=tab;H.cb.showOnly('hub');renderHub()}
+const TABS=[['play','Hrát'],['campaign','Kampaň'],['goals','Cíle'],['hero','Postava'],['prof','Profese'],['tree','Dovednosti'],['inv','Inventář'],['market','Tržiště'],['shop','Obchod'],['friends','Přátelé'],['stats','Statistiky'],['top','Žebříček']];
+export function showHub(tab){if(tab)H.tab=tab;if(H.profile&&!H.offline)Social.connect(H.token);H.cb.showOnly('hub');renderHub()}
+export function joinRoom(code){H.cb.join(code,{cls:H.cls,name:H.profile?H.profile.nick:H.guestName||'Host'})}
 export function renderHub(){
   const p=H.profile;
   if(!p&&H.tab!=='play'&&H.tab!=='top')H.tab='play';
@@ -106,11 +108,17 @@ export function renderHub(){
     ${H.offline?'':'<button class="ghost sm" id="loginBtn" type="button">Přihlásit nebo založit účet</button>'}`;
   $('#logoutBtn')&&($('#logoutBtn').onclick=logout);
   $('#loginBtn')&&($('#loginBtn').onclick=()=>{H.guest=false;showAuth()});
-  $('#hubNav').innerHTML=TABS.map(([k,n])=>{const off=!p&&k!=='play'&&!(k==='top'&&!H.offline);return`<button type="button" data-t="${k}" ${H.tab===k?'aria-current="page"':''} ${off?'disabled title="Jen s účtem"':''}>${n}</button>`}).join('');
+  $('#hubNav').innerHTML=TABS.map(([k,n])=>{const off=!p&&k!=='play'&&!(k==='top'&&!H.offline);return`<button type="button" data-t="${k}" ${H.tab===k?'aria-current="page"':''} ${off?'disabled title="Jen s účtem"':''}>${n}${k==='friends'?navBadge():''}</button>`}).join('');
   $('#hubNav').querySelectorAll('button').forEach(b=>b.onclick=()=>{H.tab=b.dataset.t;renderHub()});
   if(H.tab!=='hero')H.cb.preview(null);
-  ({play:tabPlay,campaign:tabCampaign,goals:tabGoals,hero:tabHero,prof:tabProf,inv:tabInv,tree:tabTree,market:tabMarket,shop:tabShop,stats:tabStats,top:tabTop})[H.tab]();
+  ({play:tabPlay,campaign:tabCampaign,goals:tabGoals,hero:tabHero,prof:tabProf,inv:tabInv,tree:tabTree,market:tabMarket,shop:tabShop,friends:tabFriends,stats:tabStats,top:tabTop})[H.tab]();
 }
+const navBadge=()=>{const n=Social.pending();return n?` <b>${n}</b>`:''};
+// friend list updates arrive every few seconds; only the list part is redrawn so a half-typed nick stays
+Social.onChange(()=>{
+  const b=document.querySelector('#hubNav [data-t="friends"]');if(b)b.innerHTML='Přátelé'+navBadge();
+  if(H.tab==='friends'&&!$('#hub').hidden&&$('#frList'))friendList();
+});
 function setCls(k){H.cls=k;store.set('cls',k);if(H.profile&&H.profile.cls!==k)act('cls',{cls:k});else renderHub()}
 
 // ---------- shared pieces ----------
@@ -208,6 +216,37 @@ function rankedPanel(){
   </section>`;
 }
 export function netError(msg){const e=$('#netErr');if(e)e.textContent=msg;const l=$('#lobbyErr');if(l)l.textContent=msg;if(msg&&!e&&!l)toast(msg,true)}
+
+// ---------- Přátelé ----------
+function tabFriends(){
+  $('#hubBody').innerHTML=`<section class="panel"><h3>Přidat přítele</h3>
+      <form class="inline" id="frAdd" autocomplete="off"><label class="field">Přezdívka hráče<input id="frNick" maxlength="16" placeholder="Přesná přezdívka"></label><button class="go" type="submit">Poslat žádost</button></form>
+      <p class="help">Přátelé vidí, jestli jsi online a co hraješ, můžou se k tobě připojit do otevřené místnosti, pozvat tě do hry a psát ti soukromé zprávy. Hráče můžeš přidat i kliknutím na jeho jméno v chatu.</p></section>
+    <div id="frList" class="grid2" style="align-items:start"></div>`;
+  $('#frAdd').onsubmit=e=>{e.preventDefault();const n=$('#frNick').value.trim();if(!n)return;if(!Social.connected())return toast('Chat a přátelé se teprve připojují, zkus to za chvíli.',true);Social.fr('add',n);$('#frNick').value=''};
+  friendList();
+}
+function friendList(){
+  const F=Social.friends(),on=F.friends.filter(f=>f.st!=='offline').length;
+  const row=(f,btns,sub)=>`<div class="fr"><i class="dot ${f.st||'offline'}"></i><span>${esc(f.nick)}${f.title?` <small style="display:inline;color:var(--gold)">◇ ${esc(f.title)}</small>`:''}<small>${sub}</small></span><div class="btns">${btns}</div></div>`;
+  const info=f=>`úr. ${f.lv} · ${D.CLASSES[f.cls]?.name||''}`;
+  const b=(k,id,n,cls='ghost sm')=>`<button type="button" class="${cls}" data-f="${k}" data-id="${esc(id)}">${n}</button>`;
+  $('#frList').innerHTML=`<section class="panel"><div class="row"><h3>Přátelé · ${on} online</h3><small class="help">${F.friends.length} / ${D.FRIENDS_MAX}</small></div>
+      ${Social.connected()?'':'<p class="help">Připojuji k serveru přátel…</p>'}
+      <div class="flist">${F.friends.map(f=>row(f,`${f.code?b('join',f.code,'Připojit','go sm'):''}${b('dm',f.id,'Zpráva')}${b('remove',f.id,'Odebrat')}`,`${Social.statusText(f)} · ${info(f)}`)).join('')
+        ||'<p class="help">Zatím nemáš žádné přátele. Pošli žádost přes přezdívku nahoře.</p>'}</div></section>
+    <div style="display:grid;gap:22px">
+    ${F.inReq.length?`<section class="panel"><h3>Žádosti o přátelství</h3><div class="flist">${F.inReq.map(f=>row(f,`${b('accept',f.id,'Přijmout','go sm')}${b('decline',f.id,'Odmítnout')}${b('block',f.id,'Blokovat')}`,info(f))).join('')}</div></section>`:''}
+    ${F.outReq.length?`<section class="panel"><h3>Odeslané žádosti</h3><div class="flist">${F.outReq.map(f=>row(f,b('decline',f.id,'Zrušit'),'čeká na odpověď')).join('')}</div></section>`:''}
+    ${F.blocked.length?`<section class="panel"><h3>Zablokovaní</h3><p class="help">Jejich zprávy ani žádosti nevidíš.</p><div class="flist">${F.blocked.map(f=>row(f,b('unblock',f.id,'Odblokovat'),'')).join('')}</div></section>`:''}
+    </div>`;
+  document.querySelectorAll('#frList [data-f]').forEach(x=>x.onclick=()=>{const k=x.dataset.f,id=x.dataset.id;
+    if(k==='join')return joinRoom(id);
+    if(k==='dm')return Social.openDM(id);
+    // removing and blocking ask for a second click
+    if((k==='remove'||k==='block')&&!x.dataset.sure){x.dataset.sure='1';x.textContent='Opravdu?';setTimeout(()=>{if(x.isConnected){delete x.dataset.sure;x.textContent=k==='remove'?'Odebrat':'Blokovat'}},3000);return}
+    Social.fr(k,id)});
+}
 
 // ---------- Kampaň ----------
 const modeLabel=m=>m.mode==='waves'?`Vlny · ${m.waves}${m.waveBoss?` · boss ${D.BOSSES[m.waveBoss].name}`:''}`:`Boss · ${D.BOSSES[m.boss].name}`;

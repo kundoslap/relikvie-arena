@@ -9,6 +9,7 @@ import * as S from './sim.js';
 import {buildHero,buildNpc,buildBoss,buildArena,HDR,DISC_GEO} from './models.js';
 import * as Hub from './hub.js';
 import {svg,esc} from './hub.js';
+import * as Social from './social.js';
 
 const {TICK,TEAM_COL,TEAM_NAME,CLASSES,MAPS,MODES,BOSSES,RARITIES}=S;
 const V3=THREE.Vector3,$=s=>document.querySelector(s);
@@ -254,6 +255,8 @@ addEventListener('keydown',e=>{
   if(['INPUT','SELECT','TEXTAREA'].includes(e.target.tagName))return;
   if(e.code==='Tab'&&inGame()){e.preventDefault();$('#board').hidden=false;$('#board .inner').innerHTML=boardHTML(currentStats());return}
   if(e.code==='Escape'&&inGame()){setPause(!G.paused);return}
+  if((e.code==='Enter'||e.code==='NumpadEnter')&&inGame()&&G.mode==='on'&&!G.solo&&!G.paused){
+    e.preventDefault();for(const k in keys)keys[k]=false;mouseDown=false;Social.openMatchChat(e.shiftKey);return}
   keys[e.code]=true;
   if(!inGame()||G.paused||e.repeat)return;
   const map={KeyQ:0,KeyE:1,KeyR:2,KeyF:3,Space:3,KeyT:4};
@@ -347,7 +350,7 @@ function onNet(m){
   switch(m.type){
     case 'error':Hub.netError(m.msg);if(G.mode!=='on'&&$('#lobby').hidden)closeWs();break;
     case 'lobby':
-      G.lobby=m;G.solo=m.solo;
+      G.lobby=m;G.solo=m.solo;Social.roomReset(m.solo?null:m.code);
       if(!m.solo){try{history.replaceState(null,'','?room='+m.code)}catch{}}
       if(m.state==='match'){if(G.mode!=='on')enterOnlineMatch()}
       else if(m.solo){if(G.ended)closeWs()}
@@ -358,6 +361,8 @@ function onNet(m){
     case 'stats':G.stats=m.stats;break;
     case 'end':showEnd(m);Hub.showRewards(null);break;
     case 'rewards':Hub.showRewards(m);if(m.profile)Hub.setProfile(m.profile);break;
+    case 'chat':Social.roomMsg(m);break;
+    case 'chatHist':Social.roomHist(m.list||[]);break;
     case 'pong':G.ping=Math.round(performance.now()-m.t);$('#netInfo').textContent=`online · ping ${G.ping} ms`;break;
   }
 }
@@ -409,6 +414,7 @@ function renderLobby(){
   $('#lobbyTeams').querySelectorAll('[data-team]').forEach(b=>b.onclick=()=>wsSend({type:'team',team:+b.dataset.team}));
   $('#lobbyCls').innerHTML=Object.entries(CLASSES).map(([k,c])=>`<button type="button" data-k="${k}" style="--c:${c.css}" aria-pressed="${me&&me.cls===k}">${svg(k)}${c.name}</button>`).join('');
   $('#lobbyCls').querySelectorAll('button').forEach(b=>b.onclick=()=>wsSend({type:'cls',cls:b.dataset.k}));
+  Social.lobbyFriends($('#lobbyFriends'),L);
   $('#lobbyStart').hidden=L.ranked?!L.autoIn:!host&&!L.autoIn;
   $('#lobbyWait').textContent=L.ranked&&!L.autoIn?'Hodnocená hra · hledám soupeře. Zápas začne, jakmile se připojí další hráč s účtem.':L.ranked?`Hodnocená hra · soupeř nalezen, zápas začne za ${L.autoIn} s.`:L.autoIn?`Rychlá hra · zápas začne za ${L.autoIn} s, zbytek doplní boti. Spustit ho může kdokoli.`:host?(L.pub?'Veřejná místnost · ':'')+`${L.players.length} / ${M.max} ${L.players.length===1?'hráč':'hráči'} · zbytek doplní boti`:'Čeká se, až hostitel spustí zápas.';
 }
@@ -419,8 +425,8 @@ $('#copyBtn').onclick=async()=>{const url=location.origin+location.pathname+'?ro
   setTimeout(()=>$('#copyBtn').textContent='Kopírovat pozvánku',2500)};
 
 // ---------- screens ----------
-function showOnly(id){for(const k of ['auth','hub','lobby','hud','end','pause'])$('#'+k).hidden=k!==id;$('#board').hidden=true;if(id!=='hub')setPreview(null)}
-function toHub(){closeWs();G.lobby=null;try{history.replaceState(null,'',location.pathname)}catch{}startAttract();Hub.showHub()}
+function showOnly(id){for(const k of ['auth','hub','lobby','hud','end','pause'])$('#'+k).hidden=k!==id;$('#board').hidden=true;if(id!=='hub')setPreview(null);Social.screen(id)}
+function toHub(){closeWs();G.lobby=null;Social.roomReset(null);try{history.replaceState(null,'',location.pathname)}catch{}startAttract();Hub.showHub()}
 function setPause(p){
   if(!inGame())return;G.paused=p;mouseDown=false;
   $('#pause').hidden=!p;
@@ -634,6 +640,8 @@ function frame(){
   drawHUD();
 }
 
+Social.setup({join:code=>Hub.joinRoom(code),sendRoom:(text,team)=>wsSend({type:'say',ch:'room',text,team}),pvp:()=>!!MODES[G.info?.mode||G.lobby?.mode]?.pvp});
+Social.onChange(()=>{if(!$('#lobby').hidden&&G.lobby)Social.lobbyFriends($('#lobbyFriends'),G.lobby)});
 applyTouch();startAttract();frame();
 Hub.init(hubCallbacks);
 window.__arena=G;

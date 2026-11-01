@@ -319,6 +319,56 @@ h2.sec{margin:0;font-family:var(--display);font-size:26px;font-weight:800;letter
 .divs span.on{border-color:var(--c);color:var(--c)}
 .rkd{font-family:var(--display);font-size:22px;font-weight:800}
 .rew .lvup{font-family:var(--display);font-size:22px;color:var(--gold);letter-spacing:.08em;text-transform:uppercase}
+/* friends & chat */
+#chatDock{position:fixed;right:var(--gr);bottom:var(--gb);z-index:15;display:grid;justify-items:end;gap:8px;pointer-events:none}
+#chatDock>*{pointer-events:auto}
+#chatToggle{background:var(--panel);border:1px solid var(--line);border-radius:3px;padding:8px 14px;font-family:var(--display);font-weight:600;letter-spacing:.12em;text-transform:uppercase;font-size:15px}
+#chatToggle[aria-expanded="true"]{border-color:var(--gold);color:var(--gold)}
+#chatToggle b{display:inline-grid;place-items:center;min-width:18px;height:18px;padding:0 4px;margin-left:4px;border-radius:9px;background:var(--red);color:#fff;font-family:var(--body);font-size:11px;letter-spacing:0;box-sizing:border-box}
+#chatToggle i{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--gold);margin-left:6px;vertical-align:middle}
+#chatPanel{width:min(380px,calc(100vw - 32px));height:min(460px,62vh);display:grid;grid-template-rows:auto auto minmax(0,1fr) auto auto;background:rgba(8,12,24,.97);border:1px solid var(--line);border-radius:3px;overflow:hidden;user-select:text}
+.chead{display:flex;justify-content:space-between;align-items:center;gap:6px;padding:6px 8px 6px 12px;border-bottom:1px solid var(--line)}
+.chead b{font-family:var(--display);letter-spacing:.14em;text-transform:uppercase;font-size:14px;margin-right:auto}
+.ctabs{display:flex;gap:2px;overflow-x:auto;padding:2px 6px 0;border-bottom:1px solid var(--line)}
+.ctabs button{background:transparent;border:0;border-bottom:2px solid transparent;padding:7px 10px;font-size:12px;color:var(--muted);white-space:nowrap}
+.ctabs button[aria-pressed="true"]{color:var(--gold);border-bottom-color:var(--gold)}
+.ctabs b{color:var(--red);font-size:11px}
+#chatLog{overflow-y:auto;padding:8px 12px;display:grid;gap:4px;align-content:start;font-size:13px;line-height:1.4;overflow-wrap:anywhere}
+.cm>small{color:var(--muted);font-size:10.5px;font-variant-numeric:tabular-nums}
+.cn{background:none;border:0;padding:0;font:inherit;font-weight:600;color:var(--cyan)}
+button.cn:hover{text-decoration:underline}
+.cn.cme{color:var(--gold)}
+.cm .t0,#mchatLog .t0{color:var(--blue)} .cm .t1,#mchatLog .t1{color:var(--red)} .ct{color:var(--green)} .cw{color:#d9b8ff}
+#chatPick{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:6px 10px;border-top:1px solid var(--line);background:rgba(255,198,109,.06)}
+#chatPick b{margin-right:auto;font-size:13px}
+#chatForm,#mchatForm{display:flex;gap:6px;padding:8px}
+#chatForm input,#mchatForm input{flex:1;min-width:0;background:rgba(0,0,0,.45);border:1px solid var(--line);border-radius:3px;padding:8px 10px;font-size:14px}
+#chatFilter[aria-pressed="true"]{border-color:var(--green);color:var(--green)}
+#invites{position:fixed;top:calc(var(--gt) + 64px);right:var(--gr);z-index:16;width:min(340px,calc(100vw - 32px));display:grid;gap:8px}
+.inv{display:grid;gap:8px;padding:10px 12px;background:rgba(8,12,24,.97);border:1px solid var(--gold);border-radius:3px;box-shadow:0 0 24px rgba(255,198,109,.2);animation:feedIn .25s ease-out}
+.inv small{display:block;color:var(--muted);font-size:12px}
+#mchat{position:fixed;left:var(--gl);bottom:calc(var(--gb) + 120px);width:min(380px,42vw);display:grid;gap:6px;pointer-events:none}
+#mchatLog{display:grid;gap:2px;font-size:12.5px;line-height:1.35;text-shadow:0 1px 3px #000,0 0 2px #000;overflow-wrap:anywhere}
+#mchatLog div{transition:opacity 1s}
+#mchatLog div.old{opacity:0}
+#mchat.on #mchatLog div.old{opacity:.85}
+#mchat.on #mchatLog{background:rgba(6,9,18,.6);padding:6px 8px;border-radius:3px}
+#mchatForm{pointer-events:auto;padding:0;align-items:center;background:var(--panel);border:1px solid var(--gold);border-radius:3px;padding:4px}
+#mchatTo{font-size:11px;letter-spacing:.12em;text-transform:uppercase;padding:0 6px;color:var(--ink)}
+#mchatBtn{display:none;pointer-events:auto}
+body.touch #mchat{top:calc(var(--gt) + 150px);bottom:auto;width:min(260px,55vw)}
+body.touch #mchatLog{font-size:11.5px}
+body.touch #mchatBtn{display:block;position:fixed;right:calc(var(--gr) + 48px);top:calc(var(--gt) + 4px);height:40px;background:var(--panel);border:1px solid var(--line);border-radius:3px;padding:0 10px;font-size:12px}
+.flist{display:grid;gap:4px}
+.fr{display:flex;gap:10px;align-items:center;padding:7px 10px;border:1px solid var(--line);border-radius:3px;background:rgba(10,14,28,.7);font-size:14px}
+.fr>span{flex:1;min-width:0}
+.fr>span small{display:block;color:var(--muted);font-size:11.5px}
+.fr .btns{gap:6px}
+.dot{flex:none;width:9px;height:9px;border-radius:50%;background:#3a425c}
+.dot.online{background:var(--green);box-shadow:0 0 8px var(--green)} .dot.lobby{background:var(--gold);box-shadow:0 0 8px var(--gold)} .dot.match{background:var(--blue);box-shadow:0 0 8px var(--blue)}
+.nav button b{display:inline-grid;place-items:center;min-width:16px;height:16px;padding:0 4px;margin-left:5px;border-radius:8px;background:var(--red);color:#fff;font-size:10px;box-sizing:border-box}
+#lobby .center{padding-bottom:calc(var(--gb) + 64px)}
+.hubbody{padding-bottom:calc(var(--gb) + 64px)}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
 </head>
@@ -349,6 +399,11 @@ h2.sec{margin:0;font-family:var(--display);font-size:26px;font-weight:800;letter
   <div id="dead" hidden>Zničen · obnova za <b id="deadT">5</b> s</div>
   <div id="touch" hidden><div id="stick"><i></i></div><button id="tAtk" type="button">Útok</button></div>
   <button id="pauseBtn" type="button" aria-label="Menu zápasu">II</button>
+  <div id="mchat" hidden>
+    <div id="mchatLog" aria-live="polite"></div>
+    <form id="mchatForm" hidden autocomplete="off"><span id="mchatTo">Tým</span><input id="mchatIn" maxlength="200" placeholder="Enter odešle · Tab tým/všem · Esc zavře"></form>
+    <button id="mchatBtn" type="button">Chat</button>
+  </div>
 </div>
 <div id="board" hidden><div class="inner"></div></div>
 
@@ -377,6 +432,7 @@ h2.sec{margin:0;font-family:var(--display);font-size:26px;font-weight:800;letter
     <div id="lobbyCfg"></div>
     <div class="teams" id="lobbyTeams"></div>
     <div><div class="lbl">Tvoje povolání</div><div class="minicls" id="lobbyCls"></div></div>
+    <div id="lobbyFriends" hidden></div>
     <div class="btns">
       <button class="go" id="lobbyStart" type="button">Spustit zápas</button>
       <span class="help" id="lobbyWait"></span>
@@ -404,6 +460,17 @@ h2.sec{margin:0;font-family:var(--display);font-size:26px;font-weight:800;letter
     <p class="help" id="endNote"></p>
     <div class="btns"><button class="go" id="againBtn" type="button">Hrát znovu</button><button class="ghost" id="menuBtn" type="button">Zpět do hubu</button></div>
   </div></div>
+</div>
+<div id="invites" hidden></div>
+<div id="chatDock" hidden>
+  <div id="chatPanel" hidden>
+    <div class="chead"><b>Chat</b><button class="ghost sm" id="chatFilter" type="button" title="Skrývat sprostá slova">Filtr</button><button class="ghost sm" id="chatClose" type="button" aria-label="Zavřít chat">×</button></div>
+    <div class="ctabs" id="chatTabs"></div>
+    <div id="chatLog" aria-live="polite"></div>
+    <div id="chatPick" hidden></div>
+    <form id="chatForm" autocomplete="off"><input id="chatIn" maxlength="200" aria-label="Zpráva"><button class="go sm" type="submit">Poslat</button></form>
+  </div>
+  <button id="chatToggle" type="button" aria-expanded="false">Chat</button>
 </div>
 <div id="toast" role="status" hidden></div>
 

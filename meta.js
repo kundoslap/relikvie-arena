@@ -28,6 +28,7 @@ export function createMeta(db){
     p.goals??={day:null,list:[],rerolled:false,bonus:false,week:null,weekly:null};
     p.merchant??={day:null,offers:[],rerolled:false};p.tactic??='dodge';p.builds??=[];p.history??=[];
     p.ranked??={season:null,rating:D.RATING_START,games:0,wins:0,losses:0,peak:D.RATING_START};p.rankedPrev??=null;
+    p.social??={friends:[],inReq:[],outReq:[],blocked:[]};
     // repairs saves damaged by the old "constructor" lookups (NaN credits, empty items, unknown class)
     if(!Number.isFinite(p.credits))p.credits=0;if(p.inv.some(i=>!i||!i.id))p.inv=p.inv.filter(i=>i&&i.id);if(!D.CLASSES[p.cls])p.cls='striker';
     const st=p.stats;st.bestEndless??=0;st.byCls??={};st.byMode??={};st.byBoss??={};st.dmg??=0;st.heal??=0;st.time??=0;st.mvp??=0;
@@ -244,6 +245,51 @@ export function createMeta(db){
         .map(p=>({nick:p.nick,cls:p.cls,rating:p.ranked.rating,div:D.divisionOf(p.ranked.rating),games:p.ranked.games,wins:p.ranked.wins,placed:p.ranked.games>=D.PLACEMENT}))};
   }
 
+  // ---------- friends ----------
+  // the friend graph is stored on both sides; every operation updates both profiles and returns the ids whose lists changed
+  const profById=id=>typeof id==='string'&&Object.hasOwn(doc.profiles,id)?migrate(doc.profiles[id]):null;
+  const profByNick=nick=>{const k=String(nick||'').trim().toLowerCase(),u=Object.hasOwn(doc.users,k)?doc.users[k]:null;return u?profById(u.id):null};
+  const without=(a,id)=>{const i=a.indexOf(id);if(i>=0)a.splice(i,1)};
+  const isFriend=(a,b)=>!!(a&&b&&migrate(a).social.friends.includes(b.id));
+  const blocks=(a,b)=>!!(a&&b&&migrate(a).social.blocked.includes(b.id));
+  function friendOp(p,op,arg){
+    migrate(p);const S=p.social;
+    const o=op==='add'?profByNick(arg):profById(arg);
+    if(op==='unblock'){without(S.blocked,arg);db.touch();return[p.id]}
+    if(!o)fail(op==='add'?'Hráč s touto přezdívkou neexistuje.':'Hráč nenalezen.',404);
+    if(o.id===p.id)fail('Sám sebe si přidat nejde.');
+    const T=o.social;
+    const unlink=()=>{without(S.friends,o.id);without(T.friends,p.id);without(S.inReq,o.id);without(S.outReq,o.id);without(T.inReq,p.id);without(T.outReq,p.id)};
+    switch(op){
+      case 'add':
+        if(S.friends.includes(o.id))fail(`${o.nick} už je tvůj přítel.`);
+        if(S.blocked.includes(o.id))fail('Tohoto hráče máš zablokovaného.');
+        if(S.inReq.includes(o.id))return friendOp(p,'accept',o.id);
+        if(S.outReq.includes(o.id))fail('Žádost už čeká na odpověď.');
+        if(S.friends.length>=D.FRIENDS_MAX)fail(`Přátel můžeš mít nejvýš ${D.FRIENDS_MAX}.`);
+        if(S.outReq.length>=30)fail('Máš moc nevyřízených žádostí.');
+        // a player who blocked you never sees the request, and you are not told
+        if(!T.blocked.includes(p.id)){if(T.inReq.length>=50)fail('Tento hráč má moc nevyřízených žádostí.');T.inReq.push(p.id)}
+        S.outReq.push(o.id);break;
+      case 'accept':
+        if(!S.inReq.includes(o.id))fail('Žádost už neplatí.');
+        if(S.friends.length>=D.FRIENDS_MAX||T.friends.length>=D.FRIENDS_MAX)fail(`Přátel může mít každý nejvýš ${D.FRIENDS_MAX}.`);
+        unlink();S.friends.push(o.id);T.friends.push(p.id);break;
+      case 'decline':case 'remove':unlink();break;
+      case 'block':unlink();if(!S.blocked.includes(o.id)){if(S.blocked.length>=200)S.blocked.shift();S.blocked.push(o.id)}break;
+      default:fail('Neznámá akce.',404);
+    }
+    db.touch();return[p.id,o.id];
+  }
+  // status(id) comes from the server: {st:'offline'|'online'|'lobby'|'match', ...where}
+  function friendsView(p,status){
+    migrate(p);const S=p.social,card=id=>{const o=profById(id);return o?{id,nick:o.nick,lv:o.level,cls:o.cls,title:o.title||null}:null};
+    const list=ids=>ids.map(card).filter(Boolean);
+    const order={match:0,lobby:1,online:2,offline:3};
+    return{friends:list(S.friends).map(f=>({...f,...status(f.id)})).sort((a,b)=>order[a.st]-order[b.st]||a.nick.localeCompare(b.nick,'cs')),
+      inReq:list(S.inReq),outReq:list(S.outReq),blocked:list(S.blocked)};
+  }
+
   // ---------- ranked ----------
   // entries: [{pid,team,present}] of everyone who started the ranked match. Returns {pid:{delta,rating,div,prevDiv,games}},
   // or {none:reason} when the match does not count. A player who left before the end takes a loss.
@@ -327,5 +373,5 @@ export function createMeta(db){
     return{xp,credits:cr,items,res,levelUps,sold,skin,camp,goalsDone:done,record,mvp};
   }
 
-  return{register,login,logout,auth,view,act,market,top,rewardsFor,rankedResult,canStartMission,loadoutFor:(p,k)=>D.computeLoadout(p,k)};
+  return{register,login,logout,auth,view,act,market,top,rewardsFor,rankedResult,canStartMission,friendOp,friendsView,isFriend,blocks,profById,loadoutFor:(p,k)=>D.computeLoadout(p,k)};
 }

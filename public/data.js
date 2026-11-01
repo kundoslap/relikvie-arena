@@ -433,6 +433,17 @@ export function eloDelta(my,opp,score,games){const K=games<PLACEMENT?48:28;retur
 // a new season keeps half of the distance from the starting rating
 export const softReset=r=>Math.round(RATING_START+(r-RATING_START)/2);
 
+// ---------- friends and chat ----------
+export const FRIENDS_MAX=100,CHAT_LEN=200;
+// chat text: no control characters, collapsed whitespace, limited length
+export const cleanChat=s=>String(s??'').replace(/[\u0000-\u001f\u007f​-‏‪-‮⁦-⁩]/g,'').replace(/\s+/g,' ').trim().slice(0,CHAT_LEN);
+// optional client-side filter: masks common Czech and English swear words (diacritics-insensitive)
+const SWEAR=['kurv','pica','pico','picu','pici','kokot','curak','zmrd','mrdat','mrdk','debil','kreten','hovad','prdel','fuck','shit','bitch','cunt','nigg'];
+// per character, so match positions stay the same in the original text
+const fold=s=>s.replace(/[\s\S]/g,c=>{const d=c.normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase();return d.length===1?d:c});
+const SWEAR_RE=new RegExp('\\p{L}*(?:'+[...new Set(SWEAR.map(fold))].join('|')+')\\p{L}*','giu');
+export const maskSwears=s=>{const f=fold(s);let out='',i=0;for(const m of f.matchAll(SWEAR_RE)){out+=s.slice(i,m.index)+'*'.repeat(m[0].length);i=m.index+m[0].length}return out+s.slice(i)};
+
 // ---------- NPCs and bosses ----------
 export const NPCS={
   drone:{name:'Dron',hp:80,speed:7.5,def:0,atk:10,tech:0,pref:10,color:0xff5d6c,radius:.6,basic:{type:'shot',dmg:9,rate:.9,speed:26,range:16,size:1}},
