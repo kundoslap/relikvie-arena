@@ -1,6 +1,7 @@
 // Relikvie Aréna — 3D models (heroes with skins, NPCs, bosses) and map environments.
 import * as THREE from 'three';
 import {CLASSES,NPCS,BOSSES,MAPS,TEAM_COL,skinOf} from './sim.js';
+const PORTAL_COL=[0x7df9ff,0xff7de9];
 
 export const HDR=(c,k=2.4)=>new THREE.Color(c).multiplyScalar(k);
 export const DISC_GEO=new THREE.CircleGeometry(1,40);
@@ -319,6 +320,16 @@ export function buildArena(scene,mapKey,hiQ){
     const rim=new THREE.Mesh(new THREE.RingGeometry(hz.r,hz.r+.25,40),new THREE.MeshStandardMaterial({color:0x2a1208,metalness:.6,roughness:.5}));rim.rotation.x=-Math.PI/2;rim.position.set(hz.x,.06,hz.z);g.add(rim);
     const l=new THREE.PointLight(0xff6a1a,6,10,1.5);l.position.set(hz.x,1.2,hz.z);g.add(l);
   }
+  // teleport gates: each pair has its own colour, a glowing floor disc, an upright spinning ring and a light
+  (map.portals||[]).forEach((pair,pi)=>{const col=PORTAL_COL[pi%PORTAL_COL.length];
+    for(const p of pair){
+      const disc=new THREE.Mesh(new THREE.CircleGeometry(1.3,40),new THREE.MeshBasicMaterial({color:HDR(col,1.2),transparent:true,opacity:.35,depthWrite:false,blending:THREE.AdditiveBlending}));
+      disc.rotation.x=-Math.PI/2;disc.position.set(p.x,.06,p.z);g.add(disc);
+      const base=new THREE.Mesh(new THREE.RingGeometry(1.3,1.55,40),new THREE.MeshBasicMaterial({color:HDR(col,2),side:THREE.DoubleSide}));base.rotation.x=-Math.PI/2;base.position.set(p.x,.07,p.z);g.add(base);
+      const ring=new THREE.Mesh(new THREE.TorusGeometry(1.25,.09,8,48),new THREE.MeshBasicMaterial({color:HDR(col,2.2)}));ring.position.set(p.x,1.6,p.z);g.add(ring);
+      const inner=new THREE.Mesh(new THREE.TorusGeometry(.8,.05,6,40),new THREE.MeshBasicMaterial({color:HDR(col,1.6),transparent:true,opacity:.7}));inner.position.copy(ring.position);g.add(inner);
+      const l=new THREE.PointLight(col,5,9,1.5);l.position.set(p.x,1.4,p.z);g.add(l);
+      updaters.push((dt,t)=>{ring.rotation.y=t*1.4+pi;inner.rotation.x=t*2.1;inner.rotation.y=-t*.9;disc.material.opacity=.28+Math.sin(t*3+pi)*.08})}});
   // wall, rim, skyline, sky
   const wall=new THREE.Mesh(new THREE.CylinderGeometry(R+1.6,R+1.6,1.4,96,1,true),new THREE.MeshStandardMaterial({color:0x10162a,metalness:.7,roughness:.4,side:THREE.DoubleSide}));wall.position.y=.7;wall.receiveShadow=true;g.add(wall);
   const rim=new THREE.Mesh(new THREE.TorusGeometry(R+1.6,.07,6,128),new THREE.MeshBasicMaterial({color:HDR(T.rim,1.6)}));rim.rotation.x=Math.PI/2;rim.position.y=1.4;g.add(rim);
@@ -339,6 +350,10 @@ export function buildArena(scene,mapKey,hiQ){
     updaters.push(dt=>ring.rotation.y+=dt*.08)}
   if(mapKey==='sanctum'){for(let i=0;i<6;i++){const a=i/6*Math.PI*2,r=new THREE.Mesh(new THREE.TorusGeometry(2.2,.08,6,40),new THREE.MeshBasicMaterial({color:HDR(i%2?0xff527e:0xac8dff,1.6)}));
     r.position.set(Math.cos(a)*(R+6),9,Math.sin(a)*(R+6));g.add(r);updaters.push((dt,t)=>{r.rotation.y=t*.7+i;r.position.y=9+Math.sin(t+i)*.8})}}
+  if(mapKey==='observ'){const dome=new THREE.Group();dome.position.y=16;g.add(dome);
+    for(let i=0;i<3;i++){const r=new THREE.Mesh(new THREE.TorusGeometry(8+i*3,.1,6,96),new THREE.MeshBasicMaterial({color:HDR(i===1?0xff7de9:0x7df9ff,1.4),transparent:true,opacity:.55}));r.rotation.x=Math.PI/2+i*.35;dome.add(r)}
+    const star=new THREE.Mesh(new THREE.IcosahedronGeometry(1.4),new THREE.MeshBasicMaterial({color:HDR(0xdff6ff,2.4)}));dome.add(star);
+    updaters.push((dt,t)=>{dome.rotation.y=t*.12;dome.children.forEach((c,i)=>{if(i<3)c.rotation.z=t*(.1+i*.05)});star.rotation.x=t*.5})}
   // relic pedestal in the centre
   const pg=new THREE.CylinderGeometry(1.6,1.9,.3,6),ped=new THREE.Mesh(pg,pm);ped.position.y=.15;ped.receiveShadow=true;g.add(ped);
   const pe=new THREE.LineSegments(new THREE.EdgesGeometry(pg),new THREE.LineBasicMaterial({color:HDR(T.accent,1.6)}));pe.position.y=.15;g.add(pe);

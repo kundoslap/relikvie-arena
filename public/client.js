@@ -255,6 +255,8 @@ function sample(id,rt){
   if(!a)return b||null;
   if(!b||a.d||a.hid||b.d||b.hid)return b&&sn[i].recv<rt?b:a;
   const k=Math.max(0,Math.min(1,(rt-sn[i].recv)/((bS.recv-sn[i].recv)||1)));
+  // a jump of several metres between two snapshots (a teleport gate) is shown as a jump, not as a slide across the map
+  if((b.x-a.x)**2+(b.z-a.z)**2>36)return k<.5?a:b;
   return{...b,x:a.x+(b.x-a.x)*k,z:a.z+(b.z-a.z)*k,f:lerpAng(a.f,b.f,k),vx:b.vx,vz:b.vz};
 }
 
@@ -284,6 +286,8 @@ const EV={
     burst(e,c,v.kind==='b'?120:40,v.kind==='b'?14:10,6,1);burst(e,TEAM_COL[v.t],30,8,5,.9);ringFx(e,TEAM_COL[v.t],.5,v.kind==='b'?12:5,.6);
     if(v.kind==='b'){columnFx(e,BOSSES[v.k].color);G.shake=1}if(e.g===G.you){G.shake=Math.max(G.shake,.8);screenFlash(1)}
     if(v.kind==='b')ui('boom',{s:2.2,gap:.2});if(e.g===G.you)ui('died',{dur:1.4});else sfx('death',e,{f:v.kind==='n'?700:460,gap:.04,vol:v.kind==='n'?.55:.85})},
+  tp:e=>{const c=0x7df9ff,to={x:e.x,z:e.z};burst({x:e.x0,z:e.z0},c,24,5,5,.6,.3);ringFx({x:e.x0,z:e.z0},c,.3,2.5,.4);burst(to,c,30,5,6,.7,.4);ringFx(to,c,.3,3,.45);
+    if(e.g===G.you)ui('warp',{vol:.8});else sfx('warp',to,{gap:.05,vol:.6})},
   spawn:e=>{const v=views.get(e.g);if(!v)return;burst(e,TEAM_COL[v.t]??0xffffff,30,4,6,.8,.4);ringFx(e,TEAM_COL[v.t]??0xffffff,.4,3,.5);if(e.g===G.you)ui('spawn',{vol:.7})},
   feed:e=>{
     if(e.k==='kill'){feed(`${tag(e.a)} zničil ${tag(e.b)}`);if(e.b===G.you)banner('Zničen',`Dostal tě ${nameOf(e.a)}`,2,'var(--red)');
@@ -638,7 +642,7 @@ function renderLobby(){
   $('#lobbyTeams').innerHTML=teams.map(t=>{
     const ps=L.players.filter(p=>pvp?p.team===t:true);
     const rk=p=>p.rt!=null?` <small style="color:${S.DIVISIONS[S.divisionOf(p.rt)].color}">· ${S.DIVISIONS[S.divisionOf(p.rt)].name} ${p.rt}</small>`:'';
-    const rows=ps.map(p=>`<div class="pl${p.cid===L.you?' mine':''}"><span>${p.tag?`<span class="cg">[${esc(p.tag)}]</span> `:''}${esc(p.name)}${p.lv?` <small>· úr. ${p.lv}</small>`:''}${rk(p)}${p.cid===L.host&&!L.ranked?' <small>· hostitel</small>':''}</span><small>${CLASSES[p.cls].name}</small></div>`).join('');
+    const rows=ps.map(p=>`<div class="pl${p.cid===L.you?' mine':''}"><span>${p.tag?`<span class="cg">[${esc(p.tag)}]</span> `:''}${p.pid?`<button type="button" class="pname" data-prof="${esc(p.pid)}" title="Profil hráče">${esc(p.name)}</button>`:esc(p.name)}${p.lv?` <small>· úr. ${p.lv}</small>`:''}${rk(p)}${p.cid===L.host&&!L.ranked?' <small>· hostitel</small>':''}</span><small>${CLASSES[p.cls].name}</small></div>`).join('');
     const empty=L.ranked?`<span>Volné místo</span><small>${size===1?'čeká se na soupeře':'hráč nebo bot'}</small>`:L.rules?.bots===false?'<span>Volné místo</span><small>bez bota</small>':'<span>Bot</span><small>doplní se</small>';
     const bots=Array.from({length:Math.max(0,size-ps.length)},()=>`<div class="pl bot">${empty}</div>`).join('');
     const canMove=pvp&&!L.ranked&&me&&me.team!==t&&ps.length<size;
@@ -788,6 +792,7 @@ function drawHUD(){
   mg.strokeStyle='rgba(143,166,255,.5)';mg.lineWidth=3;mg.beginPath();mg.arc(cx,cx,map.r*sc,0,Math.PI*2);mg.stroke();
   map.bases.forEach((b,i)=>{mg.fillStyle=i?'rgba(255,63,142,.25)':'rgba(63,184,255,.25)';mg.beginPath();mg.arc(toM(b.x),toM(b.z),4*sc,0,Math.PI*2);mg.fill()});
   mg.fillStyle='rgba(255,106,26,.45)';for(const h of map.hazards){mg.beginPath();mg.arc(toM(h.x),toM(h.z),h.r*sc,0,Math.PI*2);mg.fill()}
+  (map.portals||[]).forEach((pair,i)=>{mg.strokeStyle=i?'#ff7de9':'#7df9ff';mg.lineWidth=3;for(const p of pair){mg.beginPath();mg.arc(toM(p.x),toM(p.z),Math.max(3,1.6*sc),0,Math.PI*2);mg.stroke()}});
   mg.fillStyle='#2a3350';for(const [x,z,r] of map.pillars){mg.beginPath();mg.arc(toM(x),toM(z),r*sc,0,Math.PI*2);mg.fill()}
   if(mode==='control')map.points.forEach((p,i)=>{const o=s.pt[i]?.[0];mg.strokeStyle=o===0?'#3fb8ff':o===1?'#ff3f8e':'#ffc66d';mg.lineWidth=4;mg.beginPath();mg.arc(toM(p.x),toM(p.z),4*sc,0,Math.PI*2);mg.stroke()});
   if(mode==='elim'&&s.el&&s.el[2]<map.r){mg.fillStyle='rgba(255,40,80,.22)';mg.beginPath();mg.arc(cx,cx,cx,0,Math.PI*2);mg.arc(cx,cx,s.el[2]*sc,0,Math.PI*2,true);mg.fill();

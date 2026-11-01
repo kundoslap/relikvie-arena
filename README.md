@@ -46,6 +46,17 @@ Proměnné prostředí:
 
 **Denní a týdenní cíle:** každý den tři náhodné cíle (jeden lze vyměnit) a bonus za splnění všech tří, každý týden jeden větší cíl s epickým implantátem.
 
+**Denní odměna za přihlášení** (jen s účtem, karta Cíle a dokud není vyzvednutá, i nahoře na kartě Hrát): jednou za kalendářní den (půlnoc v Praze) sedmidenní řada, která s každým dnem roste:
+1. 100 kreditů;
+2. 150 kreditů a 5 esence;
+3. 200 kreditů a krystal I;
+4. 250 kreditů a 10 esence;
+5. 300 kreditů a vzácný implantát;
+6. 400 kreditů a 20 esence;
+7. 600 kreditů, epický implantát, krystal II a 200 bodů průkazu.
+
+Po sedmém dni řada začne znovu. Když hráč den vynechá, začíná znovu od prvního dne a hra mu to připomene. Nevyzvednutá dnešní odměna má na kartě Cíle značku.
+
 **Profese** (od úrovně 10, platí pro všechna povolání): Úder, Stín, Technika, Ochrana. Každá má vlastní schopnosti (Stín a Technika čtyři), které jdou dát do slotů Q/E/R místo schopností povolání. Stín má **Dvojúder** (dva seky z opačných stran do stejného cíle), Technika **Mor nanitů** (nákaza, která tiká každou sekundu a přeskakuje na soupeře stojící blízko). Postupně se odemykají:
 - talent (úroveň 10);
 - schopnosti a větev +15 % (15);
@@ -68,7 +79,14 @@ Proměnné prostředí:
 - **Serafín** — kopí světla v liniích. Na 70 % a 35 % vzlétne a z nebe padá světlo.
 - **Archon** — Rozsudek spálí polovinu arény, gravitace přitáhne tým k úderu. V polovině povolá hlídače.
 
-**Mapy:** Neonové jádro, Rezavá kovárna (lávové kanály pálí), Ledový archiv (hustý les sloupů), Rudá svatyně (aréna pro bosse), Pevnost relikvií (bludiště jen pro Únos relikvie). Boti hledají cestu po navigační mřížce, takže obejdou i dlouhé zdi. Každá má vlastní vzhled, oblohu, sloupy a částice.
+**Mapy:** Neonové jádro, Rezavá kovárna (lávové kanály pálí), Ledový archiv (hustý les sloupů), **Hvězdná observatoř** (kruh obelisků a dva páry teleportních bran), Rudá svatyně (aréna pro bosse), Pevnost relikvií (bludiště jen pro Únos relikvie). Boti hledají cestu po navigační mřížce, takže obejdou i dlouhé zdi. Každá má vlastní vzhled, oblohu, sloupy a částice.
+
+**Hvězdná observatoř** se hraje v Aréně, Ovládnutí, Eliminaci, Lovu bosse, Vlnách i Nekonečnu:
+- Dva páry teleportních bran propojují protilehlé rohy mapy: azurový pár severozápad–jihovýchod, růžový pár jihozápad–severovýchod.
+- Kdo do brány vstoupí, vyjde z její dvojice 2,6 m dál ve směru, kterým šel; kdo stál, vyjde směrem ke středu. Pak 3 s žádnou bránu použít nemůže.
+- Bránou projdou hrdinové, boti i drony a drtiči z vln, bossové ne. Přeskok má záblesk na obou koncích a vlastní zvuk.
+- Maskovaný soupeř se teleportem neprozradí.
+- Brány jsou vidět i na minimapě a hra skok ukáže jako skok, ne jako sklouznutí přes mapu.
 
 **Postup (jen s účtem)**
 - Úroveň 1–50. Zkušenosti a kredity za zápasy, víc za vyšší obtížnost.
@@ -98,6 +116,8 @@ PvP zápas s jiným než normálním cílem nebo délkou je **vlastní zápas** 
 **Hodnocená hra:** Souboj 1 proti 1 nebo Aréna 3 proti 3 o hodnocení Elo (start 1000, prvních 10 umisťovacích zápasů mění hodnocení rychleji). Hledání páruje hráče s podobným hodnocením a týmy rozdělí vyrovnaně podle součtu hodnocení, chybějící místa doplní boti. Zápas se hodnotí, jen když na každé straně hraje aspoň jeden hráč s účtem, takže proti botům se hodnocení nahnat nedá. Kdo odejde před koncem, prohrává. Divize: Bronz, Stříbro (1100), Zlato (1250), Platina (1400), Diamant (1550), Neon (1700). Sezóna trvá kalendářní měsíc: na jejím konci dostaneš odměnu podle nejlepší dosažené divize (kredity, od Zlata implantát, od Diamantu titul) a nová sezóna začne s polovičním odstupem od 1000. Žebříček ukazuje pořadí aktuální sezóny.
 
 **Přátelé a chat** (přátelé jen s účtem): na kartě Přátelé pošleš žádost podle přezdívky, nebo klikneš na jméno hráče v chatu. U přátel vidíš, jestli jsou online, v místnosti nebo ve hře a v jakém režimu, a do otevřené místnosti se k nim připojíš jedním tlačítkem. V lobby můžeš online přátele pozvat, pozvánka se jim ukáže s tlačítkem Připojit. Chat má záložky Svět (všichni přihlášení), Místnost a soukromé zprávy přátelům. V zápase otevře chat Enter: v PvP píšeš týmu, Tab přepne na všechny, Esc zavře (na mobilu tlačítko Chat). Hráče jde zablokovat, pak od něj nevidíš zprávy, žádosti ani pozvánky. Filtr sprostých slov je zapnutý a jde vypnout. Zprávy mají nejvýš 200 znaků a omezení rychlosti; historie chatu se drží jen v paměti serveru, přátelé a blokování se ukládají do účtu.
+
+**Profil hráče:** kliknutím na jméno hráče v žebříčku, v seznamu přátel, v místnosti nebo v chatu (tlačítko Profil) se otevře jeho karta. Ukazuje klan, titul, úroveň, povolání, datum založení účtu, počet zápasů a výher, zničení, MVP, body úspěchů a hodiny ve hře. Dál divizi a hodnocení v aktuální sezóně a nejlepší dosaženou divizi, rekordy (bossové, vlny, Nekonečno), čtyři nejhranější povolání a režimy s úspěšností a posledních šest zápasů. Přihlášený hráč odtud může poslat žádost o přátelství nebo soukromou zprávu, nahlásit, nebo zablokovat. Profil vidí i hosté. Karta ukazuje jen herní údaje, nikdy inventář, kredity, cíle ani seznam přátel (`/api/player?id=` nebo `?nick=`).
 
 **Klany** (karta Klan, jen s účtem): klan založíš od úrovně 5 za 1000 kreditů (název, zkratka 2–4 znaky, popis, otevřený vstup nebo na žádost). Do klanu se vstupuje pozvánkou, žádostí, nebo rovnou, když je otevřený. Role: vůdce (nastavení, povyšování, předání vedení, rozpuštění), důstojník (zve, schvaluje žádosti, vyhazuje členy) a člen. Každý zápas člena dá klanu třetinu získaných zkušeností; úrovně 1–10 přidávají dvě místa (20 až 38 členů) a všem členům +1 % zkušeností a kreditů za úroveň. Týdenní cíl klanu je společný počet výher (4 na člena, aspoň 15); kdo za klan odehrál tento týden aspoň 3 zápasy, vyzvedne kredity a implantát. Klan má vlastní chat a zkratka se ukazuje u jmen v chatu a v lobby. Žebříček ukazuje nejlepší klany.
 

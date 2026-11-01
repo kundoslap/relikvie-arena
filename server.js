@@ -43,6 +43,7 @@ async function api(req,res,p,url){
     return json(res,200,await meta[p.slice(5)](body.nick,body.pass));
   }
   if(p==='/api/top')return json(res,200,meta.top());
+  if(p==='/api/player')return json(res,200,meta.publicProfile(url.searchParams.get('id')||url.searchParams.get('nick')||''));
   if(p==='/api/rooms')return json(res,200,{rooms:publicRooms(),online:wss.clients.size});
   if(p==='/api/status')return json(res,200,{ok:true,storage:db.kind,rooms:rooms.size,players:wss.clients.size,
     matches:[...rooms.values()].filter(r=>r.state==='match').length,load:{tickMs:LOAD.tickMs,lateMs:LOAD.lateMs,snapHz:30/SNAP_EVERY}});
@@ -114,7 +115,7 @@ function lobbyMsg(room,c){
   return{type:'lobby',code:room.code,you:c.cid,host:room.host,state:room.state,diff:room.diff,mode:room.mode,map:room.map,boss:room.boss,solo:!!room.solo,mission:room.mission||null,
     pub:!!room.pub,ranked:!!room.ranked,rk:c.rk,rules:room.rules||null,
     autoIn:room.quick&&room.state==='lobby'&&!(room.ranked&&room.clients.size<2)?Math.max(0,Math.ceil((room.autoAt-Date.now())/1000)):0,
-    players:humans(room).map(x=>({cid:x.cid,name:x.name,cls:x.cls,team:x.team,off:x.gone?1:0,lv:x.profile?.level||0,tag:x.profile?meta.tagOf(x.profile.id):null,rt:room.ranked?x.profile?.ranked?.rating??null:null}))};
+    players:humans(room).map(x=>({cid:x.cid,pid:x.profile?.id||null,name:x.name,cls:x.cls,team:x.team,off:x.gone?1:0,lv:x.profile?.level||0,tag:x.profile?meta.tagOf(x.profile.id):null,rt:room.ranked?x.profile?.ranked?.rating??null:null}))};
 }
 function broadcastLobby(room){for(const c of room.clients.values())send(c,lobbyMsg(room,c))}
 function broadcast(room,m){const s=JSON.stringify(m);for(const c of room.clients.values())send(c,s);for(const c of room.specs||[])send(c,s)}

@@ -152,10 +152,11 @@ function renderDock(){
   log.querySelectorAll('button.cn').forEach(b=>b.onclick=()=>{X.pick={pid:b.dataset.pid,nick:b.dataset.nick};renderDock()});
   const P=X.pick,pb=$('#chatPick');
   if(P&&X.want){const f=isFriend(P.pid),out=X.fr.outReq.some(x=>x.id===P.pid);
-    pb.hidden=false;pb.innerHTML=`<b>${esc(P.nick)}</b>${f?'<button type="button" class="ghost sm" data-pk="dm">Soukromá zpráva</button>':out?'<small class="help">žádost čeká</small>':'<button type="button" class="ghost sm" data-pk="add">Přidat do přátel</button>'}
+    pb.hidden=false;pb.innerHTML=`<b>${esc(P.nick)}</b><button type="button" class="ghost sm" data-pk="prof">Profil</button>${f?'<button type="button" class="ghost sm" data-pk="dm">Soukromá zpráva</button>':out?'<small class="help">žádost čeká</small>':'<button type="button" class="ghost sm" data-pk="add">Přidat do přátel</button>'}
       <button type="button" class="ghost sm" data-pk="report">Nahlásit</button><button type="button" class="ghost sm" data-pk="block">Zablokovat</button><button type="button" class="ghost sm" data-pk="x" aria-label="Zavřít">×</button>`;
     pb.querySelectorAll('[data-pk]').forEach(b=>b.onclick=()=>{const k=b.dataset.pk;
       if(k==='report')reportDialog(P.pid,P.nick);
+      else if(k==='prof')profileDialog({id:P.pid});
       else if(k==='dm')openDM(P.pid);else if(k==='add')fr('add',P.nick);else if(k==='block'){fr('block',P.pid);X.world=X.world.filter(m=>m.pid!==P.pid);X.room=X.room.filter(m=>m.pid!==P.pid)}
       X.pick=null;renderDock()});
   }else pb.hidden=true;
@@ -191,6 +192,58 @@ export function reportDialog(pid,nick){
       const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||'Nahlášení se nepodařilo odeslat.');
       d.remove();toast(`Díky, ${nick} je nahlášen. Moderátor se na to podívá.`)}
     catch(err){toast(err.message,true)}};
+}
+
+// ---------- player profile ----------
+// a card with what anyone may see about a player (level, clan, division, stats, favourite classes, recent matches),
+// opened from chat, friends, the leaderboard and the lobby; guests can look too
+const RES={win:['Výhra','w'],loss:['Prohra','l'],draw:['Remíza','d'],short:['Krátký','d']};
+const pct=(w,m)=>m?Math.round(100*w/m)+' %':'—';
+const modeName=(k,ms)=>k==='campaign'||ms?(ms==='echo'?'Ozvěna jádra':D.missionById(ms)?.name||'Kampaň'):D.MODES[k]?.name||k;
+// any element with data-prof (profile id) or data-profnick opens the card
+document.addEventListener('click',e=>{const b=e.target.closest?.('[data-prof],[data-profnick]');if(!b)return;e.preventDefault();
+  profileDialog(b.dataset.prof?{id:b.dataset.prof}:{nick:b.dataset.profnick})});
+export async function profileDialog(q){
+  if(!q)return;
+  document.querySelector('#profDlg')?.remove();
+  const d=document.createElement('div');d.id='profDlg';d.className='overlay';
+  d.innerHTML=`<div class="center"><div class="card prof" role="dialog" aria-label="Profil hráče"><p class="help">Načítám profil…</p></div></div>`;
+  document.body.appendChild(d);
+  const close=()=>d.remove();
+  d.addEventListener('pointerdown',e=>{if(e.target===d||e.target.classList.contains('center'))close()});
+  d.addEventListener('keydown',e=>{if(e.key==='Escape')close()});
+  let P;
+  try{const r=await fetch('/api/player?'+new URLSearchParams(q.id?{id:q.id}:{nick:q.nick}));P=await r.json().catch(()=>({}));if(!r.ok)throw new Error(P.error||'Profil se nepodařilo načíst.')}
+  catch(err){d.querySelector('.card').innerHTML=`<p class="help">${esc(err.message)}</p><div class="btns"><button class="ghost" type="button" data-x>Zavřít</button></div>`;
+    d.querySelector('[data-x]').onclick=close;return}
+  if(!d.isConnected)return;
+  const s=P.stats,C=D.CLASSES[P.cls],div=P.ranked?D.DIVISIONS[P.ranked.div]:null,best=P.rankedGames?D.DIVISIONS[P.bestDiv]:null;
+  const me=P.id===X.me,f=isFriend(P.id),out=X.fr.outReq.some(x=>x.id===P.id),blocked=X.fr.blocked.some(x=>x.id===P.id);
+  const tile=(n,v,sub='')=>`<div class="ptile"><b>${v}</b><small>${n}${sub?` · ${sub}`:''}</small></div>`;
+  const bars=(list,name,col)=>list.length?list.map(x=>`<div class="pbar"><span>${esc(name(x.k))}</span><i><em style="width:${Math.round(100*x.m/list[0].m)}%;${col?`background:${col(x.k)}`:''}"></em></i><small>${x.m} · ${pct(x.w,x.m)}</small></div>`).join(''):'<p class="help">Zatím žádné zápasy.</p>';
+  const hrs=Math.round(s.time/360)/10;
+  d.querySelector('.card').innerHTML=`
+    <div class="phead" style="--c:${C?.css||'#fff'}"><div><h2 class="sec">${P.guild?`<span class="cg">[${esc(P.guild.tag)}]</span> `:''}${esc(P.nick)}</h2>
+      <small>${P.title?`<span style="color:var(--gold)">${esc(P.title)}</span> · `:''}úroveň ${P.level} · hraje za ${esc(C?.name||'')}${P.created?` · od ${new Date(P.created).toLocaleDateString('cs-CZ')}`:''}</small>
+      ${P.guild?`<small>Klan ${esc(P.guild.name)} · úroveň ${P.guild.level}</small>`:''}</div>
+      <button class="ghost sm" type="button" data-x aria-label="Zavřít">×</button></div>
+    <div class="ptiles">${tile('zápasů',s.matches)}${tile('výher',s.wins,pct(s.wins,s.matches))}${tile('zničení',s.kills)}${tile('MVP',s.mvp)}${tile('body úspěchů',P.ach)}${tile('hodin ve hře',String(hrs).replace('.',','))}</div>
+    <div class="pcols">
+      <section><div class="lbl">Hodnocená hra</div>
+        ${div?`<p><b style="color:${div.color}">${div.name}</b> · ${P.ranked.rating}${P.ranked.placed?'':' <small class="help">(umisťovací)</small>'}<br><small class="help">${P.ranked.games} zápasů této sezóny, výhry ${pct(P.ranked.wins,P.ranked.games)}</small></p>`:'<p class="help">Tuto sezónu zatím nehrál.</p>'}
+        ${best?`<p class="help">Nejlepší divize: <b style="color:${best.color}">${best.name}</b></p>`:''}
+        <div class="lbl">Rekordy</div><p class="help">Poražení bossové ${s.bossKills} · nejlepší vlna ${s.bestWave||'—'} · Nekonečno ${s.bestEndless||'—'}</p></section>
+      <section><div class="lbl">Oblíbená povolání</div>${bars(P.classes,k=>D.CLASSES[k]?.name||k,k=>D.CLASSES[k]?.css)}
+        <div class="lbl">Režimy</div>${bars(P.modes,k=>modeName(k))}</section>
+    </div>
+    <div class="lbl">Poslední zápasy</div>
+    ${P.recent.length?`<div class="precent">${P.recent.map(h=>{const r=RES[h.res]||RES.loss;return`<div><span class="pr ${r[1]}">${r[0]}</span><span>${esc(modeName(h.mode,h.mission))}</span><small>${esc(D.CLASSES[h.cls]?.name||'')}${h.score?` · ${h.score[0]}:${h.score[1]}`:''} · ${h.ki}/${h.de}${h.mvp?' · MVP':''}</small></div>`}).join('')}</div>`:'<p class="help">Zatím žádné zápasy.</p>'}
+    ${X.want&&!me?`<div class="btns">${f?'<button class="go sm" type="button" data-pa="dm">Soukromá zpráva</button>':out?'<small class="help">Žádost o přátelství čeká.</small>':blocked?'':'<button class="go sm" type="button" data-pa="add">Přidat do přátel</button>'}
+      <button class="ghost sm" type="button" data-pa="report">Nahlásit</button>${blocked?'':'<button class="ghost sm" type="button" data-pa="block">Zablokovat</button>'}</div>`:''}`;
+  d.querySelector('[data-x]').onclick=close;d.querySelector('[data-x]').focus();
+  d.querySelectorAll('[data-pa]').forEach(b=>b.onclick=()=>{const k=b.dataset.pa;close();
+    if(k==='dm'){X.open=true;openDM(P.id)}else if(k==='add')fr('add',P.nick);else if(k==='report')reportDialog(P.id,P.nick);
+    else if(k==='block'){fr('block',P.id);X.world=X.world.filter(m=>m.pid!==P.id);X.room=X.room.filter(m=>m.pid!==P.id);renderDock()}});
 }
 
 // ---------- invites ----------

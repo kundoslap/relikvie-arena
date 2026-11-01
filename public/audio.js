@@ -97,6 +97,8 @@ const SFX={
   hitIn(c){sub(c,110,42,.2,.85);hiss(c,'lowpass',700,150,.18,.55,.002)},
   death(c,o){hiss(c,'lowpass',2200,120,.55,.5,.004,1.2);sub(c,(o.f||460)/5,32,.5,.55);tone(c,'sawtooth',(o.f||460)/4,40,.45,.12,.01,['lowpass',600,150])},
   kill(c){sub(c,130,50,.18,.5);bell(c,1046,.7,.16,.04)},
+  // teleport gate: a rising filtered whoosh with a glassy chime on top
+  warp(c){hiss(c,'bandpass',400,3200,.35,.4,.02,2.5);tone(c,'sine',220,880,.3,.14,.01);bell(c,1568,.5,.08,.12)},
   died(c){hiss(c,'lowpass',1600,60,1.3,.55,.01);sub(c,80,26,1.3,.8);pad(c,[hz(45),hz(52)],1.2,.18,600,.05)},
   boom(c,o){const s=clamp(o.s||1,.3,3);sub(c,90/Math.sqrt(s)+20,24,.55+.35*s,.95);hiss(c,'lowpass',1800,70,.5+.4*s,.8,.003,.7);hiss(c,'bandpass',900,200,.25,.3,.002,.8)},
   zap(c){const t=c.t,s=ac.createBufferSource();s.buffer=noise;s.loop=true;const f=filt(s,'bandpass',3200,1400,.3,t,5),am=ac.createGain(),g=ac.createGain();

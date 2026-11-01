@@ -33,7 +33,7 @@ export function createMeta(db,{admins=''}={}){
     p.social??={friends:[],inReq:[],outReq:[],blocked:[]};
     p.mod??={muteUntil:0,banUntil:0,warns:0,banNote:''};
     p.essence??=0;p.frags??=0;p.crystals??={};p.mastery??={};
-    p.guild??=null;p.guildInv??=[];p.guildWeek??=null;p.pass??={season:null,xp:0,claimed:[]};
+    p.guild??=null;p.guildInv??=[];p.guildWeek??=null;p.pass??={season:null,xp:0,claimed:[]};p.login??={last:null,streak:0};
     // a disbanded guild, or a membership that was removed while the save was elsewhere
     if(p.guild&&!isMember(guildById(p.guild),p.id))p.guild=null;
     // repairs saves damaged by the old "constructor" lookups (NaN credits, empty items, unknown class)
@@ -59,6 +59,13 @@ export function createMeta(db,{admins=''}={}){
     let auto=0;
     if(P.season)for(let n=1;n<=D.passTier(P.xp);n++)if(!P.claimed.includes(n))try{passClaim(p,n,p.cls);auto++}catch{}
     p.pass={season:key,xp:0,claimed:[],auto:auto?{season:P.season,n:auto}:null};
+  }
+  // which day of the login cycle is next and whether it can be claimed today
+  function loginState(p){
+    const L=p.login,today=D.dayKey(),n=D.LOGIN_DAYS.length;
+    if(L.last===today)return{can:false,day:L.streak,claimed:L.streak,next:L.streak%n+1};
+    const day=L.last===D.prevDay(today)?L.streak%n+1:1;
+    return{can:true,day,claimed:day-1,next:day,broken:!!L.last&&L.last!==D.prevDay(today)&&L.streak>0};
   }
   function passGain(p,xp){rollPass(p);const before=D.passTier(p.pass.xp);p.pass.xp+=Math.max(0,Math.round(xp));return{gain:Math.round(xp),tier:D.passTier(p.pass.xp),before}}
   const passSkins=()=>D.CLASS_KEYS.map(k=>[k,D.SKINS[k].find(s=>s.req?.pass)]).filter(x=>x[1]);
@@ -198,7 +205,7 @@ export function createMeta(db,{admins=''}={}){
     return{...p,xpNext:p.level>=D.MAX_LEVEL?0:D.xpFor(p.level),echo:D.echoOfWeek(D.weekKey()),
       campaignView:D.MISSIONS.map(m=>({id:m.id,open:missionOpen(p,m),cleared:p.campaign.cleared.includes(m.id)})),echoOpen:echoOpen(p),
       skinState:Object.fromEntries(D.CLASS_KEYS.map(k=>[k,D.SKINS[k].map(s=>({k:s.k,owned:D.skinOwned(p,k,s.k)}))])),
-      listings:Object.values(doc.market).filter(l=>l.seller===p.id).length,achView:achView(p),admin:isAdmin(p),muteUntil:muted(p)};
+      listings:Object.values(doc.market).filter(l=>l.seller===p.id).length,achView:achView(p),admin:isAdmin(p),muteUntil:muted(p),loginView:loginState(p)};
   }
   const item=(p,id)=>p.inv.find(i=>i.id===id)||fail('Předmět nenalezen.',404);
   // own keys only: an id like "constructor" must not resolve to Object.prototype.constructor
@@ -345,6 +352,17 @@ export function createMeta(db,{admins=''}={}){
       return{xp,credits:cr,item,levelUps,pass};
     },
     passClaim(p,{n,cls}){return passClaim(p,n,cls)},
+    // daily login reward: once per calendar day, the day of the cycle continues only from yesterday's claim
+    loginClaim(p){
+      const L=loginState(p);if(!L.can)fail('Dnešní odměnu už máš. Další bude zítra.');
+      const R=D.LOGIN_DAYS[L.day-1];let item=null,crystal=null;
+      p.credits+=R.cr|0;p.essence+=R.ess|0;
+      if(R.minR){item=D.rollItem(p.level,{minR:R.minR});giveItem(p,item)}
+      if(R.crystal){crystal=D.crystalKey(Object.keys(D.CRYSTALS)[Math.floor(Math.random()*Object.keys(D.CRYSTALS).length)],R.crystal);addCrystal(p,crystal)}
+      const pass=R.pass?passGain(p,R.pass):null;
+      p.login={last:D.dayKey(),streak:L.day};
+      return{day:L.day,credits:R.cr|0,essence:R.ess|0,item,crystal,pass};
+    },
     // one-time reward for finishing the tutorial (it runs on the client, so the reward is small and given once)
     tutorialDone(p){
       if(p.tutorial)return{already:true};
@@ -583,6 +601,20 @@ export function createMeta(db,{admins=''}={}){
       guilds:guildList('').slice(0,20)};
   }
 
+  // ---------- public player profile ----------
+  // what anyone may see about a player: game stats only, no inventory, credits, goals or friend lists
+  function publicProfile(q){
+    const p=profById(q)||profByNick(q);if(!p)fail('Hráč nenalezen.',404);
+    const st=p.stats,rk=p.ranked?.season===D.seasonKey()&&p.ranked.games>0?p.ranked:null,g=guildById(p.guild);
+    const top=(o,n)=>Object.entries(o||{}).filter(([,v])=>v&&v.m>0).sort((a,b)=>b[1].m-a[1].m).slice(0,n).map(([k,v])=>({k,m:v.m,w:v.w}));
+    return{id:p.id,nick:p.nick,level:p.level,title:p.title,cls:p.cls,created:p.created||0,
+      guild:g&&isMember(g,p.id)?{name:g.name,tag:g.tag,level:g.level}:null,
+      ranked:rk?{rating:rk.rating,div:D.divisionOf(rk.rating),games:rk.games,wins:rk.wins,placed:rk.games>=D.PLACEMENT}:null,bestDiv:st.bestDiv|0,rankedGames:st.rankedGames|0,
+      stats:{matches:st.matches,wins:st.wins,kills:st.kills,mvp:st.mvp|0,bossKills:st.bossKills,bestWave:st.bestWave,bestEndless:st.bestEndless|0,time:st.time|0},
+      classes:top(st.byCls,4).filter(c=>D.CLASSES[c.k]),modes:top(st.byMode,4),ach:achView(p).pts,
+      recent:p.history.slice(0,6).map(h=>({at:h.at,mode:h.mode,mission:h.mission,res:h.res,cls:h.cls,ki:h.ki,de:h.de,score:h.score,mvp:!!h.mvp}))};
+  }
+
   // ---------- friends ----------
   // the friend graph is stored on both sides; every operation updates both profiles and returns the ids whose lists changed
   const profById=id=>typeof id==='string'&&Object.hasOwn(doc.profiles,id)?migrate(doc.profiles[id]):null;
@@ -752,6 +784,6 @@ export function createMeta(db,{admins=''}={}){
     p.credits+=credits;return{credits,titles,tiers:tiers.length};
   }
 
-  return{register,login,logout,auth,view,act,market,top,rewardsFor,rankedResult,canStartMission,friendOp,friendsView,isFriend,blocks,profById,
+  return{register,login,logout,auth,view,act,market,top,publicProfile,rewardsFor,rankedResult,canStartMission,friendOp,friendsView,isFriend,blocks,profById,
     guildView,guildList,tagOf,report,findPlayer:t=>profById(t)||profByNick(t),modView,modAction,muted,muteText,isAdmin,guildMembers:gid=>{const g=guildById(gid);return g?memberIds(g):[]},loadoutFor:(p,k,cap)=>D.computeLoadout(p,k,cap)};
 }

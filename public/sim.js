@@ -545,6 +545,22 @@ function moveUnit(M,u,mx,mz,dt){
     if(D.t<=0){u.dash=null;u.vx*=.2;u.vz*=.2;D.end&&D.end()}return}
   walk(u,mx,mz,dt,M.state==='countdown',M.map);
 }
+// ---------- teleport gates ----------
+// Maps with portals have pairs of gates: a hero, drone or crusher stepping into one comes out of the other, a few metres
+// further in the direction it was going, and cannot use a gate again for a moment. Bosses are too big for them.
+export const PORTAL={r:1.3,cd:3,exit:2.6};
+function updPortals(M,dt){
+  units:for(const u of M.units){
+    if(u.tpCd>0){u.tpCd-=dt;continue}
+    if(u.dead||u.kind==='boss'||u.dash)continue;
+    for(const pair of M.map.portals)for(let e=0;e<2;e++){const a=pair[e],b=pair[1-e];if(d2(u,a)>=PORTAL.r)continue;
+      // keep going the way the unit moved; a unit standing still is sent towards the middle of the map
+      let dx=u.vx,dz=u.vz,l=Math.hypot(dx,dz);if(l<1){dx=-b.x;dz=-b.z;l=Math.hypot(dx,dz)||1}
+      const x0=u.x,z0=u.z;u.x=b.x+dx/l*PORTAL.exit;u.z=b.z+dz/l*PORTAL.exit;collide(u,M.map);
+      u.tpCd=PORTAL.cd;if(u.ai)u.ai.nav=null;
+      fx(M,{t:'tp',g:u.id,x0:r2(x0),z0:r2(z0),x:r2(u.x),z:r2(u.z)});continue units}
+  }
+}
 function separate(M){
   const U=M.units;
   for(let i=0;i<U.length;i++)for(let j=i+1;j<U.length;j++){const a=U[i],b=U[j];if(a.dead||b.dead)continue;
@@ -1088,7 +1104,7 @@ export function step(M,dt=TICK){
     updStatus(M,u,dt);if(u.dead)continue;
     if(u.ctrl==='bot')botUpdate(M,u,dt);else if(u.ctrl==='human')humanUpdate(M,u,dt);else if(u.ctrl==='npc')npcUpdate(M,u,dt);else bossUpdate(M,u,dt);
   }
-  separate(M);recordHist(M);updProjs(M,dt);updZones(M,dt);updRings(M,dt);updBeams(M,dt);updRelic(M,dt);updLoot(M,dt);
+  separate(M);if(M.map.portals)updPortals(M,dt);recordHist(M);updProjs(M,dt);updZones(M,dt);updRings(M,dt);updBeams(M,dt);updRelic(M,dt);updLoot(M,dt);
   if(M.mode==='control')updPoints(M,dt);
   if(M.flags)updFlags(M,dt);
   if(M.elim)updElim(M,dt);

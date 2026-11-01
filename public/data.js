@@ -532,6 +532,13 @@ export const MAPS={
     pillars:[[-12,-12,2.2],[12,-12,2.2],[-12,12,2.2],[12,12,2.2]],
     hazards:[],bases:[{x:-24,z:0},{x:24,z:0}],points:[{x:0,z:0},{x:-14,z:0},{x:14,z:0}],bossAt:{x:8,z:0},
     theme:{floor:0x14070c,gridA:[1,.2,.35],gridB:[.7,.2,1],accent:0xff527e,fog:0x0a0306,sky:[0x0a0306,0x2c0818],pillar:'obelisk',amb:'motes',ambColor:0xff6a8a,rim:0xff527e,skyline:[0xff527e,0xac8dff,0xff9c5b,0x5a1030]}},
+  // two pairs of teleport gates cross the map diagonally: north-west to south-east and south-west to north-east
+  observ:{name:'Hvězdná observatoř',desc:'Kruh obelisků a dva páry teleportních bran, které propojují protilehlé rohy.',r:34,
+    pillars:[...Array.from({length:6},(_,i)=>{const a=i/6*Math.PI*2;return[Math.round(Math.cos(a)*13*10)/10,Math.round(Math.sin(a)*13*10)/10,1.7]}),
+      [0,-25,2.2],[0,25,2.2],[-21,-9,1.5],[-21,9,1.5],[21,-9,1.5],[21,9,1.5]],
+    portals:[[{x:-12,z:-22},{x:12,z:22}],[{x:-12,z:22},{x:12,z:-22}]],
+    hazards:[],bases:[{x:-28,z:0},{x:28,z:0}],points:[{x:0,z:0},{x:0,z:-17},{x:0,z:17}],bossAt:{x:9,z:5},
+    theme:{floor:0x0a0818,gridA:[.6,.4,1],gridB:[.2,.9,.95],accent:0x7df9ff,fog:0x05040c,sky:[0x05040c,0x1a0f3a],pillar:'obelisk',amb:'motes',ambColor:0xb69cff,rim:0x7df9ff,skyline:[0x7df9ff,0xb69cff,0xff7de9,0x3f6bff]}},
   // Únos relikvie only: a long, mirrored arena. Each relic stands in a fortress whose wall faces the middle;
   // the gates are on the north and south sides and at the back towards the base.
   bastion:{name:'Pevnost relikvií',desc:'Bludiště zdí se třemi propojenými cestami a dvě pevnosti s relikviemi. Jen pro Únos relikvie.',r:44,ctfOnly:true,
@@ -543,14 +550,14 @@ export const MAP_KEYS=Object.keys(MAPS);
 
 // ---------- modes ----------
 export const MODES={
-  arena:{name:'Aréna',desc:'3 proti 3. Body za zničení soupeřů a za relikvii ve středu. Vyhrává 20 bodů.',pvp:true,maps:['core','forge','archive'],max:6,win:20},
-  control:{name:'Ovládnutí',desc:'3 proti 3 o tři body. Každý držený bod přidává skóre, vyhrává 100.',pvp:true,maps:['core','forge','archive'],max:6,win:100},
+  arena:{name:'Aréna',desc:'3 proti 3. Body za zničení soupeřů a za relikvii ve středu. Vyhrává 20 bodů.',pvp:true,maps:['core','forge','archive','observ'],max:6,win:20},
+  control:{name:'Ovládnutí',desc:'3 proti 3 o tři body. Každý držený bod přidává skóre, vyhrává 100.',pvp:true,maps:['core','forge','archive','observ'],max:6,win:100},
   ctf:{name:'Únos relikvie',desc:'3 proti 3 v Pevnosti relikvií. Ukradni soupeřovu relikvii a dones ji ke své, která musí být doma. Vyhrávají 3 únosy.',pvp:true,maps:['bastion'],max:6,win:3},
-  elim:{name:'Eliminace',desc:'3 proti 3 na kola bez oživení. Kolo vyhrává tým, který zůstane stát. Po 40 s se aréna začne zmenšovat a mimo kruh to pálí. Vyhrávají 4 kola.',pvp:true,rounds:true,maps:['core','forge','archive'],max:6,win:4,time:900},
+  elim:{name:'Eliminace',desc:'3 proti 3 na kola bez oživení. Kolo vyhrává tým, který zůstane stát. Po 40 s se aréna začne zmenšovat a mimo kruh to pálí. Vyhrávají 4 kola.',pvp:true,rounds:true,maps:['core','forge','archive','observ'],max:6,win:4,time:900},
   duel:{name:'Souboj',desc:'1 proti 1 bez relikvie a bodů. Vyhrává, kdo první pětkrát zničí soupeře.',pvp:true,team:1,maps:['archive','core','sanctum'],max:2,win:5},
-  boss:{name:'Lov bosse',desc:'Až 4 hráči proti bossovi s mechanikami. Tým má společné životy.',pvp:false,maps:['sanctum','core','forge','archive'],max:4,lives:8},
-  waves:{name:'Vlny',desc:'Až 4 hráči proti vlnám dronů. Každá pátá vlna je boss, cílem je přežít 15 vln.',pvp:false,waves:true,maps:['sanctum','forge','archive','core'],max:4,lives:6,last:15},
-  endless:{name:'Nekonečno',desc:'Vlny bez konce. Každá pátá je boss, od vlny 10 přibývá každých 10 vln nový modifikátor. Kam až se dostanete?',pvp:false,waves:true,endless:true,maps:['core','forge','archive','sanctum'],max:4,lives:5,last:0}
+  boss:{name:'Lov bosse',desc:'Až 4 hráči proti bossovi s mechanikami. Tým má společné životy.',pvp:false,maps:['sanctum','core','forge','archive','observ'],max:4,lives:8},
+  waves:{name:'Vlny',desc:'Až 4 hráči proti vlnám dronů. Každá pátá vlna je boss, cílem je přežít 15 vln.',pvp:false,waves:true,maps:['sanctum','forge','archive','core','observ'],max:4,lives:6,last:15},
+  endless:{name:'Nekonečno',desc:'Vlny bez konce. Každá pátá je boss, od vlny 10 přibývá každých 10 vln nový modifikátor. Kam až se dostanete?',pvp:false,waves:true,endless:true,maps:['core','forge','archive','sanctum','observ'],max:4,lives:5,last:0}
 };
 export const teamSize=mode=>MODES[mode]?.team||(MODES[mode]?.pvp?3:4);
 // MVP of a match: one number that weighs kills, objectives, damage, healing and tanking
@@ -646,6 +653,15 @@ export function masteryLoadout(p,cap=MASTERY.max){
 // ---------- season pass ----------
 // Free for every account, one per ranked season (calendar month). Pass XP comes from match XP and claimed goals.
 export const PASS={tiers:30,xp:500,goalXp:100,weeklyXp:400,bonusXp:150};
+// daily login reward: a seven-day cycle that grows each day; a missed day starts it again from day 1.
+// minR is the minimum implant rarity (2 rare, 3 epic), crystal the crystal tier, pass extra season pass points
+export const LOGIN_DAYS=[
+  {cr:100},{cr:150,ess:5},{cr:200,crystal:1},{cr:250,ess:10},{cr:300,minR:2},{cr:400,ess:20},{cr:600,minR:3,crystal:2,pass:200}];
+export function loginRewardText(R){
+  return[R.cr&&`${R.cr} kreditů`,R.ess&&`${R.ess} esence`,R.minR&&(R.minR>=3?'epický implantát':'vzácný implantát'),R.crystal&&`krystal ${CRYSTAL_TIERS[R.crystal-1]}`,R.pass&&`${R.pass} bodů průkazu`].filter(Boolean).join(' + ');
+}
+// the calendar day before a "YYYY-MM-DD" key
+export const prevDay=key=>new Date(Date.parse(key+'T12:00:00Z')-864e5).toISOString().slice(0,10);
 export const passTier=xp=>Math.min(PASS.tiers,Math.floor(Math.max(0,xp)/PASS.xp));
 // reward of tier n (1–30): credits, an implant of a minimum rarity, a title, a pass skin of a chosen class, or all of them
 export const PASS_REWARDS=Array.from({length:PASS.tiers},(_,i)=>{const n=i+1;
