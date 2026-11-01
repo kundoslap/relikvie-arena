@@ -33,6 +33,7 @@ export const H={token:store.get('token',null),profile:null,guest:false,offline:f
   cls:store.get('cls','striker'),play:store.get('play',{mode:'arena',map:'core',boss:'collector',diff:'normal'}),guestName:store.get('nick',''),
   inv:{slot:'',minR:0,sel:null},tree:{cls:null,draft:null},mk:{slot:'',r:'',sort:'price',mine:false,list:null},top:null};
 if(!D.CLASSES[H.cls])H.cls='striker';
+if(!H.play||typeof H.play!=='object')H.play={mode:'arena',map:'core',boss:'collector',diff:'normal'};
 
 async function api(path,body){
   const r=await fetch(path,{method:body?'POST':'GET',headers:{'Content-Type':'application/json',...(H.token?{Authorization:'Bearer '+H.token}:{})},body:body?JSON.stringify(body):undefined});
@@ -138,7 +139,9 @@ const isEq=it=>H.profile&&Object.values(H.profile.eq).includes(it.id);
 
 // ---------- Hrát ----------
 function tabPlay(){
-  const P=H.play,M=D.MODES[P.mode];if(!M.maps.includes(P.map))P.map=M.maps[0];
+  // settings come from localStorage and may be from an older version or damaged
+  const P=H.play;if(!D.MODES[P.mode])P.mode='arena';if(!D.BOSSES[P.boss])P.boss='collector';if(!D.DIFF_REWARD[P.diff])P.diff='normal';
+  const M=D.MODES[P.mode];if(!M.maps.includes(P.map))P.map=M.maps[0];
   $('#hubBody').innerHTML=`
     <section class="panel"><h3>Povolání</h3>${classCards()}${classDetail(H.cls)}</section>
     <section class="panel"><h3>Režim</h3>
@@ -158,6 +161,7 @@ function tabPlay(){
       <p class="help">Rychlá hra tě přidá do otevřené místnosti stejného režimu, nebo založí novou. Zápas začne do ${20} s, zbytek doplní boti.</p>`}
       <div class="err" id="netErr" role="status"></div>
     </section>
+    ${rankedPanel()}
     ${H.offline?'':`<section class="panel"><div class="row"><h3>Veřejné místnosti <small class="help" id="onlineN"></small></h3><button class="ghost sm" id="roomsRef" type="button">Obnovit</button></div><div class="list" id="roomList"><p class="help">Načítám…</p></div></section>`}
     <p class="help" id="helpText">${H.cb.isTouch()?'Levým palcem pohyb, tlačítkem Útok střelba na nejbližšího soupeře. Schopnosti míří automaticky.':'<kbd>W A S D</kbd> pohyb · <kbd>myš</kbd> míření · <kbd>levé tlačítko</kbd> útok · <kbd>Q</kbd> <kbd>E</kbd> <kbd>R</kbd> schopnosti · <kbd>F</kbd> ultimátka · <kbd>Tab</kbd> skóre · <kbd>Esc</kbd> menu'}. Vlastní základna léčí a dobíjí energii.</p>`;
   bindClassCards();
@@ -176,13 +180,32 @@ function tabPlay(){
     $('#joinBtn').onclick=()=>{const code=$('#roomCode').value.trim().toUpperCase();if(code.length!==4){$('#netErr').textContent='Kód místnosti má 4 písmena.';return}nameOk()&&H.cb.join(code,opts())};
     const loadRooms=async()=>{try{const j=await api('/api/rooms');if(H.tab!=='play'||!$('#roomList'))return;
       $('#onlineN').textContent=`· právě hraje ${j.online}`;
-      $('#roomList').innerHTML=j.rooms.map(r=>`<div class="lrow"><div><b>${D.MODES[r.mode]?.name||r.mode} · ${D.MAPS[r.map]?.name||''}${r.mode==='boss'?' · '+(D.BOSSES[r.boss]?.name||''):''}</b>
+      $('#roomList').innerHTML=j.rooms.map(r=>`<div class="lrow"><div><b>${r.ranked?'Hodnocená · ':''}${D.MODES[r.mode]?.name||r.mode} · ${D.MAPS[r.map]?.name||''}${r.mode==='boss'?' · '+(D.BOSSES[r.boss]?.name||''):''}</b>
           <small>${r.code} · hostitel ${esc(r.host)} · ${r.state==='lobby'?(r.quick?'rychlá hra, brzy začne':'čeká v místnosti'):'zápas běží, nahradíš bota'}</small></div>
-        <div class="price">${r.players}/${r.max}</div><button class="ghost sm" type="button" data-room="${r.code}" ${r.players>=r.max?'disabled':''}>Připojit</button></div>`).join('')||'<p class="help">Žádná veřejná místnost. Zkus Rychlou hru, nebo založ veřejnou místnost.</p>';
+        <div class="price">${r.players}/${r.max}</div><button class="ghost sm" type="button" data-room="${r.code}" ${r.players>=r.max||r.ranked&&(r.state!=='lobby'||!H.profile)?'disabled':''}>Připojit</button></div>`).join('')||'<p class="help">Žádná veřejná místnost. Zkus Rychlou hru, nebo založ veřejnou místnost.</p>';
       document.querySelectorAll('[data-room]').forEach(b=>b.onclick=()=>nameOk()&&H.cb.join(b.dataset.room,opts()))}
       catch(e){if($('#roomList'))$('#roomList').innerHTML=`<p class="err">${esc(e.message)}</p>`}};
     $('#roomsRef').onclick=loadRooms;loadRooms();
   }
+  document.querySelectorAll('[data-ranked]').forEach(b=>b.onclick=()=>H.cb.ranked(b.dataset.ranked,opts()));
+  $('#claimSeason')&&($('#claimSeason').onclick=()=>act('claimSeason',{},j=>`Odměna za sezónu: +${num(j.credits)} kreditů${j.item?' a implantát':''}${j.title?`, titul ${j.title}`:''}.`));
+}
+const divBadge=(r,sm)=>{const d=D.DIVISIONS[D.divisionOf(r)];return`<span class="rkb${sm?' sm':''}" style="--c:${d.color}">${d.name}</span>`};
+const seasonRewardTxt=W=>`${num(W.credits)} kreditů${W.minR?` · implantát ${D.RARITIES[W.minR].name.toLowerCase()} nebo lepší`:''}${W.title?` · titul ${W.title}`:''}`;
+// ranked: division, rating, season countdown, the two queues and a waiting season reward
+function rankedPanel(){
+  const p=H.profile;if(!p||H.offline||!p.ranked)return'';
+  const R=p.ranked,di=D.divisionOf(R.rating),nx=D.DIVISIONS[di+1],placed=R.games>=D.PLACEMENT,P=p.rankedPrev;
+  const days=Math.max(0,Math.ceil((D.seasonEnd(R.season)-Date.now())/864e5));
+  return`<section class="panel"><div class="row"><h3>Hodnocená hra · sezóna ${D.seasonName(R.season)}</h3><small class="help">končí za ${days} ${days===1?'den':days>=2&&days<=4?'dny':'dní'}</small></div>
+    ${P&&!P.claimed?`<div class="rew"><div class="lvup">Sezóna ${D.seasonName(P.season)} skončila</div><p class="help">Nejlepší divize: ${divBadge(D.DIVISIONS[P.div].min,true)} · odměna ${seasonRewardTxt(D.DIVISIONS[P.div].reward)}</p>
+      <div class="btns"><button class="go sm" id="claimSeason" type="button">Vyzvednout odměnu</button></div></div>`:''}
+    <div class="rank">${divBadge(R.rating)}<div><b>${placed?R.rating:`Umisťovací zápasy ${R.games} / ${D.PLACEMENT}`}</b>
+      <small class="help">${placed?(nx?`${nx.min-R.rating} bodů do divize ${nx.name}`:'Nejvyšší divize'):`Zatím hodnocení ${R.rating}, v umisťovacích zápasech se mění rychleji`} · ${R.wins} výher · ${R.losses} proher · maximum ${R.peak}</small></div></div>
+    <div class="btns"><button class="go" type="button" data-ranked="duel">Hodnocený souboj 1 proti 1</button><button class="go alt" type="button" data-ranked="arena">Hodnocená aréna 3 proti 3</button></div>
+    <p class="help">Hraje se o hodnocení Elo. Hledání páruje hráče s podobným hodnocením a týmy se rozdělí vyrovnaně, chybějící místa doplní boti. Zápas se hodnotí, jen když na každé straně hraje aspoň jeden hráč s účtem. Kdo odejde před koncem, prohrává. Na konci měsíce dostaneš odměnu podle nejlepší dosažené divize a nová sezóna začne s polovičním odstupem od 1000.</p>
+    <div class="divs">${D.DIVISIONS.map((d,i)=>`<span class="${i===di?'on':''}" style="--c:${d.color}">${d.name} ${d.min||''}${d.min?'+':''} · ${seasonRewardTxt(d.reward)}</span>`).join('')}</div>
+  </section>`;
 }
 export function netError(msg){const e=$('#netErr');if(e)e.textContent=msg;const l=$('#lobbyErr');if(l)l.textContent=msg;if(msg&&!e&&!l)toast(msg,true)}
 
@@ -428,7 +451,7 @@ function tabStats(){
       ${p.history.map(h=>{const [rn,rc]=RES[h.res]||[h.res,''],ms=h.mission==='echo'?'Ozvěna jádra':h.mission?D.missionById(h.mission)?.name:null;
         return`<tr><td>${new Date(h.at).toLocaleString('cs-CZ',{day:'numeric',month:'numeric',hour:'2-digit',minute:'2-digit'})}</td>
         <td>${ms?'Kampaň · '+esc(ms):modeName(h.mode)}${h.boss?' · '+D.BOSSES[h.boss].name:''}${h.wave?' · vlna '+h.wave:''}<br><small class="help">${D.MAPS[h.map]?.name||''} · ${dur(h.dur)}</small></td>
-        <td style="color:${rc}">${rn}${h.score?` ${h.score[0]}:${h.score[1]}`:''}${h.mvp?' <b style="color:var(--gold)">MVP</b>':''}</td><td>${D.CLASSES[h.cls]?.name||''}</td>
+        <td style="color:${rc}">${rn}${h.score?` ${h.score[0]}:${h.score[1]}`:''}${h.mvp?' <b style="color:var(--gold)">MVP</b>':''}${h.rk!=null?`<br><small class="help">hodnocená ${h.rk>=0?'+':''}${h.rk}</small>`:''}</td><td>${D.CLASSES[h.cls]?.name||''}</td>
         <td>${D.MODES[h.mode]?.pvp?h.ki:h.nk} / ${h.de}</td><td>${num(h.dm)}</td><td>${num(h.he)}</td><td>+${num(h.xp)} zk. · +${num(h.cr)} kr.</td></tr>`}).join('')||'<tr><td colspan="8">Zatím žádný zápas s účtem.</td></tr>'}</tbody></table></div></section>`;
 }
 
@@ -436,7 +459,11 @@ function tabStats(){
 async function tabTop(){
   $('#hubBody').innerHTML='<section class="panel"><h3>Žebříček</h3><p class="help">Načítám…</p></section>';
   try{const j=await api('/api/top');if(H.tab!=='top')return;
-    $('#hubBody').innerHTML=`<section class="panel"><h3>Žebříček · nejvyšší úrovně</h3><div class="tbl" style="overflow-x:auto"><table class="st"><thead><tr><th>Hráč</th><th>Povolání</th><th>Úroveň</th><th>Výhry</th><th>Bossové</th><th>Nejlepší vlna</th><th>Nekonečno</th></tr></thead><tbody>
+    const me=x=>H.profile&&x.nick===H.profile.nick?'mine':'';
+    $('#hubBody').innerHTML=`<section class="panel"><h3>Hodnocená hra · sezóna ${D.seasonName(j.season)}</h3>${j.ranked?.length?`<div class="tbl" style="overflow-x:auto"><table class="st"><thead><tr><th>Hráč</th><th>Divize</th><th>Hodnocení</th><th>Zápasy</th><th>Výhry</th><th>Úspěšnost</th></tr></thead><tbody>
+      ${j.ranked.map((x,i)=>`<tr class="${me(x)}"><td>${i+1}. ${esc(x.nick)} <small class="help">${D.CLASSES[x.cls]?.name||''}</small></td><td>${divBadge(x.rating,true)}</td><td>${x.placed?x.rating:`${x.rating} <small class="help">umisťuje se</small>`}</td><td>${x.games}</td><td>${x.wins}</td><td>${pct(x.wins,x.games)}</td></tr>`).join('')}</tbody></table></div>`
+      :'<p class="help">V této sezóně zatím nikdo neodehrál hodnocený zápas.</p>'}</section>
+    <section class="panel"><h3>Žebříček · nejvyšší úrovně</h3><div class="tbl" style="overflow-x:auto"><table class="st"><thead><tr><th>Hráč</th><th>Povolání</th><th>Úroveň</th><th>Výhry</th><th>Bossové</th><th>Nejlepší vlna</th><th>Nekonečno</th></tr></thead><tbody>
       ${j.players.map((x,i)=>`<tr class="${H.profile&&x.nick===H.profile.nick?'mine':''}"><td>${i+1}. ${esc(x.nick)}</td><td>${D.CLASSES[x.cls]?.name||''}</td><td>${x.level}</td><td>${x.wins}</td><td>${x.bossKills}</td><td>${x.bestWave}</td><td>${x.bestEndless|0}</td></tr>`).join('')}</tbody></table></div></section>`}
   catch(e){$('#hubBody').innerHTML=`<section class="panel"><p class="err">${esc(e.message)}</p></section>`}
 }
@@ -446,8 +473,11 @@ export function showRewards(m){
   const el=$('#endRewards');
   if(!m){el.innerHTML='';return}
   if(m.guest){el.innerHTML=`<div class="rew"><p class="help">Hraješ jako host, odměny se neukládají. Přihlas se a získávej zkušenosti, kredity a implantáty.</p></div>`;return}
-  if(m.res==='short'){el.innerHTML=`<div class="rew"><p class="help">Zápas trval méně než 45 sekund, odměny se nepočítají.${m.items.length?' Sebraná kořist ti zůstává.':''}</p>${m.items.length?`<div class="items">${m.items.map(i=>itemCard(i)).join('')}</div>`:''}</div>`}
-  else el.innerHTML=`<div class="rew"><div class="big"><div><span>+${num(m.xp)}</span> zkušeností</div><div><span>+${num(m.credits)}</span> kreditů</div></div>
+  const R=m.ranked,rk=R?`<div class="rank">${divBadge(R.rating)}<div><span class="rkd" style="color:${R.delta>=0?'var(--green)':'var(--red)'}">${R.delta>=0?'+':''}${R.delta}</span> hodnocení · nyní <b style="display:inline;font-size:20px">${R.rating}</b>
+      ${R.div>R.prevDiv?`<div class="lvup">Postup do divize ${D.DIVISIONS[R.div].name}</div>`:R.div<R.prevDiv?`<p class="help">Sestup do divize ${D.DIVISIONS[R.div].name}.</p>`:''}
+      ${R.games<=D.PLACEMENT?`<p class="help">Umisťovací zápas ${R.games} / ${D.PLACEMENT}.</p>`:''}</div></div>`:m.rankedNone?`<p class="help">${esc(m.rankedNone)}</p>`:'';
+  if(m.res==='short'){el.innerHTML=`<div class="rew">${rk}<p class="help">Zápas trval méně než 45 sekund, odměny se nepočítají.${m.items.length?' Sebraná kořist ti zůstává.':''}</p>${m.items.length?`<div class="items">${m.items.map(i=>itemCard(i)).join('')}</div>`:''}</div>`}
+  else el.innerHTML=`<div class="rew">${rk}<div class="big"><div><span>+${num(m.xp)}</span> zkušeností</div><div><span>+${num(m.credits)}</span> kreditů</div></div>
     ${m.levelUps.length?`<div class="lvup">Nová úroveň ${m.levelUps.at(-1)}! Bod do stromu dovedností a bonus kreditů.</div>`:''}
     ${m.skin?`<div class="lvup">Odemčen vzhled: ${esc(D.skinOf(...m.skin.split(':')).name)}</div>`:''}
     ${m.camp?.first?`<div class="lvup">Mise dokončena poprvé: ${esc(m.camp.first)}</div>`:''}

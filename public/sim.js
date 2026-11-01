@@ -4,10 +4,13 @@ import {CLASSES,CLASS_KEYS,MAPS,MODES,NPCS,BOSSES,BOSS_KEYS,ENDLESS_MODS,ECHO_MO
 export * from './data.js';
 
 export const MATCH_TIME=360, RELIC_EVERY=40, TICK=1/30, TEAM_SIZE=3;
+// lag compensation: a human's hits are judged against where targets were on their screen, at most this many seconds back
+export const LAG_MAX=.3;
 export const TEAM_COL=[0x3fb8ff,0xff3f8e], TEAM_NAME=['Modří','Rudí'];
 export const BOT_NAMES=['Rys','Sova','Vega','Kobra','Orin','Mara','Jiskra','Stín','Kestrel','Dusk','Iskra','Nox'];
 export const DIFF={easy:{err:2.4,react:.7,skill:.45,dmg:.8,hp:.75},normal:{err:1.3,react:.4,skill:.8,dmg:1,hp:1},hard:{err:.55,react:.2,skill:1,dmg:1.15,hp:1.3}};
 
+Object.setPrototypeOf(DIFF,null); // indexed by the difficulty name a player sends; see the note at the end of data.js
 const rnd=(a,b)=>a+Math.random()*(b-a), clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 export const d2=(a,b)=>Math.hypot(a.x-b.x,a.z-b.z);
 const r2=v=>Math.round(v*100)/100;
@@ -32,7 +35,7 @@ export function createMatch(o={}){
 const NO_PROF={skills:['c0','c1','c2'],pass:[],branch:null,mod:null,ultMod:false,cap:null};
 function baseUnit(M,C,team,ctrl,name,kind,key){
   return{id:M.nextId++,kind,key,C,team,ctrl,name,x:0,z:0,vx:0,vz:0,face:0,aimX:0,aimZ:0,maxHp:C.hp,radius:C.radius||.7,
-    kills:0,deaths:0,dmgDealt:0,healDone:0,relics:0,npcKills:0,ult:0,input:null,queue:[],lastSeq:0,
+    kills:0,deaths:0,dmgDealt:0,healDone:0,relics:0,npcKills:0,ult:0,input:null,queue:[],lastSeq:0,hist:[],lag:0,
     mods:{},uniq:new Set(),skin:'default',level:1,bag:[],hpScale:1,dmgScale:1,threat:{},prof:NO_PROF,pass:new Set(),title:null,
     ai:{think:0,target:null,strafe:1,strafeT:0,err:{x:0,z:0},lane:0,retreat:false,cd:{},lock:0,acc:0}};
 }
@@ -64,14 +67,14 @@ function spawnBoss(M,key,scale){
 function spawnAt(u,x,z,M){
   u.x=x;u.z=z;u.vx=u.vz=0;u.hp=u.maxHp;u.shield=0;u.energy=0;u.cds=[0,0,0];u.atkCd=rnd(.2,1);u.dead=false;u.respawn=0;
   u.st={stun:0,slow:0,silence:0,cloak:0,inv:.5,relic:0,bleed:null,hot:null,fieldAcc:0,hazAcc:0,nanite:null,decon:0,marked:0};u.ambush=0;u.dash=null;u.lastHit=null;u.lastHitT=-99;
-  u.face=Math.atan2(-x,-z);collide(u,M.map);
+  u.face=Math.atan2(-x,-z);collide(u,M.map);u.hist=[];
 }
 export function resetUnit(u,M){
   const b=M.map.bases[u.team],a=rnd(0,Math.PI*2),r=rnd(0,2.4);
   u.x=b.x+Math.cos(a)*r;u.z=b.z+Math.sin(a)*r;u.vx=u.vz=0;u.face=u.team===0?Math.PI/2:-Math.PI/2;
   u.hp=u.maxHp;u.shield=u.pass.has('reserve')?60:0;u.energy=u.uniq.has('capacitor')?100:Math.min(100,60+m(u,'start'));u.cds=[0,0,0];u.atkCd=0;u.dead=false;u.respawn=0;
   u.st={stun:0,slow:0,silence:0,cloak:0,inv:1.5,relic:0,bleed:null,hot:null,fieldAcc:0,hazAcc:0,haste:0,hasteK:1,bulwark:0,nanite:null,decon:0,marked:0};
-  u.ambush=0;u.ambushK=0;u.drive=null;u.bomb=null;u.hurtT=-99;u.dash=null;u.lastHit=null;u.lastHitT=-99;u.ai.retreat=false;u.ai.lane=rnd(-12,12);
+  u.ambush=0;u.ambushK=0;u.drive=null;u.bomb=null;u.hurtT=-99;u.dash=null;u.lastHit=null;u.lastHitT=-99;u.ai.retreat=false;u.ai.lane=rnd(-12,12);u.hist=[];
 }
 // Called once all heroes are in: spawns the boss or prepares the first wave.
 export function startMatch(M){if(M.mode==='boss')spawnBoss(M,M.bossKey,1)}
@@ -180,8 +183,23 @@ function endMatch(M,winner){
   M.winner=winner??(M.score[0]>M.score[1]?0:M.score[1]>M.score[0]?1:-1);
 }
 
+// Where e stood `lag` seconds ago, from its position history (recorded at the end of every step).
+// A jump longer than 4 m between samples is a teleport or blink; the nearer sample is used instead of a point between them.
+function posAt(M,e,lag){
+  const h=e.hist;if(lag<=0||!h.length)return e;
+  const t=M.time-lag;if(t<=h[0][0])return{x:h[0][1],z:h[0][2]};
+  for(let i=h.length-1;i>0;i--){const a=h[i-1],b=h[i];if(t<a[0])continue;
+    if(t>=b[0])return e;
+    const k=(t-a[0])/(b[0]-a[0]||1),dx=b[1]-a[1],dz=b[2]-a[2];
+    if(dx*dx+dz*dz>16)return k<.5?{x:a[1],z:a[2]}:{x:b[1],z:b[2]};
+    return{x:a[1]+dx*k,z:a[2]+dz*k}}
+  return e;
+}
+function recordHist(M){
+  for(const u of M.units){if(u.dead)continue;const h=u.hist;h.push([M.time,u.x,u.z]);while(h.length&&h[0][0]<M.time-LAG_MAX-.1)h.shift()}
+}
 function shoot(M,u,dir,o){
-  M.projs.push({id:M.nextId++,x:u.x+dir.x*(u.radius+.2),z:u.z+dir.z*(u.radius+.2),vx:dir.x*o.speed,vz:dir.z*o.speed,life:o.range/o.speed,o,src:u,team:u.team,hit:new Set(),color:o.color,size:o.size||1});
+  M.projs.push({id:M.nextId++,x:u.x+dir.x*(u.radius+.2),z:u.z+dir.z*(u.radius+.2),vx:dir.x*o.speed,vz:dir.z*o.speed,life:o.range/o.speed,o,src:u,team:u.team,hit:new Set(),color:o.color,size:o.size||1,lag:u.ctrl==='human'?u.lag:0});
 }
 function updProjs(M,dt){
   for(let i=M.projs.length-1;i>=0;i--){
@@ -191,7 +209,8 @@ function updProjs(M,dt){
     if(!o.noHit){
       for(const [x,z,r] of M.map.pillars)if(Math.hypot(p.x-x,p.z-z)<r){end=true;break}
       if(!end)for(const e of M.units){if(e.team===p.team||e.dead||p.hit.has(e))continue;
-        if(Math.hypot(p.x-e.x,p.z-e.z)<e.radius+.25*p.size){p.hit.add(e);damage(M,e,o.dmg,p.src,{color:o.color});o.onHit&&o.onHit(e,p.src);if(!o.pierce){end=true;break}}}
+        const q=posAt(M,e,p.lag);
+        if(Math.hypot(p.x-q.x,p.z-q.z)<e.radius+.25*p.size){p.hit.add(e);damage(M,e,o.dmg,p.src,{color:o.color});o.onHit&&o.onHit(e,p.src);if(!o.pierce){end=true;break}}}
     }
     if(end){fx(M,{t:'burst',x:r2(p.x),z:r2(p.z),y:1.3,c:o.color,n:8,s:4,u:2,l:.3});o.onEnd&&o.onEnd({x:p.x,z:p.z});M.projs.splice(i,1)}
   }
@@ -228,7 +247,8 @@ function basic(M,u,pt){
   fx(M,{t:'atk',i:u.id});
   if(B.type==='melee'){
     fx(M,{t:'arc',x:r2(u.x),z:r2(u.z),f:r2(u.face),c:col,r:B.range+(u.radius-.7)});let hit=false;
-    for(const e of foes(M,u)){const dx=e.x-u.x,dz=e.z-u.z,d=Math.hypot(dx,dz);
+    const lag=u.ctrl==='human'?u.lag:0;
+    for(const e of foes(M,u)){const q=posAt(M,e,lag),dx=q.x-u.x,dz=q.z-u.z,d=Math.hypot(dx,dz);
       if(d<B.range+e.radius+(u.radius-.7)&&(dx*dir.x+dz*dir.z)/(d||1)>.55){damage(M,e,B.dmg*mul,u,{color:col});razor(e);hit=true}}
     if(hit&&u.clsKey==='guardian')addShield(u,6,u);
   }else if(u.key==='voice'){
@@ -292,7 +312,8 @@ const SK={
 // B: +15 % when the skill is the chosen branch; md / pb: protocol A or B of the skill is active
 const SKP={
   cleave(M,u,pt,B,md,pb){const dir=aimDir(u,pt),R=5*(md?1.5:1);fx(M,{t:'arc',x:r2(u.x),z:r2(u.z),f:r2(u.face),c:0xff7b5a,r:R});
-    for(const e of foes(M,u)){const dx=e.x-u.x,dz=e.z-u.z,d=Math.hypot(dx,dz);if(d<R+e.radius&&(dx*dir.x+dz*dir.z)/(d||1)>.45){damage(M,e,pw(M,u)*1.3*B,u,{color:0xff7b5a});if(pb&&!e.dead)e.st.bleed={dps:8,t:3,acc:0,src:u}}}},
+    const lag=u.ctrl==='human'?u.lag:0;
+    for(const e of foes(M,u)){const q=posAt(M,e,lag),dx=q.x-u.x,dz=q.z-u.z,d=Math.hypot(dx,dz);if(d<R+e.radius&&(dx*dir.x+dz*dir.z)/(d||1)>.45){damage(M,e,pw(M,u)*1.3*B,u,{color:0xff7b5a});if(pb&&!e.dead)e.st.bleed={dps:8,t:3,acc:0,src:u}}}},
   rend(M,u,pt,B,md,pb){const dir=aimDir(u,pt),dist=clamp(d2(u,pt),2,pb?8:5),dps=12*B*(md?2:1);
     u.dash={dx:dir.x,dz:dir.z,spd:28,t:dist/28,hits:{dmg:pw(M,u)*.8*B,r:1.8,kb:0,set:new Set()},end:()=>{
       for(const e of foes(M,u))if(u.dashHit?.has(e))e.st.bleed={dps,t:4,acc:0,src:u}}};
@@ -725,7 +746,8 @@ export function queueInput(u,inp){
 }
 function humanUpdate(M,u,dt){
   let inp=u.queue.shift();
-  if(inp){u.lastSeq=inp.seq;u.input=inp}else if(u.input){inp={...u.input,cast:[]};u.input=inp}else inp={mx:0,mz:0,ax:u.x,az:u.z,atk:false,cast:[]};
+  // vt = the server time of the world the player was looking at when sending this input
+  if(inp){u.lastSeq=inp.seq;u.input=inp;u.lag=inp.vt>0?clamp(M.time-inp.vt,0,LAG_MAX):0}else if(u.input){inp={...u.input,cast:[]};u.input=inp}else inp={mx:0,mz:0,ax:u.x,az:u.z,atk:false,cast:[]};
   let mx=+inp.mx||0,mz=+inp.mz||0;const l=Math.hypot(mx,mz);if(l>1){mx/=l;mz/=l}
   moveUnit(M,u,mx,mz,dt);
   u.aimX=clamp(+inp.ax||0,-60,60);u.aimZ=clamp(+inp.az||0,-60,60);
@@ -805,7 +827,7 @@ export function step(M,dt=TICK){
     updStatus(M,u,dt);if(u.dead)continue;
     if(u.ctrl==='bot')botUpdate(M,u,dt);else if(u.ctrl==='human')humanUpdate(M,u,dt);else if(u.ctrl==='npc')npcUpdate(M,u,dt);else bossUpdate(M,u,dt);
   }
-  separate(M);updProjs(M,dt);updZones(M,dt);updRings(M,dt);updBeams(M,dt);updRelic(M,dt);updLoot(M,dt);
+  separate(M);recordHist(M);updProjs(M,dt);updZones(M,dt);updRings(M,dt);updBeams(M,dt);updRelic(M,dt);updLoot(M,dt);
   if(M.mode==='control')updPoints(M,dt);
   if(M.D.waves)updWaves(M,dt);
   if(M.units.some(u=>u.remove)){M.units=M.units.filter(u=>!u.remove);M.rosterVer++}

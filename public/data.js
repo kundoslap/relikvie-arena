@@ -411,6 +411,28 @@ export const ENDLESS_MODS=['tough','bleed','fierce','noheal'];
 export const ENDLESS_WIN=10;
 export const MODE_KEYS=Object.keys(MODES);
 
+// ---------- ranked PvP ----------
+// Elo rating per monthly season. A match counts only with a ranked player on each side, so bots cannot be farmed.
+export const RANKED_MODES=['duel','arena'];
+export const RATING_START=1000,PLACEMENT=10;
+export const DIVISIONS=[
+  {key:'bronze',name:'Bronz',min:0,color:'#d08a5a',reward:{credits:150}},
+  {key:'silver',name:'Stříbro',min:1100,color:'#c8d4e0',reward:{credits:300}},
+  {key:'gold',name:'Zlato',min:1250,color:'#ffc66d',reward:{credits:500,minR:2}},
+  {key:'plat',name:'Platina',min:1400,color:'#6affd8',reward:{credits:800,minR:3}},
+  {key:'diamond',name:'Diamant',min:1550,color:'#6acbff',reward:{credits:1200,minR:3,title:'Diamantový šampion'}},
+  {key:'neon',name:'Neon',min:1700,color:'#ff3f8e',reward:{credits:2000,minR:4,title:'Neonová legenda'}}
+];
+export function divisionOf(rating){let i=0;for(let k=0;k<DIVISIONS.length;k++)if(rating>=DIVISIONS[k].min)i=k;return i}
+export function seasonKey(t=Date.now()){const d=new Date(t);return d.getUTCFullYear()+'-'+String(d.getUTCMonth()+1).padStart(2,'0')}
+export function seasonEnd(key){const [y,m]=key.split('-').map(Number);return Date.UTC(y,m,1)}
+const MONTHS=['leden','únor','březen','duben','květen','červen','červenec','srpen','září','říjen','listopad','prosinec'];
+export const seasonName=key=>{const [y,m]=String(key).split('-');return`${MONTHS[(+m||1)-1]} ${y}`};
+// rating change for one player: score 1 win, .5 draw, 0 loss; placement matches move the rating faster
+export function eloDelta(my,opp,score,games){const K=games<PLACEMENT?48:28;return Math.round(K*(score-1/(1+10**((opp-my)/400))))}
+// a new season keeps half of the distance from the starting rating
+export const softReset=r=>Math.round(RATING_START+(r-RATING_START)/2);
+
 // ---------- NPCs and bosses ----------
 export const NPCS={
   drone:{name:'Dron',hp:80,speed:7.5,def:0,atk:10,tech:0,pref:10,color:0xff5d6c,radius:.6,basic:{type:'shot',dmg:9,rate:.9,speed:26,range:16,size:1}},
@@ -443,3 +465,8 @@ export const BOSSES={
     basic:{type:'melee',dmg:46,rate:1.4,range:4.6},desc:'Rozsudek spálí polovinu arény, gravitace přitáhne tým k úderu. V polovině HP povolá soudní hlídače.'}
 };
 export const BOSS_KEYS=Object.keys(BOSSES);
+
+// Lookup tables are indexed by names that come from players (class, mode, crate, slot…). Without a prototype,
+// keys like "constructor" or "toString" are simply missing instead of resolving to built-in functions.
+for(const T of [CLASSES,DIFF_REWARD,STATS,SLOTS,AFFIX_BASE,AFFIX_POOLS,BASE_NAMES,UNIQUES,CRATES,SKINS,TREES,SCHOOLS,PROF_SKILLS,PASSIVES,ULT_MODS,
+  TACTICS,BOT_TACTIC,ACTS,ECHO_MODS,GOALS,WEEKLY_GOALS,MAPS,MODES,NPCS,BOSSES])Object.setPrototypeOf(T,null);

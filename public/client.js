@@ -147,6 +147,12 @@ function clearWorld(){
   relicMesh.visible=false;relicLight.intensity=0;
 }
 function renderTime(){return G.mode==='on'?performance.now()-100:(G.M?(G.M.time+G.acc)*1000-TICK*1000:0)}
+// Server time of the world currently on screen; the server uses it to judge hits where the player saw the targets.
+function viewTime(){
+  const rt=renderTime(),S=G.snaps;if(!S.length)return 0;
+  for(let i=S.length-1;i>0;i--){const a=S[i-1],b=S[i];if(rt>=a.recv)return rt>=b.recv?b.t:a.t+(b.t-a.t)*(rt-a.recv)/(b.recv-a.recv||1)}
+  return S[0].t;
+}
 function syncMap(map,list,make,update){
   const seen=new Set();
   for(const row of list){const id=row[0];seen.add(id);let m=map.get(id);if(!m){m=make(row);scene.add(m);map.set(id,m)}update(m,row)}
@@ -284,7 +290,7 @@ function inputTick(){
     atk:(mouseDown||touchAtk)&&!G.paused,fm:isTouch&&!touchAtk,cast:G.pendingCast.splice(0)};
   if(G.mode==='off'){const u=G.M.units.find(x=>x.id===G.you);if(u)S.queueInput(u,inp)}
   else if(G.mode==='on'){
-    wsSend({type:'input',...inp});
+    wsSend({type:'input',...inp,vt:Math.round(viewTime()*100)/100});
     if(G.pred){S.walk(G.pred,inp.mx,inp.mz,TICK,G.last?.st==='countdown',MAPS[G.info.map]);G.hist.push({seq:inp.seq,mx:inp.mx,mz:inp.mz});if(G.hist.length>120)G.hist.shift()}
   }
 }
@@ -368,7 +374,8 @@ const hubCallbacks={
   mission:(id,o)=>{if(o.solo)G.lastOpts={...o,mission:id};connect({type:'hello',mission:id,diff:o.diff,cls:o.cls,name:o.name,create:true,solo:!!o.solo})},
   create:o=>connect({type:'hello',...hostOpts(o),create:true}),
   join:(code,o)=>connect({type:'hello',cls:o.cls,name:o.name,room:code}),
-  quick:o=>connect({type:'hello',quick:true,mode:o.mode,diff:o.diff,cls:o.cls,name:o.name})
+  quick:o=>connect({type:'hello',quick:true,mode:o.mode,diff:o.diff,cls:o.cls,name:o.name}),
+  ranked:(mode,o)=>connect({type:'hello',ranked:true,mode,cls:o.cls,name:o.name})
 };
 function renderLobby(){
   const L=G.lobby;if(!L)return;
@@ -376,7 +383,9 @@ function renderLobby(){
   $('#lobbyCode').textContent=L.code;
   const seg=(id,opts,cur)=>`<div class="seg" id="${id}">${opts.map(([k,n])=>`<button type="button" data-v="${k}" aria-pressed="${k===cur}" ${host?'':'disabled'}>${n}</button>`).join('')}</div>`;
   const ms=L.mission==='echo'?{name:'Ozvěna jádra',desc:'Týdenní výzva s modifikátory.'}:L.mission?S.missionById(L.mission):null;
-  if(ms){$('#lobbyCfg').innerHTML=`<div style="display:grid;gap:10px"><h2 class="sec">Kampaň · ${esc(ms.name)}</h2><p class="help">${esc(ms.desc)} Mapa ${MAPS[L.map].name}.</p>
+  if(L.ranked){$('#lobbyCfg').innerHTML=`<div style="display:grid;gap:10px"><h2 class="sec">Hodnocená hra · ${esc(M.name)}</h2>
+      <p class="help">Mapa ${MAPS[L.map].name}. Týmy se rozdělí podle hodnocení, chybějící místa doplní boti. Hodnocení se počítá, když na každé straně hraje aspoň jeden hráč s účtem. Kdo zápas opustí, prohrává.</p></div>`}
+  else if(ms){$('#lobbyCfg').innerHTML=`<div style="display:grid;gap:10px"><h2 class="sec">Kampaň · ${esc(ms.name)}</h2><p class="help">${esc(ms.desc)} Mapa ${MAPS[L.map].name}.</p>
       ${seg('lDiff',[['easy','Lehká'],['normal','Normální'],['hard','Těžká']],L.diff)}<p class="help">Postup v kampani se započítá každému hráči, který má misi odemčenou.</p></div>`;
     document.querySelectorAll('#lDiff button').forEach(b=>b.onclick=()=>wsSend({type:'cfg',diff:b.dataset.v}))}
   else $('#lobbyCfg').innerHTML=`<div style="display:grid;gap:10px">
@@ -386,20 +395,22 @@ function renderLobby(){
     ${seg('lDiff',[['easy','Lehká'],['normal','Normální'],['hard','Těžká']],L.diff)}
     <p class="help">${M.desc}${host?'':' Nastavení mění hostitel.'}</p></div>`;
   const cfg=(id,key)=>document.querySelectorAll(`#${id} button`).forEach(b=>b.onclick=()=>wsSend({type:'cfg',[key]:b.dataset.v}));
-  if(!ms){cfg('lMode','mode');cfg('lMap','map');cfg('lBoss','boss');cfg('lDiff','diff')}
+  if(!ms&&!L.ranked){cfg('lMode','mode');cfg('lMap','map');cfg('lBoss','boss');cfg('lDiff','diff')}
   const teams=pvp?[0,1]:[0],size=S.teamSize(L.mode);
   $('#lobbyTeams').className='teams'+(pvp?'':' one');
   $('#lobbyTeams').innerHTML=teams.map(t=>{
     const ps=L.players.filter(p=>pvp?p.team===t:true);
-    const rows=ps.map(p=>`<div class="pl${p.cid===L.you?' mine':''}"><span>${esc(p.name)}${p.lv?` <small>· úr. ${p.lv}</small>`:''}${p.cid===L.host?' <small>· hostitel</small>':''}</span><small>${CLASSES[p.cls].name}</small></div>`).join('');
-    const bots=Array.from({length:Math.max(0,size-ps.length)},()=>`<div class="pl bot"><span>Bot</span><small>doplní se</small></div>`).join('');
-    const canMove=pvp&&me&&me.team!==t&&ps.length<size;
+    const rk=p=>p.rt!=null?` <small style="color:${S.DIVISIONS[S.divisionOf(p.rt)].color}">· ${S.DIVISIONS[S.divisionOf(p.rt)].name} ${p.rt}</small>`:'';
+    const rows=ps.map(p=>`<div class="pl${p.cid===L.you?' mine':''}"><span>${esc(p.name)}${p.lv?` <small>· úr. ${p.lv}</small>`:''}${rk(p)}${p.cid===L.host&&!L.ranked?' <small>· hostitel</small>':''}</span><small>${CLASSES[p.cls].name}</small></div>`).join('');
+    const empty=L.ranked?`<span>Volné místo</span><small>${size===1?'čeká se na soupeře':'hráč nebo bot'}</small>`:'<span>Bot</span><small>doplní se</small>';
+    const bots=Array.from({length:Math.max(0,size-ps.length)},()=>`<div class="pl bot">${empty}</div>`).join('');
+    const canMove=pvp&&!L.ranked&&me&&me.team!==t&&ps.length<size;
     return `<div class="team t${t}"><h3>${pvp?TEAM_NAME[t]:'Tým'}</h3>${rows}${bots}${canMove?`<button class="ghost" type="button" data-team="${t}">Přejít k týmu ${TEAM_NAME[t]}</button>`:''}</div>`}).join('');
   $('#lobbyTeams').querySelectorAll('[data-team]').forEach(b=>b.onclick=()=>wsSend({type:'team',team:+b.dataset.team}));
   $('#lobbyCls').innerHTML=Object.entries(CLASSES).map(([k,c])=>`<button type="button" data-k="${k}" style="--c:${c.css}" aria-pressed="${me&&me.cls===k}">${svg(k)}${c.name}</button>`).join('');
   $('#lobbyCls').querySelectorAll('button').forEach(b=>b.onclick=()=>wsSend({type:'cls',cls:b.dataset.k}));
-  $('#lobbyStart').hidden=!host&&!L.autoIn;
-  $('#lobbyWait').textContent=L.autoIn?`Rychlá hra · zápas začne za ${L.autoIn} s, zbytek doplní boti. Spustit ho může kdokoli.`:host?(L.pub?'Veřejná místnost · ':'')+`${L.players.length} / ${M.max} ${L.players.length===1?'hráč':'hráči'} · zbytek doplní boti`:'Čeká se, až hostitel spustí zápas.';
+  $('#lobbyStart').hidden=L.ranked?!L.autoIn:!host&&!L.autoIn;
+  $('#lobbyWait').textContent=L.ranked&&!L.autoIn?'Hodnocená hra · hledám soupeře. Zápas začne, jakmile se připojí další hráč s účtem.':L.ranked?`Hodnocená hra · soupeř nalezen, zápas začne za ${L.autoIn} s.`:L.autoIn?`Rychlá hra · zápas začne za ${L.autoIn} s, zbytek doplní boti. Spustit ho může kdokoli.`:host?(L.pub?'Veřejná místnost · ':'')+`${L.players.length} / ${M.max} ${L.players.length===1?'hráč':'hráči'} · zbytek doplní boti`:'Čeká se, až hostitel spustí zápas.';
 }
 $('#lobbyStart').onclick=()=>wsSend({type:'start'});
 $('#lobbyLeave').onclick=()=>toHub();

@@ -27,6 +27,9 @@ export function createMeta(db){
     p.campaign??={};const c=p.campaign;c.cleared??=[];c.shards??={};c.week??=null;c.weekWins??=0;c.weekClaimed??=false;c.echoWon??=false;
     p.goals??={day:null,list:[],rerolled:false,bonus:false,week:null,weekly:null};
     p.merchant??={day:null,offers:[],rerolled:false};p.tactic??='dodge';p.builds??=[];p.history??=[];
+    p.ranked??={season:null,rating:D.RATING_START,games:0,wins:0,losses:0,peak:D.RATING_START};p.rankedPrev??=null;
+    // repairs saves damaged by the old "constructor" lookups (NaN credits, empty items, unknown class)
+    if(!Number.isFinite(p.credits))p.credits=0;if(p.inv.some(i=>!i||!i.id))p.inv=p.inv.filter(i=>i&&i.id);if(!D.CLASSES[p.cls])p.cls='striker';
     const st=p.stats;st.bestEndless??=0;st.byCls??={};st.byMode??={};st.byBoss??={};st.dmg??=0;st.heal??=0;st.time??=0;st.mvp??=0;
     return p;
   }
@@ -36,6 +39,14 @@ export function createMeta(db){
     if(G.week!==wk){const keys=Object.keys(D.WEEKLY_GOALS);G.week=wk;G.weekly={id:keys[Math.floor(Math.random()*keys.length)],prog:0,claimed:false}}
     const c=p.campaign;if(c.week!==wk){c.week=wk;c.weekWins=0;c.weekClaimed=false;c.echoWon=false}
     if(p.merchant.day!==day){p.merchant={day,offers:merchantOffers(p),rerolled:false}}
+    rollSeason(p);
+  }
+  // a new month starts a new season: the rating is softened and the best division of the old one waits as a reward
+  function rollSeason(p){
+    const R=p.ranked,now=D.seasonKey();if(R.season===now)return;
+    if(R.season&&R.games>0)p.rankedPrev={season:R.season,div:D.divisionOf(R.peak),rating:R.rating,games:R.games,claimed:false};
+    const r=R.season?D.softReset(R.rating):D.RATING_START;
+    p.ranked={season:now,rating:r,games:0,wins:0,losses:0,peak:r};
   }
   // three slot-specific offers of rare or better, plus one epic-or-better special
   function merchantOffers(p){
@@ -67,14 +78,17 @@ export function createMeta(db){
     nick=String(nick||'').trim();pass=String(pass||'');
     if(!NICK_RE.test(nick))fail('Přezdívka musí mít 3–16 znaků: písmena, číslice, mezera, tečka, pomlčka nebo podtržítko.');
     if(pass.length<8||pass.length>100)fail('Heslo musí mít alespoň 8 znaků.');
-    const key=nick.toLowerCase();if(doc.users[key])fail('Tato přezdívka je obsazená.',409);
+    const key=nick.toLowerCase();if(Object.hasOwn(doc.users,key))fail('Tato přezdívka je obsazená.',409);
+    if(['__proto__','constructor','prototype'].includes(key))fail('Tuto přezdívku použít nejde.');
     const salt=randomBytes(16).toString('hex'),id=D.newId();
     const user={id,nick,salt,hash:await hashPass(pass,salt),tokens:[],created:Date.now()};
+    // two registrations of the same nick can both pass the first check while hashing
+    if(Object.hasOwn(doc.users,key))fail('Tato přezdívka je obsazená.',409);
     doc.users[key]=user;doc.profiles[id]=newProfile(id,nick);
     return{token:issueToken(user),profile:view(doc.profiles[id])};
   }
   async function login(nick,pass){
-    const user=doc.users[String(nick||'').trim().toLowerCase()];
+    const key=String(nick||'').trim().toLowerCase(),user=Object.hasOwn(doc.users,key)?doc.users[key]:null;
     const h=await hashPass(pass||'',user?.salt||'00');
     if(!user||!timingSafeEqual(Buffer.from(h,'hex'),Buffer.from(user.hash,'hex')))fail('Nesprávná přezdívka nebo heslo.',401);
     return{token:issueToken(user),profile:view(doc.profiles[user.id])};
@@ -91,6 +105,8 @@ export function createMeta(db){
       listings:Object.values(doc.market).filter(l=>l.seller===p.id).length};
   }
   const item=(p,id)=>p.inv.find(i=>i.id===id)||fail('Předmět nenalezen.',404);
+  // own keys only: an id like "constructor" must not resolve to Object.prototype.constructor
+  const listing=id=>typeof id==='string'&&Object.hasOwn(doc.market,id)?doc.market[id]:null;
   function unequip(p,id){for(const s of D.SLOT_KEYS)if(p.eq[s]===id)delete p.eq[s]}
   function giveItem(p,it){if(p.inv.length<D.INV_MAX){p.inv.push(it);return true}p.credits+=D.itemValue(it);return false}
 
@@ -126,7 +142,7 @@ export function createMeta(db){
       const l={id:D.newId(),seller:p.id,sellerNick:p.nick,item:it,price,created:Date.now()};doc.market[l.id]=l;return{listing:l};
     },
     marketCancel(p,{id}){
-      const l=doc.market[id];if(!l||l.seller!==p.id)fail('Nabídka nenalezena.',404);
+      const l=listing(id);if(!l||l.seller!==p.id)fail('Nabídka nenalezena.',404);
       if(p.inv.length>=D.INV_MAX)fail('Inventář je plný.');delete doc.market[id];p.inv.push(l.item);
     },
     prof(p,body){
@@ -158,6 +174,15 @@ export function createMeta(db){
       if(p.inv.length>=D.INV_MAX)fail('Inventář je plný.');
       p.campaign.shards[boss]=n-D.SHARDS_FOR_PLAN;const item=D.rollItem(p.level,{minR:4});item.name=`${item.name} · ${B.name}`;p.inv.push(item);return{item};
     },
+    claimSeason(p){
+      const P=p.rankedPrev;if(!P||P.claimed)fail('Žádná odměna za sezónu nečeká.');
+      const W=D.DIVISIONS[P.div]?.reward||D.DIVISIONS[0].reward;let item=null;
+      if(W.minR&&p.inv.length>=D.INV_MAX)fail('Inventář je plný. Nejdřív něco prodej.');
+      P.claimed=true;p.credits+=W.credits;
+      if(W.minR){item=D.rollItem(p.level,{minR:W.minR,boost:.4});item.name=`${item.name} · ${D.DIVISIONS[P.div].name}`;p.inv.push(item)}
+      if(W.title&&!p.titles.includes(W.title))p.titles.push(W.title);
+      return{credits:W.credits,item,title:W.title||null};
+    },
     merchantBuy(p,{i}){
       const o=p.merchant.offers[i|0];if(!o)fail('Nabídka nenalezena.',404);if(o.sold)fail('Tuhle nabídku už jsi koupil.');
       if(p.credits<o.price)fail('Nemáš dost kreditů.');if(p.inv.length>=D.INV_MAX)fail('Inventář je plný.');
@@ -186,7 +211,7 @@ export function createMeta(db){
     },
     buildDelete(p,{id}){const n=p.builds.length;p.builds=p.builds.filter(x=>x.id!==id);if(n===p.builds.length)fail('Sestava nenalezena.',404)},
     marketBuy(p,{id}){
-      const l=doc.market[id];if(!l)fail('Nabídka už neexistuje.',404);if(l.seller===p.id)fail('Vlastní nabídku nekoupíš, můžeš ji zrušit.');
+      const l=listing(id);if(!l)fail('Nabídka už neexistuje.',404);if(l.seller===p.id)fail('Vlastní nabídku nekoupíš, můžeš ji zrušit.');
       if(p.credits<l.price)fail('Nemáš dost kreditů.');if(p.inv.length>=D.INV_MAX)fail('Inventář je plný.');
       delete doc.market[id];p.credits-=l.price;p.inv.push(l.item);
       const s=doc.profiles[l.seller];if(s)s.credits+=Math.floor(l.price*(1-D.MARKET_FEE));
@@ -194,7 +219,8 @@ export function createMeta(db){
     }
   };
   function act(p,name,body){
-    const fn=actions[name];if(!fn)fail('Neznámá akce.',404);
+    // own keys only: names like "constructor" or "__defineGetter__" would otherwise reach Object.prototype
+    const fn=Object.hasOwn(actions,name)?actions[name]:null;if(!fn)fail('Neznámá akce.',404);
     const extra=fn(p,body||{})||{};db.touch();return{...extra,profile:view(p)};
   }
   function expireListings(){
@@ -211,12 +237,34 @@ export function createMeta(db){
     return{listings:list.slice(0,60).map(l=>({...l,mine:l.seller===p.id}))};
   }
   function top(){
+    const season=D.seasonKey();
     return{players:Object.values(doc.profiles).sort((a,b)=>b.level-a.level||b.xp-a.xp).slice(0,20)
-      .map(p=>({nick:p.nick,level:p.level,cls:p.cls,wins:p.stats.wins,bossKills:p.stats.bossKills,bestWave:p.stats.bestWave,bestEndless:p.stats.bestEndless|0}))};
+      .map(p=>({nick:p.nick,level:p.level,cls:p.cls,wins:p.stats.wins,bossKills:p.stats.bossKills,bestWave:p.stats.bestWave,bestEndless:p.stats.bestEndless|0})),
+      season,ranked:Object.values(doc.profiles).filter(p=>p.ranked?.season===season&&p.ranked.games>0).sort((a,b)=>b.ranked.rating-a.ranked.rating).slice(0,30)
+        .map(p=>({nick:p.nick,cls:p.cls,rating:p.ranked.rating,div:D.divisionOf(p.ranked.rating),games:p.ranked.games,wins:p.ranked.wins,placed:p.ranked.games>=D.PLACEMENT}))};
+  }
+
+  // ---------- ranked ----------
+  // entries: [{pid,team,present}] of everyone who started the ranked match. Returns {pid:{delta,rating,div,prevDiv,games}},
+  // or {none:reason} when the match does not count. A player who left before the end takes a loss.
+  function rankedResult(M,entries){
+    const list=entries.map(e=>({...e,p:doc.profiles[e.pid]})).filter(e=>e.p);
+    for(const e of list){migrate(e.p);rollSeason(e.p)}
+    const teams=[0,1].map(t=>list.filter(e=>e.team===t));
+    if(!teams[0].length||!teams[1].length)return{none:'Na jedné straně nehrál žádný hráč s účtem, zápas se nehodnotí.'};
+    const avg=t=>teams[t].reduce((a,e)=>a+e.p.ranked.rating,0)/teams[t].length,av=[avg(0),avg(1)];
+    const out={};
+    for(const e of list){
+      const R=e.p.ranked,score=!e.present?0:M.winner===e.team?1:M.winner===1-e.team?0:.5;
+      const delta=D.eloDelta(R.rating,av[1-e.team],score,R.games),prevDiv=D.divisionOf(R.rating);
+      R.rating=Math.max(0,R.rating+delta);R.games++;if(score===1)R.wins++;else if(score===0)R.losses++;R.peak=Math.max(R.peak,R.rating);
+      out[e.pid]={delta,rating:R.rating,div:D.divisionOf(R.rating),prevDiv,games:R.games,left:!e.present};
+    }
+    db.touch();return out;
   }
 
   // ---------- rewards ----------
-  function rewardsFor(M,u,p,loot,mvp=false){
+  function rewardsFor(M,u,p,loot,mvp=false,rk=null){
     const mult=D.DIFF_REWARD[M.diffKey]||1,part=Math.max(.25,Math.min(1,(M.time-(u.joinedAt||0))/Math.max(1,M.time)));
     let xp=0,cr=0,res='loss',record=0;const items=[...u.bag,...loot];
     const pveWin=!M.D.pvp&&(M.winner===0||M.D.endless&&M.wave>=D.ENDLESS_WIN);
@@ -273,11 +321,11 @@ export function createMeta(db){
     st.dmg+=Math.round(u.dmgDealt);st.heal+=Math.round(u.healDone);st.time+=Math.round(M.time-(u.joinedAt||0));if(mvp)st.mvp++;
     p.history.unshift({at:Date.now(),mode:M.mode,map:M.mapKey,boss:M.mode==='boss'?M.bossKey:null,mission:M.mission,res,cls:u.clsKey,
       ki:u.kills,de:u.deaths,nk:u.npcKills,dm:Math.round(u.dmgDealt),he:Math.round(u.healDone),wave:M.D.waves?M.wave:0,
-      score:M.D.pvp?[M.score[u.team],M.score[1-u.team]]:null,dur:Math.round(M.time),xp,cr,mvp});
+      score:M.D.pvp?[M.score[u.team],M.score[1-u.team]]:null,dur:Math.round(M.time),xp,cr,mvp,rk});
     p.history.length=Math.min(p.history.length,D.HISTORY_MAX);
     db.touch();
     return{xp,credits:cr,items,res,levelUps,sold,skin,camp,goalsDone:done,record,mvp};
   }
 
-  return{register,login,logout,auth,view,act,market,top,rewardsFor,canStartMission,loadoutFor:(p,k)=>D.computeLoadout(p,k)};
+  return{register,login,logout,auth,view,act,market,top,rewardsFor,rankedResult,canStartMission,loadoutFor:(p,k)=>D.computeLoadout(p,k)};
 }
