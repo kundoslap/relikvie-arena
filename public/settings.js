@@ -4,8 +4,8 @@ import * as Snd from './audio.js';
 
 const store={get(k,d){try{const v=localStorage.getItem('rel.'+k);return v==null?d:JSON.parse(v)}catch{return d}},set(k,v){try{localStorage.setItem('rel.'+k,JSON.stringify(v))}catch{}}};
 export const ACTIONS=[['up','Pohyb nahoru'],['down','Pohyb dolů'],['left','Pohyb doleva'],['right','Pohyb doprava'],['q','Schopnost 1'],['e','Schopnost 2'],['r','Schopnost 3'],
-  ['ult','Ultimátka'],['tac','Taktická akce'],['score','Skóre (držet)'],['mute','Vypnout zvuk']];
-const DEF_KEYS={up:'KeyW',down:'KeyS',left:'KeyA',right:'KeyD',q:'KeyQ',e:'KeyE',r:'KeyR',ult:'KeyF',tac:'KeyT',score:'Tab',mute:'KeyM'};
+  ['ult','Ultimátka'],['tac','Taktická akce'],['ping','Ping (s Alt varování)'],['wheel','Rychlé zprávy'],['score','Skóre (držet)'],['mute','Vypnout zvuk']];
+const DEF_KEYS={up:'KeyW',down:'KeyS',left:'KeyA',right:'KeyD',q:'KeyQ',e:'KeyE',r:'KeyR',ult:'KeyF',tac:'KeyT',ping:'KeyG',wheel:'KeyV',score:'Tab',mute:'KeyM'};
 const DEF={scale:1,bloom:true,particles:1,shake:true,flash:true,dmgNums:true,names:true,zoom:1,fps:false};
 // keys the game keeps for itself: menu, chat, typing
 const RESERVED=new Set(['Escape','Enter','NumpadEnter','Backspace','MetaLeft','MetaRight','ContextMenu']);

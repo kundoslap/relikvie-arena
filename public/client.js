@@ -136,8 +136,32 @@ function onRoster(list){
   for(const u of list)ensureView(u);
   for(const v of [...views.values()])if(!G.roster.has(v.id))dropView(v);
 }
+// Únos relikvie: a stand with a beam in each fortress and the two team relics
+let flagMeshes=[];
+function buildFlags(info){
+  for(const f of flagMeshes){scene.remove(f.stand);scene.remove(f.relic)}flagMeshes=[];
+  if(info.mode!=='ctf')return;
+  const map=MAPS[info.map];
+  (map.flags||map.bases).forEach((h,team)=>{const c=TEAM_COL[team];
+    const stand=new THREE.Group();stand.position.set(h.x,.08,h.z);
+    const ring=new THREE.Mesh(RING_GEO,addMat(c,1.8));ring.rotation.x=-Math.PI/2;ring.scale.setScalar(S.CTF.score);
+    const beam=new THREE.Mesh(BEAM_GEO,addMat(c,.7));beam.scale.set(.18,12,.18);beam.position.y=6;stand.add(ring,beam);scene.add(stand);
+    const relic=new THREE.Group();relic.add(new THREE.Mesh(new THREE.OctahedronGeometry(.5,0),new THREE.MeshBasicMaterial({color:HDR(c,2.6)})));
+    relic.add(new THREE.Mesh(new THREE.IcosahedronGeometry(.85,1),new THREE.MeshBasicMaterial({color:HDR(c,1.4),wireframe:true,transparent:true,opacity:.5})));
+    const light=new THREE.PointLight(c,8,12,1.4);relic.add(light);relic.position.set(h.x,1.5,h.z);scene.add(relic);
+    flagMeshes.push({team,stand,relic,ring})});
+}
+function updFlagMeshes(t){
+  const fg=G.last?.fg;if(!fg||!flagMeshes.length)return;
+  for(const F of flagMeshes){const f=fg[F.team];if(!f)continue;const [st,x,z,car]=f;
+    const v=st===1?views.get(car):null;
+    if(v&&!v.dead)F.relic.position.set(v.x,3.1+Math.sin(t*4)*.12,v.z);else F.relic.position.set(x,1.5+Math.sin(t*2+F.team)*.15,z);
+    F.relic.rotation.y+=.03;F.relic.scale.setScalar(st===2?1+.15*Math.sin(t*8):1);
+    F.ring.material.opacity=st===0?.9:.25+.2*Math.sin(t*6)}
+}
+const flagText=(f,mine)=>!f?'':f[0]===0?'doma':f[0]===1?`unesena · ${esc(nameOf(f[3]))}`:`leží · vrátí se za ${f[4]} s`;
 function setInfo(info){
-  G.info=info;setMap(info.map);
+  G.info=info;setMap(info.map);buildFlags(info);
   for(const m of pointMeshes)scene.remove(m.g);pointMeshes=[];
   if(info.mode==='control')MAPS[info.map].points.forEach((p,i)=>{
     const g=new THREE.Group();g.position.set(p.x,.08,p.z);
@@ -154,7 +178,7 @@ function clearWorld(){
   for(const m of pointMeshes)scene.remove(m.g);pointMeshes=[];
   fxList.forEach(dropFx);fxList=[];parts.length=0;floaters.forEach(f=>f.el.remove());floaters=[];$('#feed').innerHTML='';
   Object.assign(G,{roster:new Map(),snaps:[],last:null,evq:[],stats:[],ended:false,pred:null,show:null,hist:[],pendingCast:[],you:0,slotsFor:'',tut:null});
-  tutMarker(null);$('#hud').classList.remove('tut');$('#tut').hidden=true;
+  tutMarker(null);$('#hud').classList.remove('tut');$('#tut').hidden=true;clearSignals();
   relicMesh.visible=false;relicLight.intensity=0;
 }
 function renderTime(){return G.mode==='on'?performance.now()-100:(G.M?(G.M.time+G.acc)*1000-TICK*1000:0)}
@@ -263,6 +287,12 @@ const EV={
   wave:e=>{banner(e.b?`Vlna ${e.w} · boss`:`Vlna ${e.w}`,e.b?'Přichází boss s doprovodem':'Nepřátelé přicházejí z okraje arény',2.2,e.b?'var(--red)':'var(--gold)');ui('wave',{b:e.b,dur:1.2})},
   waveClear:e=>{banner(`Vlna ${e.w} zvládnuta`,e.w%5===0?'Bonusový život pro tým':'Krátká pauza, doplň síly na základně',2,'var(--green)');ui('clear',{dur:1})},
   point:e=>{const L='ABC'[e.i];feed(e.o<0?`Bod ${L} je neutrální`:`<span class="t${e.o}">${TEAM_NAME[e.o]}</span> obsadili bod ${L}`);if(e.o>=0)ui('point',{mine:e.o===(G.roster.get(G.you)?.t??0)})},
+  sig:e=>onSignal(e),
+  flag:e=>{const my=G.roster.get(G.you)?.t??0,ours=e.team===my,who=tag(e.u);
+    if(e.k==='take'){feed(`${who} unesl ${ours?'vaši':'soupeřovu'} relikvii`);banner(ours?'Vaše relikvie je unesena!':'Relikvie je vaše, neste ji domů!',ours?`Nese ji ${nameOf(e.u)}`:`Nese ji ${nameOf(e.u)}`,2.2,ours?'var(--red)':'var(--gold)');ui(ours?'relicFoe':'relicMine',{dur:1.2})}
+    else if(e.k==='cap'){feed(`${who} donesl relikvii · <span class="g">bod</span>`);banner(ours?'Soupeř bodoval':'Únos! +1 bod',`${nameOf(e.u)} donesl relikvii`,2.6,ours?'var(--red)':'var(--gold)');ui(ours?'lose':'win',{dur:2})}
+    else if(e.k==='drop'){feed(`${ours?'Vaše':'Soupeřova'} relikvie leží na zemi`);ui('warn',{gap:.5,vol:.6})}
+    else if(e.k==='return'){feed(`${ours?'Vaše':'Soupeřova'} relikvie je zpět doma${e.u?' · vrátil '+who:''}`);ui('clear',{vol:.6,dur:1})}},
   loot:e=>{const R=RARITIES[e.r];floatText({x:e.x,y:2.2,z:e.z},e.n,'loot',R.color);feed(`Kořist: <span style="color:${R.color}">${esc(e.n)}</span>`);burst(e,R.hex,30,4,6,.8,1);sfx('loot',e,{r:e.r,gap:.1})}
 };
 function playEvents(rt){
@@ -284,6 +314,12 @@ addEventListener('keydown',e=>{
   if(e.code==='Escape'&&inGame()){setPause(!G.paused);return}
   if((e.code==='Enter'||e.code==='NumpadEnter')&&inGame()&&G.mode==='on'&&!G.solo&&!G.paused){
     e.preventDefault();for(const k in keys)keys[k]=false;mouseDown=false;Social.openMatchChat(e.shiftKey);return}
+  // quick messages: the wheel opens with its key, numbers pick a message
+  if(inGame()&&!G.paused&&!e.repeat){
+    if(!$('#wheel').hidden&&/^(Digit|Numpad)[1-7]$/.test(e.code)){e.preventDefault();sendSignal(WHEEL[+e.code.slice(-1)-1]);toggleWheel(false);return}
+    if(e.code===Cfg.key('wheel')){e.preventDefault();toggleWheel();return}
+    if(e.code===Cfg.key('ping')){e.preventDefault();sendSignal(e.altKey?'danger':'here',aimPoint());return}
+  }
   keys[e.code]=true;
   if(!inGame()||G.paused||e.repeat)return;
   // Space stays a second key for the ultimate unless it was bound to something else
@@ -589,6 +625,9 @@ $('#menuBtn').onclick=()=>toHub();
 $('#resumeBtn').onclick=()=>setPause(false);
 $('#quitBtn').onclick=()=>toHub();
 $('#pauseBtn').onclick=()=>setPause(true);
+// touch: ping at the auto-aim point (the nearest enemy or ahead), and the quick message panel
+$('#pingBtn').onclick=()=>sendSignal('here',autoAim());
+$('#wheelBtn').onclick=()=>toggleWheel();
 
 // ---------- HUD ----------
 function mySkills(){const me=G.roster.get(G.you);if(!me||me.kind!=='h')return null;const ids=G.last?.me?.sk||['c0','c1','c2'];const tac=G.last?.me?.tc?.[0]||'dodge';return{k:me.k,ids,tac,key:me.k+':'+ids.join(',')+':'+tac,defs:ids.map(id=>S.skillDef(me.k,id)||CLASSES[me.k].skills[0])}}
@@ -613,6 +652,7 @@ function drawHUD(){
   const clock=s.tl>1e6?'':`${Math.floor(s.tl/60)}:${String(s.tl%60).padStart(2,'0')}`;
   let mb='';
   if(MODES[mode]?.pvp){setTxt('sL','Modří');setTxt('sR','Rudí');setTxt('s0',s.sc[0]);setTxt('s1',s.sc[1]);setTxt('scoreSub','do '+MODES[mode].win);
+    if(mode==='ctf'&&s.fg){const my=meInfo?.t??0;mb=`<div class="flags">${[my,1-my].map(team=>`<div class="fl${team}"><b>${team===my?'Vaše':'Soupeřova'} relikvie</b> ${flagText(s.fg[team])}</div>`).join('')}</div>`}
     if(mode==='control')mb=`<div class="pts">${s.pt.map(([o,pr],i)=>`<div class="pt${o>=0?' o'+o:''}" style="background:linear-gradient(0deg,${pr<0?'rgba(63,184,255,.35)':'rgba(255,63,142,.35)'} ${Math.abs(pr)}%,var(--panel) 0)">${'ABC'[i]}</div>`).join('')}</div>`}
   else{const wv=s.wv,W=MODES[mode]?.waves;setTxt('sL',W?'Vlna':'Životy');setTxt('s0',W?wv?.[0]??0:s.lv);setTxt('sR',W?'Životy':'Boss');
     setTxt('s1',W?s.lv:(s.bs?Math.ceil(s.bs[1]/s.bs[2]*100)+'%':'—'));
@@ -647,10 +687,50 @@ function drawHUD(){
   if(mode==='control')map.points.forEach((p,i)=>{const o=s.pt[i]?.[0];mg.strokeStyle=o===0?'#3fb8ff':o===1?'#ff3f8e':'#ffc66d';mg.lineWidth=4;mg.beginPath();mg.arc(toM(p.x),toM(p.z),4*sc,0,Math.PI*2);mg.stroke()});
   if(s.rl[0]&&mode==='arena'){mg.fillStyle='#ffc66d';mg.beginPath();mg.arc(cx,cx,7,0,Math.PI*2);mg.fill()}
   for(const L of s.lt){mg.fillStyle=RARITIES[L[3]].color;mg.fillRect(toM(L[1])-4,toM(L[2])-4,8,8)}
+  if(mode==='ctf'&&s.fg)s.fg.forEach(([st,x,z],team)=>{const h=(map.flags||map.bases)[team];mg.strokeStyle=team?'#ff3f8e':'#3fb8ff';mg.lineWidth=3;mg.beginPath();mg.arc(toM(h.x),toM(h.z),9,0,Math.PI*2);mg.stroke();
+    mg.fillStyle=team?'#ff3f8e':'#3fb8ff';mg.save();mg.translate(toM(x),toM(z));mg.rotate(Math.PI/4);const k=st===2?7+3*Math.sin(performance.now()/120):8;mg.fillRect(-k/2,-k/2,k,k);mg.restore()});
+  for(const p of pingMarks){mg.strokeStyle='#'+SIG_COL[p.k].toString(16).padStart(6,'0');mg.lineWidth=4;mg.beginPath();mg.arc(toM(p.x),toM(p.z),10+4*Math.sin(performance.now()/120),0,Math.PI*2);mg.stroke()}
   for(const v of views.values()){if(v.dead||v.hid)continue;
     mg.fillStyle=v.t?'#ff3f8e':'#3fb8ff';mg.beginPath();mg.arc(toM(v.x),toM(v.z),v.kind==='b'?13:v.kind==='n'?4:v.id===G.you?9:7,0,Math.PI*2);mg.fill();
     if(v.id===G.you){mg.strokeStyle='#ffc66d';mg.lineWidth=3;mg.stroke()}}
   mg.restore();
+}
+
+// ---------- pings and quick messages ----------
+const SIG_COL={here:0xffc66d,attack:0xff3f5e,danger:0xff8a2a};
+let pingMarks=[],bubbles=new Map();
+function onSignal(e){
+  const S2=S.SIGNALS[e.k];if(!S2||G.mode==='menu')return;
+  if(S2.ping){
+    const c=SIG_COL[e.k],g=new THREE.Group(),ring=new THREE.Mesh(RING_GEO,addMat(c,2)),col=new THREE.Mesh(BEAM_GEO,addMat(c,1.2));
+    ring.rotation.x=-Math.PI/2;ring.scale.setScalar(1.6);col.scale.set(.06,5,.06);col.position.y=2.5;g.add(ring,col);g.position.set(e.x,.12,e.z);scene.add(g);
+    pingMarks.push({g,x:e.x,z:e.z,k:e.k,tg:e.tg,until:performance.now()+3500});
+    feed(`${tag(e.u)}: <span style="color:${'#'+c.toString(16).padStart(6,'0')}">${S2.name}${e.tg?' · '+esc(nameOf(e.tg)):''}</span>`);
+    Snd.play('ping',null,{ui:true,danger:e.k==='danger',gap:.2});
+  }else{
+    const v=views.get(e.u);if(!v)return;bubbles.get(e.u)?.el.remove();
+    const el=document.createElement('div');el.className='bubble';el.textContent=S2.name;$('#floaters').appendChild(el);bubbles.set(e.u,{el,until:performance.now()+2600});
+    if(v.t===G.roster.get(G.you)?.t)feed(`${tag(e.u)}: ${S2.name}`);Snd.play('msg',null,{ui:true,vol:.5,gap:.3});
+  }
+}
+function updSignals(t){
+  const now=performance.now();
+  pingMarks=pingMarks.filter(p=>{if(now>p.until){scene.remove(p.g);p.g.traverse(o=>o.material&&o.material.dispose());return false}
+    if(p.tg){const v=views.get(p.tg);if(v&&!v.dead){p.x=v.x;p.z=v.z;p.g.position.set(v.x,.12,v.z)}}
+    const k=(p.until-now)/3500;p.g.children[0].scale.setScalar(1.2+Math.sin(t*8)*.25);p.g.children[0].material.opacity=Math.min(1,k*2);p.g.children[1].material.opacity=Math.min(1,k*2)*.7;return true});
+  for(const [id,b] of bubbles){const v=views.get(id);if(now>b.until||!v||v.dead){b.el.remove();bubbles.delete(id);continue}
+    const s=toScreen(v,(v.model.height||2.3)+1.3);b.el.style.display=s.off?'none':'';b.el.style.transform=`translate(${s.x}px,${s.y}px) translate(-50%,-100%)`;b.el.style.opacity=Math.min(1,(b.until-now)/400)}
+}
+function clearSignals(){for(const p of pingMarks)scene.remove(p.g);pingMarks=[];for(const b of bubbles.values())b.el.remove();bubbles.clear();$('#wheel').hidden=true}
+function sendSignal(k,p){
+  if(G.mode==='on')wsSend({type:'sig',k,x:p?.x??0,z:p?.z??0});
+  else if(G.mode==='off'&&G.M){const u=G.M.units.find(x=>x.id===G.you);if(u)S.signal(G.M,u,k,p?.x??u.x,p?.z??u.z)}
+}
+const WHEEL=['go','back','help','hold','thanks','gg','haha'];
+function toggleWheel(show=$('#wheel').hidden){
+  const w=$('#wheel');w.hidden=!show;if(!show)return;
+  w.innerHTML=WHEEL.map((k,i)=>`<button type="button" data-sig="${k}"><kbd>${i+1}</kbd>${S.SIGNALS[k].name}</button>`).join('');
+  w.querySelectorAll('[data-sig]').forEach(b=>b.onclick=()=>{sendSignal(b.dataset.sig);toggleWheel(false)});
 }
 
 // ---------- legendary skin trails: particles that follow the hero, more while moving ----------
@@ -706,7 +786,7 @@ function unitVisual(v,st,dt,t){
   const s=toScreen(v,M.height+.8);if(s.off){b.el.style.display='none';return}
   b.el.style.display='';b.el.style.transform=`translate(${s.x-38}px,${s.y-30}px)`;
   b.h.style.width=Math.max(0,st.h/v.mh*100)+'%';b.s.style.width=Math.min(100,st.s/v.mh*100)+'%';
-  const f=st.fl;b.em.textContent=f&1024?'BŘEMENO':f&2048?'NAKAŽEN':f&8192?'OZNAČEN':f&1?'OMRÁČEN':f&2?'UMLČEN':f&4?'KRVÁCÍ':f&16384?'HOŘÍ':f&32768?'OTRÁVEN':f&65536?'ŠOK':f&8?'ZPOMALEN':f&16?'RELIKVIE':'';
+  const f=st.fl;b.em.textContent=G.last?.fg?.some(x=>x[0]===1&&x[3]===v.id)?'NESE RELIKVII':f&1024?'BŘEMENO':f&2048?'NAKAŽEN':f&8192?'OZNAČEN':f&1?'OMRÁČEN':f&2?'UMLČEN':f&4?'KRVÁCÍ':f&16384?'HOŘÍ':f&32768?'OTRÁVEN':f&65536?'ŠOK':f&8?'ZPOMALEN':f&16?'RELIKVIE':'';
 }
 
 // ---------- hero preview for the hub ----------
@@ -762,6 +842,7 @@ function frame(){
     if(Math.random()<(hiQ?.7:.35)){_c.set(m.userData.c);parts.push({x:m.position.x,y:1.3,z:m.position.z,vx:rnd(-.3,.3),vy:rnd(-.2,.2),vz:rnd(-.3,.3),l:.25,m:.25,r:_c.r*2,g:_c.g*2,b:_c.b*2})}}
   for(const m of zoneMeshes.values()){m.material.opacity=.22*Math.min(1,m.userData.t)+.06*Math.sin(t*8);m.rotation.z+=dt*.6;
     if(Math.random()<.6){const a=rnd(0,6.28),r=rnd(0,3.5);burst({x:m.position.x+Math.cos(a)*r,z:m.position.z+Math.sin(a)*r},m.userData.c,1,.6,2.2,.7,0)}}
+  updSignals(t);updFlagMeshes(t);
   if(tutMark){tutMark.children[0].scale.setScalar(2.4+Math.sin(t*4)*.25);tutMark.children[1].material.opacity=.5+.3*Math.sin(t*6)}
   for(const g of lootMeshes.values()){g.userData.gem.rotation.y+=dt*2;g.userData.gem.position.y=1+Math.sin(t*3)*.15}
   for(const g of beamMeshes.values())g.userData.glow.material.opacity=.5+.3*Math.sin(t*30);

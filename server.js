@@ -391,6 +391,10 @@ function onMessage(c,m){
         S.queueInput(u,{seq:num(m.seq,1e9)|0,mx:num(m.mx,1),mz:num(m.mz,1),ax:num(m.ax,60),az:num(m.az,60),atk:!!m.atk,fm:!!m.fm,vt:num(m.vt,1e6),
           cast:Array.isArray(m.cast)?m.cast.slice(0,4).map(x=>x|0).filter(x=>x>=0&&x<=4):[]});
         break}
+      case 'sig':{
+        // pings and quick messages; the simulation validates the kind and rate-limits them
+        if(!room||!room.match)break;const u=room.match.units.find(x=>x.id===c.unitId);if(!u||u.ctrl!=='human')break;
+        const num=v=>Number.isFinite(+v)?Math.max(-60,Math.min(60,+v)):0;S.signal(room.match,u,String(m.k||'').slice(0,12),num(m.x),num(m.z));break}
       case 'ping':send(c,{type:'pong',t:m.t});break;
       case 'leave':leave(c);send(c,{type:'left'});break;
     }

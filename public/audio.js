@@ -118,6 +118,7 @@ const SFX={
   loot(c,o){const r=o.r||0;bell(c,hz(84+r*2),.9+r*.2,.08+r*.02);if(r>=3)bell(c,hz(91+r),1.1,.06,.12)},
   click(c){hiss(c,'bandpass',2200,1800,.012,.18,.001,2)},
   msg(c){bell(c,hz(81),.7,.08);bell(c,hz(88),.6,.05,.09)},
+  ping(c,o){const f=o.danger?hz(70):hz(84);bell(c,f,.5,.12);bell(c,o.danger?hz(66):f*1.5,.45,.09,.1);if(o.danger)sub(c,90,60,.15,.3)},
   heart(c){sub(c,62,40,.15,.6);sub(c,56,36,.13,.45,.17)},
   win(c){pad(c,[hz(48),hz(55),hz(60),hz(64),hz(67)],3.2,.5,2600,.6);sub(c,65,32,2,.8);bell(c,hz(84),2.4,.08,.7);hiss(c,'highpass',3000,9000,1.6,.06,.6)},
   lose(c){pad(c,[hz(45),hz(52),hz(57),hz(60)],3,.45,900,.5);sub(c,55,30,2.4,.7);tone(c,'sine',hz(64),hz(62),2.2,.05,.6)},

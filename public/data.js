@@ -490,6 +490,27 @@ export function weekKey(t=Date.now()){
 
 // ---------- maps ----------
 // pillars: [x,z,r]; hazards hurt anyone inside; points are capture zones for Ovládnutí.
+// Pevnost relikvií: walls are rows of overlapping pillars. The layout is mirrored left/right (the two teams) and
+// top/bottom, so neither side has a shorter way. Three lanes (north, middle, south) are linked by gaps; no dead ends.
+function bastionPillars(){
+  const out=[],wall=(x1,z1,x2,z2,r=1.15)=>{const L=Math.hypot(x2-x1,z2-z1),n=Math.max(1,Math.round(L/1.7));
+    for(let i=0;i<=n;i++)out.push([Math.round((x1+(x2-x1)*i/n)*10)/10,Math.round((z1+(z2-z1)*i/n)*10)/10,r])};
+  for(const sx of [-1,1]){
+    // fortress around the relic stand (±30, 0): solid towards the middle, gates north, south and to the back
+    for(let a=0;a<360;a+=20){if(a>=60&&a<=120||a>=240&&a<=300)continue;const back=sx<0?(a>=150&&a<=210):(a<=30||a>=330);if(back)continue;
+      out.push([Math.round((sx*30+Math.cos(a*Math.PI/180)*8.5)*10)/10,Math.round(Math.sin(a*Math.PI/180)*8.5*10)/10,1.35])}
+    for(const sz of [-1,1]){
+      wall(sx*10,sz*4,sx*10,sz*11);           // the middle lane: walls split it into two corridors
+      wall(sx*5,sz*14,sx*15,sz*14);           // between the middle and the side lanes, with gaps at x 0 and x ±17
+      wall(sx*19,sz*9,sx*19,sz*17);           // guards the fortress gates from the side lanes
+      wall(sx*7,sz*22,sx*13,sz*30);           // side lane bends
+      wall(sx*22,sz*22,sx*27,sz*27);
+      wall(sx*2,sz*30,sx*2,sz*37);            // splits the far side lane near the centre line
+    }
+  }
+  out.push([0,0,2.6],[0,-22,2],[0,22,2]);
+  return out;
+}
 export const MAPS={
   core:{name:'Neonové jádro',desc:'Symetrická aréna se sloupy a relikvií ve středu.',r:34,
     pillars:[[-10,-9,2.2],[-10,9,2.2],[10,-9,2.2],[10,9,2.2],[0,-17,2.6],[0,17,2.6],[-19,-17,1.8],[-19,17,1.8],[19,-17,1.8],[19,17,1.8],[-16,0,1.6],[16,0,1.6]],
@@ -508,7 +529,13 @@ export const MAPS={
   sanctum:{name:'Rudá svatyně',desc:'Otevřený kruh pro lov bossů se čtyřmi úkryty.',r:30,
     pillars:[[-12,-12,2.2],[12,-12,2.2],[-12,12,2.2],[12,12,2.2]],
     hazards:[],bases:[{x:-24,z:0},{x:24,z:0}],points:[{x:0,z:0},{x:-14,z:0},{x:14,z:0}],bossAt:{x:8,z:0},
-    theme:{floor:0x14070c,gridA:[1,.2,.35],gridB:[.7,.2,1],accent:0xff527e,fog:0x0a0306,sky:[0x0a0306,0x2c0818],pillar:'obelisk',amb:'motes',ambColor:0xff6a8a,rim:0xff527e,skyline:[0xff527e,0xac8dff,0xff9c5b,0x5a1030]}}
+    theme:{floor:0x14070c,gridA:[1,.2,.35],gridB:[.7,.2,1],accent:0xff527e,fog:0x0a0306,sky:[0x0a0306,0x2c0818],pillar:'obelisk',amb:'motes',ambColor:0xff6a8a,rim:0xff527e,skyline:[0xff527e,0xac8dff,0xff9c5b,0x5a1030]}},
+  // Únos relikvie only: a long, mirrored arena. Each relic stands in a fortress whose wall faces the middle;
+  // the gates are on the north and south sides and at the back towards the base.
+  bastion:{name:'Pevnost relikvií',desc:'Bludiště zdí se třemi propojenými cestami a dvě pevnosti s relikviemi. Jen pro Únos relikvie.',r:44,ctfOnly:true,
+    pillars:bastionPillars(),
+    hazards:[],bases:[{x:-40,z:0},{x:40,z:0}],flags:[{x:-30,z:0},{x:30,z:0}],points:[{x:0,z:0},{x:0,z:-20},{x:0,z:20}],bossAt:{x:0,z:0},
+    theme:{floor:0x0c0a18,gridA:[.35,.5,1],gridB:[1,.3,.6],accent:0xc9a0ff,fog:0x06040e,sky:[0x06040e,0x1c0f3a],pillar:'wall',amb:'motes',ambColor:0xc9a0ff,rim:0xc9a0ff,skyline:[0x3fb8ff,0xff3f8e,0xc9a0ff,0xffc66d]}}
 };
 export const MAP_KEYS=Object.keys(MAPS);
 
@@ -516,6 +543,7 @@ export const MAP_KEYS=Object.keys(MAPS);
 export const MODES={
   arena:{name:'Aréna',desc:'3 proti 3. Body za zničení soupeřů a za relikvii ve středu. Vyhrává 20 bodů.',pvp:true,maps:['core','forge','archive'],max:6,win:20},
   control:{name:'Ovládnutí',desc:'3 proti 3 o tři body. Každý držený bod přidává skóre, vyhrává 100.',pvp:true,maps:['core','forge','archive'],max:6,win:100},
+  ctf:{name:'Únos relikvie',desc:'3 proti 3 v Pevnosti relikvií. Ukradni soupeřovu relikvii a dones ji ke své, která musí být doma. Vyhrávají 3 únosy.',pvp:true,maps:['bastion'],max:6,win:3},
   duel:{name:'Souboj',desc:'1 proti 1 bez relikvie a bodů. Vyhrává, kdo první pětkrát zničí soupeře.',pvp:true,team:1,maps:['archive','core','sanctum'],max:2,win:5},
   boss:{name:'Lov bosse',desc:'Až 4 hráči proti bossovi s mechanikami. Tým má společné životy.',pvp:false,maps:['sanctum','core','forge','archive'],max:4,lives:8},
   waves:{name:'Vlny',desc:'Až 4 hráči proti vlnám dronů. Každá pátá vlna je boss, cílem je přežít 15 vln.',pvp:false,waves:true,maps:['sanctum','forge','archive','core'],max:4,lives:6,last:15},

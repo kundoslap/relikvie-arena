@@ -301,6 +301,7 @@ export function buildArena(scene,mapKey,hiQ){
     const c=x<-1?TEAM_COL[0]:x>1?TEAM_COL[1]:T.accent;let geo,m,h=5;
     if(T.pillar==='box'){h=4.4;geo=new THREE.BoxGeometry(r*1.5,h,r*1.5);m=new THREE.Mesh(geo,new THREE.MeshStandardMaterial({color:0x2a1d16,metalness:.7,roughness:.55}));m.rotation.y=Math.PI/4}
     else if(T.pillar==='crystal'){h=6;geo=new THREE.CylinderGeometry(r*.45,r,h,5);m=new THREE.Mesh(geo,new THREE.MeshStandardMaterial({color:0x9fd8ff,metalness:.1,roughness:.08,transparent:true,opacity:.55,emissive:0x15354a}))}
+    else if(T.pillar==='wall'){h=3.2;geo=new THREE.CylinderGeometry(r*1.02,r*1.08,h,8);m=new THREE.Mesh(geo,new THREE.MeshStandardMaterial({color:0x1a1630,metalness:.75,roughness:.35}))}
     else if(T.pillar==='obelisk'){h=7.5;geo=new THREE.CylinderGeometry(r*.3,r*.95,h,4);m=new THREE.Mesh(geo,new THREE.MeshStandardMaterial({color:0x1a0c12,metalness:.6,roughness:.35}));m.rotation.y=Math.PI/4}
     else{geo=new THREE.CylinderGeometry(r*.82,r,h,6);m=new THREE.Mesh(geo,pm)}
     m.position.set(x,h/2,z);m.castShadow=m.receiveShadow=true;g.add(m);

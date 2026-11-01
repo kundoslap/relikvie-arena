@@ -439,6 +439,21 @@ body.touch #mchatBtn{display:block;position:fixed;right:calc(var(--gr) + 48px);t
 @keyframes pulse{50%{box-shadow:0 0 12px rgba(255,198,109,.5)}}
 #fps{position:fixed;right:var(--gr);bottom:calc(var(--gb) + 46px);z-index:6;font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums;pointer-events:none}
 body.nonames .ub .n{display:none}
+/* capture the relic */
+.flags{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+.flags>div{background:var(--panel);border:1px solid var(--line);border-radius:3px;padding:4px 10px;font-size:12px;color:var(--ink)}
+.flags b{font-weight:600}.flags .fl0 b{color:var(--blue)}.flags .fl1 b{color:var(--red)}
+.flags>div.fl0{border-color:rgba(63,184,255,.5)}.flags>div.fl1{border-color:rgba(255,63,142,.5)}
+/* pings and quick messages */
+.bubble{position:absolute;left:0;top:0;padding:4px 10px;background:rgba(8,12,24,.92);border:1px solid var(--gold);border-radius:12px;font-size:13px;font-weight:600;white-space:nowrap;color:var(--ink);box-shadow:0 0 12px rgba(255,198,109,.25)}
+#wheel{position:fixed;left:50%;bottom:calc(var(--gb) + 110px);transform:translateX(-50%);display:flex;flex-wrap:wrap;gap:6px;justify-content:center;width:min(560px,calc(100vw - 32px));z-index:6}
+#wheel button{display:flex;gap:6px;align-items:center;padding:8px 12px;background:rgba(8,12,24,.94);border:1px solid var(--gold);border-radius:3px;font-size:14px}
+#wheel button:hover{background:rgba(255,198,109,.15)}
+#wheel kbd{font-family:var(--body);font-size:11px;border:1px solid var(--line);border-radius:2px;padding:0 5px;color:var(--gold)}
+#sigBtns{display:none}
+body.touch #sigBtns{display:flex;gap:6px;position:fixed;right:calc(var(--gr) + 110px);top:calc(var(--gt) + 4px)}
+body.touch #sigBtns button{height:40px;padding:0 10px;background:var(--panel);border:1px solid var(--line);border-radius:3px;font-size:12px}
+body.touch #wheel{bottom:auto;top:calc(var(--gt) + 56px)}
 /* tutorial */
 #hud.tut .top,#hud.tut #modeBar,#hud.tut #relicInfo{display:none}
 #tut{position:fixed;top:var(--gt);left:50%;transform:translateX(-50%);width:min(520px,calc(100vw - 32px));display:grid;gap:6px;padding:12px 16px;background:rgba(8,12,24,.94);border:1px solid var(--gold);border-radius:3px;box-shadow:0 0 30px rgba(255,198,109,.18);box-sizing:border-box;z-index:5}
@@ -519,6 +534,8 @@ body.touch #tut p{font-size:12.5px}
   <div id="touch" hidden><div id="stick"><i></i></div><button id="tAtk" type="button">Útok</button></div>
   <button id="pauseBtn" type="button" aria-label="Menu zápasu">II</button>
   <div id="tut" hidden></div>
+  <div id="wheel" hidden></div>
+  <div id="sigBtns"><button id="pingBtn" type="button">Ping</button><button id="wheelBtn" type="button">Zprávy</button></div>
   <div id="mchat" hidden>
     <div id="mchatLog" aria-live="polite"></div>
     <form id="mchatForm" hidden autocomplete="off"><span id="mchatTo">Tým</span><input id="mchatIn" maxlength="200" placeholder="Enter odešle · Tab tým/všem · Esc zavře"></form>

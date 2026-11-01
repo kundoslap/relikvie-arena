@@ -82,11 +82,11 @@ export function resetUnit(u,M){
   u.ambush=0;u.ambushK=0;u.drive=null;u.bomb=null;u.hurtT=-99;u.dash=null;u.lastHit=null;u.lastHitT=-99;u.ai.retreat=false;u.ai.lane=rnd(-12,12);u.hist=[];
 }
 // Called once all heroes are in: spawns the boss or prepares the first wave.
-export function startMatch(M){if(M.mode==='boss')spawnBoss(M,M.bossKey,1)}
+export function startMatch(M){if(M.mode==='boss')spawnBoss(M,M.bossKey,1);if(M.mode==='ctf')ctfSetup(M)}
 
 const atk=(M,u)=>u.C.atk*(1+m(u,'atk')/100)*(u.ctrl==='bot'?M.diff.dmg:1)*u.dmgScale;
 const tech=(M,u)=>u.C.tech*(1+m(u,'tech')/100)*(u.ctrl==='bot'?M.diff.dmg:1);
-export const speedOf=u=>u.spd??u.C.speed*(1+(u.mods?.speed||0)/100)*(u.st.slow>0?.6:1)*(u.st.cloak>0?1.12:1)*(u.st.haste>0?u.st.hasteK||1.2:1);
+export const speedOf=u=>u.spd??u.C.speed*(1+(u.mods?.speed||0)/100)*(u.st.slow>0?.6:1)*(u.st.cloak>0?1.12:1)*(u.st.haste>0?u.st.hasteK||1.2:1)*(u.carry!=null?.85:1);
 const pw=(M,u)=>Math.max(atk(M,u),tech(M,u));
 const maxShield=u=>u.maxHp*.7;
 const foes=(M,u)=>M.units.filter(e=>e.team!==u.team&&!e.dead);
@@ -543,6 +543,40 @@ function separate(M){
       const wa=a.kind==='boss'?.1:b.kind==='boss'?.9:.5,k=(mn-d)/d;a.x-=dx*k*wa;a.z-=dz*k*wa;b.x+=dx*k*(1-wa);b.z+=dz*k*(1-wa)}}
 }
 // shared steering: push away from pillars and hazards ahead
+// ---------- navigation ----------
+// A 2 m grid of free cells per map (built once). When the straight way to a goal is blocked, a bot follows a
+// breadth-first path and heads for the farthest path cell it can see, so it finds its way through walls and mazes.
+const NAV_CELL=2,navCache={};
+function navGrid(map){
+  const key=map.name;if(navCache[key])return navCache[key];
+  const R=map.r,n=Math.ceil(2*R/NAV_CELL)+1,free=new Uint8Array(n*n);
+  for(let j=0;j<n;j++)for(let i=0;i<n;i++){const x=-R+i*NAV_CELL,z=-R+j*NAV_CELL;
+    free[j*n+i]=Math.hypot(x,z)<R-1&&!map.pillars.some(([px,pz,r])=>Math.hypot(x-px,z-pz)<r+1.1)&&!map.hazards.some(h=>Math.hypot(x-h.x,z-h.z)<h.r+.8)?1:0}
+  return navCache[key]={n,R,free};
+}
+function navCell(N,p){let i=Math.round((p.x+N.R)/NAV_CELL),j=Math.round((p.z+N.R)/NAV_CELL);i=clamp(i,0,N.n-1);j=clamp(j,0,N.n-1);
+  if(N.free[j*N.n+i])return j*N.n+i;
+  // a point inside a wall: the nearest free cell around it
+  for(let r=1;r<4;r++)for(let dj=-r;dj<=r;dj++)for(let di=-r;di<=r;di++){const a=i+di,b=j+dj;if(a>=0&&b>=0&&a<N.n&&b<N.n&&N.free[b*N.n+a])return b*N.n+a}
+  return j*N.n+i}
+function navPath(M,from,to){
+  const N=navGrid(M.map),s=navCell(N,from),g=navCell(N,to);if(s===g)return null;
+  const prev=new Int32Array(N.n*N.n).fill(-1);prev[s]=s;const q=[s];let found=false;
+  for(let h=0;h<q.length;h++){const c=q[h];if(c===g){found=true;break}const ci=c%N.n,cj=(c/N.n)|0;
+    for(const [di,dj] of [[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]]){const a=ci+di,b=cj+dj;if(a<0||b<0||a>=N.n||b>=N.n)continue;const k=b*N.n+a;
+      if(prev[k]!==-1||!N.free[k])continue;if(di&&dj&&(!N.free[cj*N.n+a]||!N.free[b*N.n+ci]))continue;prev[k]=c;q.push(k)}}
+  if(!found)return null;
+  const path=[];for(let c=g;c!==s;c=prev[c])path.push({x:-N.R+(c%N.n)*NAV_CELL,z:-N.R+((c/N.n)|0)*NAV_CELL});return path.reverse();
+}
+// where to walk now on the way to goal: the goal itself when it is in sight, otherwise a waypoint on the path
+function navNext(M,u,goal){
+  if(!blocked(M.map,u,goal,.8))return goal;
+  const P=u.ai.nav;
+  if(!P||M.time>P.at+.6||Math.hypot(P.gx-goal.x,P.gz-goal.z)>3){u.ai.nav={at:M.time,gx:goal.x,gz:goal.z,path:navPath(M,u,goal)}}
+  const path=u.ai.nav.path;if(!path||!path.length)return goal;
+  let best=path[0];for(let i=Math.min(path.length-1,14);i>=0;i--){if(!blocked(M.map,u,path[i],.8)){best=path[i];break}}
+  return best;
+}
 function steer(M,u,wx,wz){
   let wl=Math.hypot(wx,wz);if(wl>0){wx/=wl;wz/=wl}
   const obs=[...M.map.pillars,...M.map.hazards.map(h=>[h.x,h.z,h.r+.6])];
@@ -591,6 +625,20 @@ function updStatus(M,u,dt){
 }
 
 // ---------- hero bots ----------
+// Únos relikvie: the carrier runs home; the nearest allies chase an enemy carrier or return a dropped relic;
+// one bot per team defends, the others go stealing or escort their own carrier.
+function ctfGoal(M,u,t,d){
+  const own=flagOf(M,u.team),foe=flagOf(M,1-u.team),mates=heroesOf(M,u.team).filter(x=>!x.dead);
+  if(u.carry!=null)return{p:own.home};
+  const nearest=p=>mates.slice().sort((a,b)=>d2(a,p)-d2(b,p)).indexOf(u);
+  if(own.state==='carried'){const c=M.units.find(x=>x.id===own.carrier);if(c&&nearest(c)<2)return{p:c,target:visibleTo(u,c)?c:null}}
+  if(own.state==='dropped'&&nearest(own)===0)return{p:own};
+  const role=mates.filter(x=>x.ctrl==='bot').sort((a,b)=>a.id-b.id).indexOf(u);
+  if(role===0&&mates.length>1){if(d2(u,own.home)>7&&(!t||d>8))return{p:own.home};return null}
+  if(foe.state==='carried'){const c=M.units.find(x=>x.id===foe.carrier);if(c&&c!==u&&(!t||d>8)&&d2(u,c)>4)return{p:c};return null}
+  if(!t||d>6||u.hp>u.maxHp*.5)return{p:foe};
+  return null;
+}
 function pickTarget(u,M){
   let best=null,bs=1e9;
   for(const e of foes(M,u)){if(!visibleTo(u,e))continue;const d=d2(u,e);if(d>(M.D.pvp?32:80))continue;
@@ -634,7 +682,10 @@ function botUpdate(M,u,dt){
   const ai=u.ai,diff=M.diff;ai.think-=dt;ai.strafeT-=dt;
   if(ai.strafeT<=0){ai.strafe=Math.random()<.5?-1:1;ai.strafeT=rnd(.8,2.4)}
   let thinkNow=false;
-  if(ai.think<=0){ai.think=diff.react*rnd(.6,1.4);ai.target=pickTarget(u,M);ai.err={x:rnd(-1,1)*diff.err,z:rnd(-1,1)*diff.err};thinkNow=true}
+  // a fresh team ping from a human ally: go there, or go after the marked enemy
+  const ping=M.pings?.find(q=>q.team===u.team&&q.until>M.time&&q.src!==u.id);
+  if(ai.think<=0){ai.think=diff.react*rnd(.6,1.4);ai.target=pickTarget(u,M);ai.err={x:rnd(-1,1)*diff.err,z:rnd(-1,1)*diff.err};thinkNow=true;
+    if(ping?.tg){const e=M.units.find(x=>x.id===ping.tg);if(e&&!e.dead&&visibleTo(u,e)&&d2(u,e)<40)ai.target=e}}
   const t=ai.target&&!ai.target.dead&&visibleTo(u,ai.target)?ai.target:null;
   const d=t?d2(u,t):99,seen=t?!blocked(M.map,u,t,.2):false;
   if(u.hp<u.maxHp*.3)ai.retreat=true;if(ai.retreat&&u.hp>u.maxHp*.85)ai.retreat=false;
@@ -646,12 +697,15 @@ function botUpdate(M,u,dt){
     const p=want[0]||M.points[(u.id+Math.floor(M.time/20))%M.points.length];
     if(d2(u,p)>2.5)goal=p;
   }
+  if(M.flags&&!u.bomb){const g=ctfGoal(M,u,t,d);if(g){goal=g.p;if(g.target)ai.target=g.target}}
+  if(!goal&&!ai.retreat&&ping&&!ping.tg&&ping.k==='here'&&(!t||d>8)&&d2(u,ping)>3)goal=ping;
+  if(!goal&&!ai.retreat&&ping&&ping.k==='danger'&&d2(u,ping)<6){const dx=u.x-ping.x,dz=u.z-ping.z,l=Math.hypot(dx,dz)||1;goal=inArena(M,{x:u.x+dx/l*6,z:u.z+dz/l*6},2)}
   // carrying Nositel's burden: run away from the rest of the team
   if(u.bomb){const fr=heroesOf(M,u.team).filter(x=>x!==u);if(fr.length){let cx=0,cz=0;for(const f of fr){cx+=f.x;cz+=f.z}cx/=fr.length;cz/=fr.length;
     const dx=u.x-cx,dz=u.z-cz,l=Math.hypot(dx,dz)||1;goal=inArena(M,{x:u.x+dx/l*10,z:u.z+dz/l*10},3)}}
-  if(goal){wx=goal.x-u.x;wz=goal.z-u.z;if(Math.hypot(wx,wz)<1)wx=wz=0}
+  if(goal){const g=navNext(M,u,goal);wx=g.x-u.x;wz=g.z-u.z;if(Math.hypot(goal.x-u.x,goal.z-u.z)<1)wx=wz=0}
   else if(t){
-    let tx=t.x-u.x,tz=t.z-u.z;const l=Math.hypot(tx,tz)||1;tx/=l;tz/=l;const pref=u.C.pref+(t.kind==='boss'&&u.clsKey!=='guardian'?3:0);
+    const way=seen?t:navNext(M,u,t);let tx=way.x-u.x,tz=way.z-u.z;const l=Math.hypot(tx,tz)||1;tx/=l;tz/=l;const pref=u.C.pref+(t.kind==='boss'&&u.clsKey!=='guardian'?3:0);
     if(!seen||d>pref+1.5){wx+=tx;wz+=tz}else if(d<pref-2){wx-=tx;wz-=tz}
     const sf=ai.strafe*(u.clsKey==='guardian'?.25:.8);wx+=-tz*sf;wz+=tx*sf;
   }else if(M.D.pvp){
@@ -859,6 +913,25 @@ function bossUpdate(M,u,dt){
 
 // ---------- humans ----------
 // input: {seq, mx, mz, ax, az, atk, fm (face by movement), cast:[i...]}
+// ---------- pings and quick messages ----------
+// Pings (here, attack, danger) go to the own team only and steer bot allies for a few seconds;
+// quick messages appear above the hero for everyone. Each hero may signal at most 6 times in 8 s.
+export const SIGNALS={here:{name:'Sem',ping:1},attack:{name:'Útok',ping:1},danger:{name:'Pozor',ping:1},
+  go:{name:'Útok!'},back:{name:'Ustupte!'},help:{name:'Potřebuju pomoc!'},hold:{name:'Bráním!'},thanks:{name:'Díky!'},gg:{name:'Dobrá hra!'},haha:{name:'Haha!'}};
+export const SIGNAL_KEYS=Object.keys(SIGNALS);
+export function signal(M,u,k,x,z){
+  if(!u||u.kind!=='hero'||!Object.hasOwn(SIGNALS,k)||M.state==='end')return false;
+  u.sigT=(u.sigT||[]).filter(t=>M.time-t<8);if(u.sigT.length>=6)return false;u.sigT.push(M.time);
+  const S=SIGNALS[k];
+  if(!S.ping){fx(M,{t:'sig',k,u:u.id});return true}
+  const p=inArena(M,{x:clamp(+x||0,-60,60),z:clamp(+z||0,-60,60)});
+  // a ping close to a visible enemy marks that enemy
+  let tg=null;if(k!=='danger'){tg=foes(M,u).filter(e=>visibleTo(u,e)&&d2(e,p)<3+e.radius).sort((a,b)=>d2(a,p)-d2(b,p))[0]||null;if(tg)k='attack';else if(k==='attack')k='here'}
+  M.pings=(M.pings||[]).filter(q=>q.until>M.time&&!(q.team===u.team&&q.src===u.id));
+  M.pings.push({team:u.team,src:u.id,k,x:tg?tg.x:p.x,z:tg?tg.z:p.z,tg:tg?.id||0,until:M.time+6});
+  fx(M,{t:'sig',k,u:u.id,x:r2(tg?tg.x:p.x),z:r2(tg?tg.z:p.z),tg:tg?.id||0,team:u.team});
+  return true;
+}
 export function queueInput(u,inp){
   if(u.queue.length>=4){const old=u.queue.shift();inp.cast=[...(old.cast||[]),...(inp.cast||[])]}
   u.queue.push(inp);
@@ -887,6 +960,36 @@ function updRelic(M,dt){
     R.state='wait';R.t=RELIC_EVERY;u.st.relic=20;u.relics++;M.score[u.team]++;
     if(u.clsKey==='guardian')u.shield=Math.min(maxShield(u)+150,u.shield+150);
     fx(M,{t:'feed',k:'relic',a:u.id});checkWin(M);break}
+}
+// ---------- Únos relikvie (capture the relic) ----------
+// Each team keeps a relic on a stand in front of its base. Touching the enemy relic picks it up; the carrier is slower
+// and cannot hide. Bringing it to your own stand while your relic is at home scores. A dropped relic returns home when
+// its team touches it, or by itself after 15 s.
+export const CTF={pick:1.7,score:2.6,ret:15,slow:.85};
+function ctfSetup(M){
+  M.flags=M.map.bases.map((b,team)=>{const l=Math.hypot(b.x,b.z)||1,h=M.map.flags?.[team]||{x:b.x-b.x/l*10,z:b.z-b.z/l*10};
+    return{team,home:{...h},x:h.x,z:h.z,state:'home',carrier:0,t:0}});
+}
+const flagOf=(M,team)=>M.flags?.[team];
+function dropFlag(M,u){const f=M.flags?.find(f=>f.state==='carried'&&f.carrier===u.id);if(!f)return;
+  f.state='dropped';f.carrier=0;f.x=u.x;f.z=u.z;f.t=CTF.ret;u.carry=null;fx(M,{t:'flag',k:'drop',team:f.team,u:u.id,x:r2(u.x),z:r2(u.z)})}
+function homeFlag(M,f,by){f.state='home';f.carrier=0;f.x=f.home.x;f.z=f.home.z;fx(M,{t:'flag',k:'return',team:f.team,u:by?.id||0})}
+function updFlags(M,dt){
+  for(const f of M.flags){
+    if(f.state==='carried'){const c=M.units.find(u=>u.id===f.carrier);if(!c||c.dead||c.remove){if(c)dropFlag(M,c);else homeFlag(M,f);continue}
+      f.x=c.x;f.z=c.z;c.st.cloak=0;
+      // a capture: the carrier reaches its own stand while its own relic is at home
+      const own=flagOf(M,c.team);
+      if(own.state==='home'&&d2(c,own.home)<CTF.score&&M.state==='play'){c.carry=null;c.caps=(c.caps||0)+1;M.score[c.team]++;homeFlag(M,f);
+        fx(M,{t:'flag',k:'cap',team:f.team,u:c.id});checkWin(M)}
+      continue}
+    if(f.state==='dropped'){f.t-=dt;if(f.t<=0){homeFlag(M,f);continue}}
+    if(M.state!=='play')continue;
+    for(const u of M.units){if(u.kind!=='hero'||u.dead||d2(u,f)>CTF.pick)continue;
+      if(u.team===f.team){if(f.state==='dropped'){homeFlag(M,f,u);break}continue}
+      if(u.carry!=null||u.st.inv>0&&u.dash)continue;
+      f.state='carried';f.carrier=u.id;u.carry=f.team;u.st.cloak=0;fx(M,{t:'flag',k:'take',team:f.team,u:u.id});break}
+  }
 }
 function updPoints(M,dt){
   for(const p of M.points){const c=[0,0];for(const u of M.units)if(u.kind==='hero'&&!u.dead&&d2(u,p)<p.r)c[u.team]++;
@@ -948,6 +1051,7 @@ export function step(M,dt=TICK){
   }
   separate(M);recordHist(M);updProjs(M,dt);updZones(M,dt);updRings(M,dt);updBeams(M,dt);updRelic(M,dt);updLoot(M,dt);
   if(M.mode==='control')updPoints(M,dt);
+  if(M.flags)updFlags(M,dt);
   if(M.D.waves)updWaves(M,dt);
   if(M.units.some(u=>u.remove)){M.units=M.units.filter(u=>!u.remove);M.rosterVer++}
 }
@@ -960,11 +1064,14 @@ function flags(u){const s=u.st;return (s.stun>0?1:0)|(s.silence>0?2:0)|(s.bleed?
 // Per-viewer snapshot: hides cloaked enemies far from the viewer and loot that belongs to someone else.
 export function snapshotFor(M,uid,events){
   const me=M.units.find(u=>u.id===uid);
+  // team pings are seen only by that team
+  if(events?.some(e=>e.team!=null))events=events.filter(e=>e.team==null||(me&&e.team===me.team));
   const vis=u=>!me||u.team===me.team||u.st.cloak<=0||(!me.dead&&d2(u,me)<3.5);
   const boss=M.units.find(u=>u.kind==='boss');
   return{type:'s',t:r2(M.time),st:M.state,cd:r2(M.countdown),tl:Math.ceil(M.timeLeft),sc:M.score,
     rl:[M.relic.state==='up'?1:0,Math.ceil(M.relic.t)],
     pt:M.points.map(p=>[p.own,Math.round(p.prog)]),lv:M.lives,
+    fg:M.flags?M.flags.map(f=>[{home:0,carried:1,dropped:2}[f.state],r2(f.x),r2(f.z),f.carrier,Math.ceil(f.t)]):null,
     wv:M.D.waves?[M.wave,M.waveState==='break'?Math.ceil(M.waveT):0,M.units.filter(u=>u.team===1).length]:null,
     bs:boss?[boss.id,Math.ceil(boss.hp),boss.maxHp,Math.round(boss.shield),boss.invuln?1:0,boss.ai.fortT>0?Math.ceil(boss.ai.fortT):0]:null,
     u:M.units.map(u=>u.dead?{i:u.id,d:Math.ceil(u.respawn)}:vis(u)?{i:u.id,x:r2(u.x),z:r2(u.z),vx:r2(u.vx),vz:r2(u.vz),f:r2(u.face),h:Math.ceil(u.hp),s:Math.round(u.shield),fl:flags(u)}:{i:u.id,hid:1}),
