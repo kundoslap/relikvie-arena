@@ -7,13 +7,23 @@ export const DISC_GEO=new THREE.CircleGeometry(1,40);
 const rnd=(a,b)=>a+Math.random()*(b-a);
 
 // ---------- shared model pieces ----------
-function kit(armorCol,glowCol,team){
-  const armor=new THREE.MeshStandardMaterial({color:new THREE.Color(armorCol).multiplyScalar(1.5),metalness:.5,roughness:.38,envMapIntensity:1.1,transparent:true,emissive:0x000000});
-  const dark=new THREE.MeshStandardMaterial({color:0x0e121c,metalness:.4,roughness:.7,transparent:true,side:THREE.DoubleSide,emissive:0x000000});
-  const glow=new THREE.MeshBasicMaterial({color:HDR(glowCol,2.4),transparent:true});
+// o: optional skin finish — metal (0..1, polished armour), dark (suit colour), accent (second armour colour)
+function kit(armorCol,glowCol,team,o={}){
+  const metal=o.metal??0;
+  const armor=new THREE.MeshStandardMaterial({color:new THREE.Color(armorCol).multiplyScalar(1.5),metalness:.5+.45*metal,roughness:.38-.26*metal,envMapIntensity:1.1+metal,transparent:true,emissive:0x000000});
+  const dark=new THREE.MeshStandardMaterial({color:o.dark??0x0e121c,metalness:.4,roughness:.7,transparent:true,side:THREE.DoubleSide,emissive:0x000000});
+  const accent=new THREE.MeshStandardMaterial({color:new THREE.Color(o.accent??armorCol).multiplyScalar(1.4),metalness:.5+.4*metal,roughness:.4-.2*metal,envMapIntensity:1.1+metal,transparent:true,side:THREE.DoubleSide,emissive:0x000000});
+  const glow=new THREE.MeshBasicMaterial({color:HDR(glowCol,2.4),transparent:true,side:THREE.DoubleSide});
   const tglow=new THREE.MeshBasicMaterial({color:HDR(TEAM_COL[team]??0xffffff,2),transparent:true,side:THREE.DoubleSide});
-  return{armor,dark,glow,tglow,mats:[armor,dark,glow,tglow],flash:[armor,dark]};
+  return{armor,dark,accent,glow,tglow,mats:[armor,dark,accent,glow,tglow],flash:[armor,dark,accent]};
 }
+// flat shapes for chest emblems and wings
+function shapeGeo(pts,depth=.02){const s=new THREE.Shape();pts.forEach(([x,y],i)=>i?s.lineTo(x,y):s.moveTo(x,y));s.closePath();return new THREE.ExtrudeGeometry(s,{depth,bevelEnabled:false})}
+const STAR=Array.from({length:10},(_,i)=>{const a=Math.PI/2+i*Math.PI/5,r=i%2?.055:.14;return[Math.cos(a)*r,Math.sin(a)*r]});
+const EMBLEMS={star:STAR,diamond:[[0,.15],[.13,0],[0,-.15],[-.13,0]],bolt:[[.04,.15],[-.07,0],[0,0],[-.05,-.15],[.08,.02],[0,.02]],
+  wing:[[-.2,.05],[-.06,.02],[0,.09],[.06,.02],[.2,.05],[.12,-.06],[.03,-.03],[0,-.1],[-.03,-.03],[-.12,-.06]],
+  eye:[[-.15,0],[-.05,.07],[.05,.07],[.15,0],[.05,-.07],[-.05,-.07]],flame:[[0,.16],[.09,.02],[.06,-.12],[0,-.06],[-.06,-.12],[-.09,.02]]};
+const WING=[[0,0],[.25,.35],[.7,.62],[1.05,.55],[.85,.25],[.95,.05],[.6,-.05],[.7,-.3],[.35,-.25],[.25,-.45]];
 function box(p,w,h,d,m,x,y,z){const me=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),m);me.position.set(x,y,z);me.castShadow=true;p.add(me);return me}
 function mesh(p,g,m,x=0,y=0,z=0){const me=new THREE.Mesh(g,m);me.position.set(x,y,z);me.castShadow=true;p.add(me);return me}
 function common(root,K,team,scale,radius){
@@ -28,8 +38,8 @@ function common(root,K,team,scale,radius){
 
 // ---------- heroes ----------
 export function buildHero(k,team,skinKey){
-  const skin=skinOf(k,skinKey),K=kit(skin.armor,skin.glow,team);
-  const {armor,dark,glow,tglow}=K,root=new THREE.Group(),body=new THREE.Group();root.add(body);
+  const skin=skinOf(k,skinKey),K=kit(skin.armor,skin.glow,team,{metal:skin.metal,dark:skin.dark,accent:skin.accent});
+  const {armor,dark,glow,tglow,accent}=K,root=new THREE.Group(),body=new THREE.Group();root.add(body);
   const W=k==='guardian'?1.25:k==='technician'?.95:.9;
   const limb=(x,y)=>{const g=new THREE.Group();g.position.set(x,y,0);body.add(g);return g};
   const legL=limb(-.2*W,.95),legR=limb(.2*W,.95);
@@ -69,10 +79,34 @@ export function buildHero(k,team,skinKey){
     box(body,.4,.5,.2,dark,0,1.45,-.3);box(body,.04,.4,.02,glow,-.1,1.45,-.41);box(body,.04,.4,.02,glow,.1,1.45,-.41);
     drone=mesh(root,new THREE.OctahedronGeometry(.16),glow);
   }
-  let cape=null;
-  switch(skin.acc){
+  let cape=null,halo=null,wings=null;
+  // chest front and height per class, so emblems and reactors sit on the armour
+  const chestZ={striker:.19,guardian:.29,technician:.31,pyro:.21}[k]||.2,chestY=k==='guardian'?1.5:1.45;
+  const accs=Array.isArray(skin.acc)?skin.acc:skin.acc?[skin.acc]:[];
+  const capeMat=skin.cape!=null?new THREE.MeshStandardMaterial({color:skin.cape,metalness:.2,roughness:.75,transparent:true,side:THREE.DoubleSide}):dark;
+  if(capeMat!==dark)K.mats.push(capeMat);
+  for(const acc of accs)switch(acc){
     case 'cape':{cape=new THREE.Group();cape.position.set(0,1.75,-.22);body.add(cape);
-      const c=box(cape,.62*W,1.15,.03,dark,0,-.58,0);c.material=dark;box(cape,.62*W,.04,.04,glow,0,-1.15,0);break}
+      box(cape,.62*W,1.15,.03,capeMat,0,-.58,0);box(cape,.62*W,.04,.04,glow,0,-1.15,0);break}
+    case 'helm':box(body,.4,.38,.42,armor,0,headY+.02,0);box(body,.32,.05,.03,glow,0,headY+.05,.22);break;
+    case 'mask':box(body,.32,.22,.05,accent,0,headY-.02,.2);for(const s of [-1,1])box(body,.08,.035,.02,glow,s*.07,headY+.03,.23);break;
+    case 'ears':for(const s of [-1,1]){const e=mesh(body,new THREE.ConeGeometry(.06,.22,4),accent,s*.12,headY+.3,0);e.rotation.z=-s*.12}break;
+    case 'reactor':{const r=mesh(body,new THREE.CylinderGeometry(.09,.09,.04,20),glow,0,chestY,chestZ+.02);r.rotation.x=Math.PI/2;
+      const t=mesh(body,new THREE.TorusGeometry(.12,.025,6,24),accent,0,chestY,chestZ+.02);break}
+    case 'emblem':{const e=mesh(body,shapeGeo(EMBLEMS[skin.emblem]||EMBLEMS.star),glow,0,chestY,chestZ+.01);break}
+    case 'wings':{wings=new THREE.Group();wings.position.set(0,1.62,-.24);body.add(wings);
+      for(const s of [-1,1]){const w=mesh(wings,shapeGeo(WING,.03),accent,0,0,0);w.scale.set(s*.95,.95,1);w.rotation.y=s*.35;
+        const e=mesh(wings,shapeGeo(WING.slice(0,5),.035),glow,0,0,0);e.scale.set(s*.95,.95,1);e.rotation.y=s*.35}break}
+    case 'shoulders':for(const s of [-1,1]){box(body,.36,.22,.5,accent,s*(k==='guardian'?.72:.46),headY-.24,0).rotation.z=s*-.25;box(body,.37,.04,.51,glow,s*(k==='guardian'?.72:.46),headY-.33,0).rotation.z=s*-.25}break;
+    case 'halo':{halo=mesh(body,new THREE.TorusGeometry(.3,.025,8,32),glow,0,headY+.18,-.2);break}
+    case 'quiver':{const q=mesh(body,new THREE.CylinderGeometry(.08,.07,.6,10),dark,.12,1.55,-.28);q.rotation.z=-.4;
+      for(let i=0;i<3;i++){const a=mesh(body,new THREE.CylinderGeometry(.012,.012,.3,4),glow,.24+i*.03,1.92-i*.03,-.28);a.rotation.z=-.4}break}
+    case 'skull':box(body,.38,.36,.4,accent,0,headY+.02,0);for(const s of [-1,1])box(body,.09,.08,.02,dark,s*.08,headY+.05,.21);box(body,.16,.03,.02,dark,0,headY-.08,.21);break;
+    case 'tiara':for(let i=-1;i<=1;i++){const t=mesh(body,new THREE.ConeGeometry(.035,i?.12:.2,4),glow,i*.09,headY+.22+(i?0:.04),.12);t.rotation.x=-.2}break;
+    case 'wingedHelm':box(body,.38,.34,.4,armor,0,headY+.02,0);for(const s of [-1,1]){const w=mesh(body,shapeGeo([[0,0],[.22,.16],[.3,.12],[.2,.02]],.02),glow,s*.2,headY+.08,0);w.scale.x=s;w.rotation.y=s*.3}break;
+    case 'necklace':{const n=mesh(body,new THREE.TorusGeometry(.2,.022,6,24),glow,0,headY-.2,.02);n.rotation.x=Math.PI/2.3;break}
+    case 'amulet':{const a=mesh(body,new THREE.OctahedronGeometry(.08),glow,0,chestY+.12,chestZ+.04);mesh(body,new THREE.TorusGeometry(.1,.015,6,20),accent,0,chestY+.12,chestZ+.03);break}
+    case 'belt':box(body,.56*W,.08,.42,accent,0,1.03,0);box(body,.12,.1,.04,glow,0,1.03,.21);break;
     case 'hood':{const h=mesh(body,new THREE.SphereGeometry(.27,16,10,0,Math.PI*2,0,Math.PI*.6),dark,0,headY-.02,-.03);h.material=dark;
       const r=mesh(body,new THREE.TorusGeometry(.22,.02,6,20),glow,0,headY-.06,.06);r.rotation.x=.3;break}
     case 'horns':for(const s of [-1,1]){const h=mesh(body,new THREE.ConeGeometry(.07,.48,6),glow,s*.2,headY+.3,0);h.rotation.z=-s*.5}break;
@@ -82,8 +116,9 @@ export function buildHero(k,team,skinKey){
     case 'antenna':for(const s of [-1,1]){const a=mesh(body,new THREE.CylinderGeometry(.012,.012,.5,4),dark,s*.14,headY+.3,-.05);a.rotation.z=-s*.25;mesh(body,new THREE.SphereGeometry(.05,8,6),glow,s*.2,headY+.55,-.05)}break;
   }
   const C=common(root,K,team,1,W*.75);
-  return{root,body,legL,legR,armL,armR,drone,cape,...C,mats:K.mats,flash:K.flash,height:2.3,
-    anim(dt,t,sp,amp){if(cape)cape.rotation.x=-.15-amp*.55+Math.sin(t*6)*.04*amp}};
+  return{root,body,legL,legR,armL,armR,drone,cape,...C,mats:K.mats,flash:K.flash,height:2.3,fx:skin.fx||null,
+    anim(dt,t,sp,amp){if(cape)cape.rotation.x=-.15-amp*.55+Math.sin(t*6)*.04*amp;if(halo)halo.rotation.z=t*.8;
+      if(wings)wings.children.forEach((w,i)=>w.rotation.y=(i%4<2?-1:1)*(.35+Math.sin(t*3)*.08+amp*.25))}};
 }
 
 // ---------- NPCs ----------

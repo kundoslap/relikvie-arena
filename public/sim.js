@@ -1,6 +1,6 @@
 // Relikvie Aréna — authoritative simulation. Runs on the server and, for offline matches, in the browser.
 // Pure logic: no rendering. Visual effects leave the simulation as events in M.events.
-import {CLASSES,CLASS_KEYS,MAPS,MODES,NPCS,BOSSES,BOSS_KEYS,ENDLESS_MODS,ECHO_MODS,TACTICS,BOT_TACTIC,rollItem,skillDef,MASTERY,masteryKey,BURN} from './data.js';
+import {CLASSES,CLASS_KEYS,MAPS,MODES,NPCS,BOSSES,BOSS_KEYS,ENDLESS_MODS,ECHO_MODS,TACTICS,BOT_TACTIC,rollItem,skillDef,MASTERY,masteryKey,BURN,POISON_HEAL,MASTERY_BASIC} from './data.js';
 export * from './data.js';
 
 export const MATCH_TIME=360, RELIC_EVERY=40, TICK=1/30, TEAM_SIZE=3;
@@ -121,6 +121,7 @@ function damage(M,t,amt,src,o={}){
   if(o.ult&&src)amt*=(1+m(src,'ultDmg')/100)*(src.uniq.has('reactor')?1.3:1);
   if(src&&src.st.relic>0&&src.clsKey==='striker')amt*=1.25;
   if(t.vuln>M.time)amt*=1.25;
+  if(src&&src.kind==='hero'&&!o.dot&&basicMastery(src).b[1]===1&&myDot(src,t))amt*=1.06;
   if(t.st.nanite?.rot)amt*=1.1;
   amt*=1-Math.min(.6,t.C.def+m(t,'def')/100);
   if(t.st.relic>0&&t.clsKey==='guardian')amt*=.8;
@@ -146,10 +147,16 @@ function damage(M,t,amt,src,o={}){
   }
   return amt;
 }
-function heal(M,t,amt,src,quiet){if(t.dead)return;amt*=(1+(src?m(src,'heal'):0)/100)*(M.emod.has('noheal')&&t.team===0?.5:1);const h=Math.min(amt,t.maxHp-t.hp);if(h<=0)return;t.hp+=h;if(src)src.healDone+=h;if(!quiet)fx(M,{t:'heal',x:r2(t.x),z:r2(t.z),a:Math.round(h),g:t.id})}
+function heal(M,t,amt,src,quiet){if(t.dead)return;amt*=(1+(src?m(src,'heal'):0)/100)*(M.emod.has('noheal')&&t.team===0?.5:1)*(t.st.poison?POISON_HEAL:1);const h=Math.min(amt,t.maxHp-t.hp);if(h<=0)return;t.hp+=h;if(src)src.healDone+=h;if(!quiet)fx(M,{t:'heal',x:r2(t.x),z:r2(t.z),a:Math.round(h),g:t.id})}
 function kill(M,t,src){
   if(t.dead)return;
-  t.dead=true;t.hp=0;t.shield=0;t.deaths++;t.st.bleed=null;t.st.burn=null;t.st.nanite=null;t.bomb=null;t.st.hot=null;t.dash=null;
+  // Šíření: the killer's elements jump to enemies standing close to the fallen one
+  const kk=src||(t.lastHit&&M.time-t.lastHitT<6?t.lastHit:null);
+  if(kk&&kk.kind==='hero'&&basicMastery(kk).b[2]===1){
+    const ds=['bleed','poison','shock','burn'].filter(x=>t.st[x]?.src===kk).map(x=>({kind:x,dps:t.st[x].dps,t:Math.max(1.5,t.st[x].t)}));
+    if(ds.length)for(const e of near(foes(M,kk).filter(x=>x!==t&&!x.dead),t,4)){for(const d of ds)applyDot(e,kk,d);fx(M,{t:'burst',x:r2(e.x),z:r2(e.z),y:1,c:0xffc66d,n:10,s:3,u:2,l:.4})}
+  }
+  t.dead=true;t.hp=0;t.shield=0;t.deaths++;t.st.bleed=null;t.st.burn=null;t.st.poison=null;t.st.shock=null;t.st.nanite=null;t.bomb=null;t.st.hot=null;t.dash=null;
   const k=src||(t.lastHit&&M.time-t.lastHitT<6?t.lastHit:null);
   fx(M,{t:'death',x:r2(t.x),z:r2(t.z),g:t.id});
   if(t.kind==='hero'){
@@ -246,7 +253,7 @@ function updBeams(M,dt){
 function basic(M,u,pt){
   const B=u.C.basic;if(!B||u.dead||u.atkCd>0||u.st.stun>0||u.dash)return;
   u.atkCd=B.rate/(1+m(u,'rate')/100);
-  let mul=(u.ctrl==='bot'?M.diff.dmg:1)*u.dmgScale;const dir=aimDir(u,pt);let col=u.C.color,pierce=false;
+  let mul=(u.ctrl==='bot'?M.diff.dmg:1)*u.dmgScale*(u.kind==='hero'?1+basicMastery(u).r*MASTERY_BASIC.dmgPerRank:1);const dir=aimDir(u,pt);let col=u.C.color,pierce=false;
   if(u.drive&&u.drive.n>0){mul*=u.drive.mul;pierce=true;col=0xff7b5a;if(--u.drive.n<=0)u.drive=null}
   const razor=e=>{if(u.pass.has('razor')&&Math.random()<.15&&!e.dead)e.st.bleed={dps:6,t:3,acc:0,src:u};if(B.poison&&!e.dead)e.st.bleed={dps:7*u.dmgScale,t:4,acc:0,src:u}};
   fx(M,{t:'atk',i:u.id});
@@ -254,16 +261,15 @@ function basic(M,u,pt){
     fx(M,{t:'arc',x:r2(u.x),z:r2(u.z),f:r2(u.face),c:col,r:B.range+(u.radius-.7)});let hit=false;
     const lag=u.ctrl==='human'?u.lag:0;
     for(const e of foes(M,u)){const q=posAt(M,e,lag),dx=q.x-u.x,dz=q.z-u.z,d=Math.hypot(dx,dz);
-      if(d<B.range+e.radius+(u.radius-.7)&&(dx*dir.x+dz*dir.z)/(d||1)>.55){damage(M,e,B.dmg*mul,u,{color:col});razor(e);hit=true}}
+      if(d<B.range+e.radius+(u.radius-.7)&&(dx*dir.x+dz*dir.z)/(d||1)>.55){damage(M,e,B.dmg*mul,u,{color:col});razor(e);basicHit(M,u,e);hit=true}}
     if(hit&&u.clsKey==='guardian')addShield(u,6,u);
   }else if(u.key==='voice'){
     for(const a of [-.18,0,.18]){const ca=Math.cos(a),sa=Math.sin(a);shoot(M,u,{x:dir.x*ca-dir.z*sa,z:dir.x*sa+dir.z*ca},{dmg:B.dmg*mul,speed:B.speed,range:B.range,color:col,size:B.size})}
   }else{
     shoot(M,u,dir,{dmg:B.dmg*mul,speed:B.speed,range:B.range,color:col,size:B.size,pierce,onHit:(e,s)=>{
-      razor(e);
+      razor(e);basicHit(M,s,e);
       if(s.clsKey==='striker'){const c=.35+m(s,'comboCdr');s.cds=s.cds.map(x=>Math.max(0,x-c))}
       else if(s.clsKey==='technician')s.energy=Math.min(100,s.energy+5);
-      else if(s.clsKey==='pyro')burn(e,s,BURN.talent);
     }});
   }
 }
@@ -314,6 +320,46 @@ const SK={
       fx(M,{t:'ban',ti:'Řetězový výboj',col:'var(--cyan)',d:1.2,i:u.id})}
   ]
 };
+// ---------- basic attack damage over time (bleed, poison, shock, burn) ----------
+// Basic attack mastery decides what a hit adds: the class element from rank 5 and the chosen milestone branches.
+function basicMastery(u){const bm=u.mast?.[u.clsKey+':basic'];return{r:bm?.r||0,b:bm?.b||[]}}
+function basicHit(M,u,e){
+  if(u.kind!=='hero'||!e||e.dead)return;
+  if(u.ctrl==='human'){const k=u.clsKey+':basic';u.mcount[k]=(u.mcount[k]||0)+1/MASTERY_BASIC.hitsPerXp}
+  const {r,b}=basicMastery(u),B=u.C.basic;
+  // the Žhář's talent burns from the start; the element replaces it from rank 5
+  if(r<MASTERY_BASIC.elementRank){if(u.clsKey==='pyro')burn(e,u,BURN.talent);return}
+  const d={...B.dot,dps:B.dot.dps*(b[0]===0?1.5:1),t:B.dot.t+(b[0]===1?2:0)};applyDot(e,u,d);
+  if(b[3]===1)applyDot(e,u,{kind:MASTERY_BASIC.second[u.clsKey]||'shock',dps:3,t:2});
+  u.hitN=(u.hitN||0)+1;
+  if(b[1]===0&&u.hitN%5===0)spark(M,u,e,d);
+  if(b[3]===0&&u.hitN%8===0)detonate(M,u,e);
+}
+const myDot=(u,e)=>['bleed','poison','shock','burn'].some(k=>e.st[k]?.src===u);
+function detonate(M,u,e){let total=0;for(const k of ['bleed','poison','shock','burn']){const d=e.st[k];if(d?.src===u){total+=d.dps*Math.max(0,d.t);e.st[k]=null}}
+  if(total>0){fx(M,{t:'blast',x:r2(e.x),z:r2(e.z),r:1.6,c:0xffc66d});damage(M,e,total,u,{color:0xffc66d})}}
+function applyDot(e,src,d){
+  if(!e||e.dead||!d)return;
+  if(d.kind==='burn')return burn(e,src,d);
+  if(e.st.decon>0&&d.kind!=='shock')return;
+  const dps=d.dps*(src.dmgScale||1)*(src.ctrl==='bot'?1:1),cur=e.st[d.kind];
+  if(!cur||cur.dps<=dps)e.st[d.kind]={dps,t:d.t,acc:cur?.acc||0,src};else cur.t=Math.max(cur.t,d.t);
+}
+// Jiskra: the hit jumps to another enemy nearby and carries the element
+function spark(M,s,from,d){
+  const t=foes(M,s).filter(e=>e!==from&&!e.dead&&visibleTo(s,e)&&d2(e,from)<6).sort((a,b)=>d2(a,from)-d2(b,from))[0];if(!t)return;
+  fx(M,{t:'bolt',a:[r2(from.x),1.2,r2(from.z)],b:[r2(t.x),1.2,r2(t.z)],c:0x9fd8ff});
+  damage(M,t,Math.max(atk(M,s),tech(M,s))*.25,s,{color:0x9fd8ff});applyDot(t,s,d);
+}
+// one damage-over-time tick; the Vysátí branch heals the source
+function dotTick(M,u,d,amt,color){const got=damage(M,u,amt,d.src&&!d.src.dead?d.src:null,{dot:true,color});
+  if(got&&d.src&&!d.src.dead&&basicMastery(d.src).b[2]===0)heal(M,d.src,got*.15,null,true)}
+function tickDot(M,u,k,color,dt){
+  const d=u.st[k];if(!d)return;d.acc+=dt;d.t-=dt;
+  while(u.st[k]&&d.acc>=.5&&!u.dead){d.acc-=.5;dotTick(M,u,d,d.dps*.5,color)}
+  if(u.st[k]&&d.t<=0)u.st[k]=null;
+}
+
 // ---------- Žhář: burning and fire zones ----------
 function burn(e,src,B){if(!e||e.dead||e.st.decon>0)return;const dps=B.dps*(1+m(src,'burnDps')/100)*(src.dmgScale||1),t=B.t+m(src,'burnT');
   if(!e.st.burn||e.st.burn.dps<=dps)e.st.burn={dps,t,acc:e.st.burn?.acc||0,src};else e.st.burn.t=Math.max(e.st.burn.t,t)}
@@ -420,7 +466,7 @@ function tactical(M,u,pt){
   switch(u.tactic){
     case 'dodge':{if(u.dash)return false;let dx=u.vx,dz=u.vz,l=Math.hypot(dx,dz);if(l<.5){dx=Math.sin(u.face);dz=Math.cos(u.face);l=1}
       s.inv=Math.max(s.inv,.4);u.dash={dx:dx/l,dz:dz/l,spd:32,t:6/32};fx(M,{t:'burst',x:r2(u.x),z:r2(u.z),y:1,c:0x9fd8ff,n:18,s:4,u:1,l:.4});break}
-    case 'decon':s.nanite=null;s.bleed=null;s.burn=null;s.slow=0;s.silence=0;s.stun=0;s.decon=4;fx(M,{t:'dome',x:r2(u.x),z:r2(u.z),c:0x7dff9a,r:1.8,d:.6});fx(M,{t:'txt',x:r2(u.x),z:r2(u.z),s:'Dekontaminace',c:'info'});break;
+    case 'decon':s.nanite=null;s.bleed=null;s.burn=null;s.poison=null;s.shock=null;s.slow=0;s.silence=0;s.stun=0;s.decon=4;fx(M,{t:'dome',x:r2(u.x),z:r2(u.z),c:0x7dff9a,r:1.8,d:.6});fx(M,{t:'txt',x:r2(u.x),z:r2(u.z),s:'Dekontaminace',c:'info'});break;
     case 'overload':u.energy=Math.min(100,u.energy+45);fx(M,{t:'ring',x:r2(u.x),z:r2(u.z),c:0x6acbff,a:.4,b:3,d:.4});fx(M,{t:'txt',x:r2(u.x),z:r2(u.z),s:'+45 energie',c:'info'});break;
     case 'beacon':{const p=clampReach(M,u,pt,16);fx(M,{t:'emp',x:r2(p.x),z:r2(p.z),r:6});let n=0;
       for(const e of M.units)if(e.team!==u.team&&!e.dead&&d2(e,p)<6+e.radius){e.vuln=Math.max(e.vuln||0,M.time+4);e.st.marked=4;e.st.cloak=0;n++}
@@ -518,15 +564,16 @@ function steer(M,u,wx,wz){
 function updStatus(M,u,dt){
   const s=u.st;
   for(const k of ['stun','slow','silence','cloak','inv','relic','haste','bulwark','decon','marked'])if(s[k]>0)s[k]=Math.max(0,s[k]-dt);
-  if(s.decon>0){s.bleed=null;s.nanite=null;s.burn=null}
+  if(s.decon>0){s.bleed=null;s.nanite=null;s.burn=null;s.poison=null;s.shock=null}
   if(s.marked>0)s.cloak=0;
   if(s.nanite)updNanite(M,u,s.nanite,dt);
   if(u.ambush>0){u.ambush-=dt;if(s.cloak<=0&&u.ambush>1.5)u.ambush=1.5}
   if(s.bleed){s.bleed.acc+=dt;s.bleed.t-=dt;
     while(s.bleed&&s.bleed.acc>=.5&&!u.dead){s.bleed.acc-=.5;damage(M,u,s.bleed.dps*.5,s.bleed.src,{dot:true,color:0xff3355})}
     if(s.bleed&&s.bleed.t<=0)s.bleed=null}
+  tickDot(M,u,'poison',0x9dff5d,dt);tickDot(M,u,'shock',0x9fd8ff,dt);
   if(s.burn){s.burn.acc+=dt;s.burn.t-=dt;
-    while(s.burn&&s.burn.acc>=.5&&!u.dead){s.burn.acc-=.5;const b=s.burn;damage(M,u,b.dps*.5*(b.src&&b.src.st.relic>0&&b.src.clsKey==='pyro'?2:1),b.src&&!b.src.dead?b.src:null,{dot:true,color:0xff6a1a})}
+    while(s.burn&&s.burn.acc>=.5&&!u.dead){s.burn.acc-=.5;const b=s.burn;dotTick(M,u,b,b.dps*.5*(b.src&&b.src.st.relic>0&&b.src.clsKey==='pyro'?2:1),0xff6a1a)}
     if(s.burn&&s.burn.t<=0)s.burn=null}
   if(u.dead)return;
   if(s.hot){s.hot.acc+=dt;s.hot.t-=dt;while(s.hot&&s.hot.acc>=.5){s.hot.acc-=.5;heal(M,u,s.hot.hps*.5,s.hot.src)}if(s.hot&&s.hot.t<=0)s.hot=null}
@@ -909,7 +956,7 @@ export function step(M,dt=TICK){
 export function roster(M){return M.units.map(u=>({i:u.id,n:u.name,k:u.key,kind:u.kind[0],t:u.team,mh:u.maxHp,b:u.ctrl==='human'?0:1,sk:u.skin,lv:u.level}))}
 export function stats(M){return M.units.filter(u=>u.kind==='hero').map(u=>({i:u.id,n:u.name,k:u.clsKey,t:u.team,b:u.ctrl==='bot'?1:0,ki:u.kills,de:u.deaths,dm:Math.round(u.dmgDealt),he:Math.round(u.healDone),re:u.relics,nk:u.npcKills,tk:Math.round(u.dmgTaken||0),cp:u.caps||0,nd:Math.round(u.naniteDmg||0)}))}
 export function matchInfo(M){return{mode:M.mode,map:M.mapKey,boss:M.bossKey,diff:M.diffKey,mission:M.mission,mods:[...M.emod],last:M.last}}
-function flags(u){const s=u.st;return (s.stun>0?1:0)|(s.silence>0?2:0)|(s.bleed?4:0)|(s.slow>0?8:0)|(s.relic>0?16:0)|(s.cloak>0?32:0)|(s.inv>0?64:0)|(u.dash?128:0)|(u.invuln?256:0)|(u.air?512:0)|(u.bomb?1024:0)|(s.nanite?2048:0)|(s.decon>0?4096:0)|(s.marked>0?8192:0)|(s.burn?16384:0)}
+function flags(u){const s=u.st;return (s.stun>0?1:0)|(s.silence>0?2:0)|(s.bleed?4:0)|(s.slow>0?8:0)|(s.relic>0?16:0)|(s.cloak>0?32:0)|(s.inv>0?64:0)|(u.dash?128:0)|(u.invuln?256:0)|(u.air?512:0)|(u.bomb?1024:0)|(s.nanite?2048:0)|(s.decon>0?4096:0)|(s.marked>0?8192:0)|(s.burn?16384:0)|(s.poison?32768:0)|(s.shock?65536:0)}
 // Per-viewer snapshot: hides cloaked enemies far from the viewer and loot that belongs to someone else.
 export function snapshotFor(M,uid,events){
   const me=M.units.find(u=>u.id===uid);

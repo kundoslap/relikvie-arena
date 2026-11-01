@@ -4,7 +4,7 @@
 export const CLASSES={
   striker:{name:'Lovec',role:'Nápor a přesnost',color:0xffb347,css:'#ffb347',hp:230,speed:9.2,def:.08,atk:40,tech:12,pref:11,
     talent:'Kombinátor',talentDesc:'Zásah základním útokem zkrátí čekání schopností o 0,35 s.',
-    basic:{type:'shot',name:'Pulzní střela',dmg:16,rate:.3,speed:46,range:22,size:1},
+    basic:{type:'shot',name:'Pulzní střela',dmg:16,rate:.3,speed:46,range:22,size:1,dot:{kind:'bleed',dps:4,t:4}},
     skills:[{name:'Průrazný výpad',cost:30,cd:6,icon:'slash',desc:'Výpad vpřed a dva seky po 90 % útoku.'},
             {name:'Optické maskování',cost:25,cd:12,icon:'eye',desc:'3,5 s neviditelnost. Další zásah +45 % (Přepad).'},
             {name:'Krvavý šíp',cost:20,cd:5,icon:'arrow',desc:'Průrazný šíp. Krvácení 9 HP/s na 4 s.'}],
@@ -12,7 +12,7 @@ export const CLASSES={
     relic:'Bouřová relikvie: +25 % poškození na 20 s.',bars:[.45,.9,.25,.95]},
   guardian:{name:'Strážce',role:'Výdrž a obrana',color:0x5dffa8,css:'#5dffa8',hp:360,speed:7.6,def:.22,atk:30,tech:16,pref:2.2,
     talent:'Bastion',talentDesc:'Každý zásah na blízko přidá 6 bodů štítu.',
-    basic:{type:'melee',name:'Pancéřový úder',dmg:30,rate:.62,range:3.4},
+    basic:{type:'melee',name:'Pancéřový úder',dmg:30,rate:.62,range:3.4,dot:{kind:'poison',dps:4,t:3}},
     skills:[{name:'Kotva',cost:25,cd:8,icon:'anchor',desc:'Štít 90 a zpomalení nepřátel do 5,5 m o 40 %.'},
             {name:'Náraz',cost:30,cd:9,icon:'charge',desc:'Výpad až 8 m, omráčení 0,9 s a odhození.'},
             {name:'Štítová kupole',cost:35,cd:14,icon:'dome',desc:'Ty a spojenci do 7 m získáte štít 55.'}],
@@ -20,23 +20,34 @@ export const CLASSES={
     relic:'Titánova relikvie: štít 150 a −20 % přijatého poškození na 20 s.',bars:[1,.6,.35,.55]},
   technician:{name:'Technik',role:'Energie a obnova',color:0x6acbff,css:'#6acbff',hp:245,speed:8.4,def:.1,atk:24,tech:40,pref:12,
     talent:'Inženýr',talentDesc:'Zásah základním útokem vrátí 5 energie.',
-    basic:{type:'shot',name:'Výbojový šíp',dmg:22,rate:.48,speed:34,range:20,size:1.5},
+    basic:{type:'shot',name:'Výbojový šíp',dmg:22,rate:.48,speed:34,range:20,size:1.5,dot:{kind:'shock',dps:4,t:2}},
     skills:[{name:'Mor nanitů',cost:30,cd:9,icon:'nano',desc:'Zóna 4 m na 5 s, 50 % TECH za sekundu.'},
             {name:'Obnova',cost:30,cd:10,icon:'heal',desc:'Spojenci do 7,5 m léčí 22 HP/s po 3 s a zbaví se krvácení.'},
             {name:'EMP',cost:30,cd:9,icon:'emp',desc:'Výboj v místě: 110 % TECH, −40 energie, umlčení 1,6 s.'}],
     ult:{name:'Řetězový výboj',icon:'chain',desc:'Blesk přeskočí až na 5 cílů, každý zásah 160 % TECH.'},
     relic:'Relikvie ozvěny: energie ×1,8 a čekání −30 % na 20 s.',bars:[.55,.45,1,.75]},
   pyro:{name:'Žhář',role:'Oheň a kontrola prostoru',color:0xff6a1a,css:'#ff6a1a',hp:275,speed:8.8,def:.12,atk:28,tech:36,pref:9,
-    talent:'Popel',talentDesc:'Základní útok zapálí cíl: hoření 6 HP/s na 3 s.',
-    basic:{type:'shot',name:'Žhavý projektil',dmg:19,rate:.4,speed:36,range:19,size:1.6},
+    talent:'Popel',talentDesc:'Základní útok zapálí cíl: hoření 5 HP/s na 3 s. Ohnivé oblasti zapalují každého, kdo v nich stojí.',
+    basic:{type:'shot',name:'Žhavý projektil',dmg:19,rate:.4,speed:36,range:19,size:1.6,dot:{kind:'burn',dps:10,t:3}},
     skills:[{name:'Plamenná vlna',cost:30,cd:7,icon:'flame',desc:'Vlna ohně do 6 m před tebou: 110 % TECH a hoření 8 HP/s na 3 s.'},
             {name:'Žhnoucí půda',cost:30,cd:10,icon:'firezone',desc:'Hořící oblast 3,5 m na 4 s: 45 % TECH za sekundu.'},
             {name:'Fázový plamen',cost:25,cd:9,icon:'blink',desc:'Přesun až o 7 m. Na výchozím místě zůstane hořící oblast 2,5 m na 3 s.'}],
     ult:{name:'Inferno',icon:'inferno',desc:'Tři výbuchy ohně kolem tebe do 7 m, každý 90 % TECH, a hoření 12 HP/s na 4 s.'},
     relic:'Relikvie výhně: hoření dává dvojnásobné poškození a ohnivé oblasti jsou o polovinu větší na 20 s.',bars:[.6,.55,.85,.7]}
 };
+// damage over time from basic attacks: each class has its own kind. A new application refreshes the duration and keeps
+// the stronger one; they do not stack. Decontamination removes all of them, Restore only bleeding and burning.
+export const DOTS={
+  bleed:{name:'Krvácení',color:'#ff3355',hex:0xff3355,desc:'krvácení'},
+  poison:{name:'Jed',color:'#9dff5d',hex:0x9dff5d,desc:'jed: cíl se navíc léčí o 30 % méně'},
+  shock:{name:'Šok',color:'#9fd8ff',hex:0x9fd8ff,desc:'elektrický šok'},
+  burn:{name:'Hoření',color:'#ff6a1a',hex:0xff6a1a,desc:'hoření'}
+};
+export const POISON_HEAL=.7;
+// the element is unlocked by basic attack mastery rank 5 (see MASTERY_BASIC_BRANCHES)
+export const basicFxText=k=>{const d=CLASSES[k]?.basic?.dot;if(!d)return'';return`Mistrovství základního útoku 5: ${DOTS[d.kind].desc} ${d.dps} HP/s na ${d.t} s při každém zásahu.`};
 // burning (from the Žhář): damage over time, removed by Decontamination and Restore like bleeding
-export const BURN={talent:{dps:6,t:3},wave:{dps:10,t:3},ult:{dps:12,t:4}};
+export const BURN={talent:{kind:'burn',dps:5,t:3},wave:{dps:10,t:3},ult:{dps:12,t:4}};
 export const CLASS_KEYS=Object.keys(CLASSES);
 
 // ---------- progression ----------
@@ -161,9 +172,43 @@ export const SKINS={
     {k:'relic',name:'Relikviový žhář',armor:0x2a2410,glow:0xffe08a,acc:'crown',req:{drop:true}},
     {k:'pass',name:'Neonová výheň',armor:0x0c1222,glow:0xffe14f,acc:'crest',req:{pass:true}}]
 };
+// Legendary skins: hero archetypes from comics and films with our own names and emblems. Several accessories each,
+// a metal finish, a suit (dark) and second armour colour (accent), a cape colour and a particle trail (fx).
+// Unlocked with credits in the Shop, by level, or by an achievement tier (ach + tier, 0 bronze, 1 silver, 2 gold).
+const LEGEND_SKINS={
+  striker:[
+    {k:'vigilante',name:'Noční mstitel',desc:'Temný strážce ulic s pláštěm a ušatou kápí.',armor:0x1c1d24,glow:0xffd23f,dark:0x07080c,accent:0x2a2c36,cape:0x0b0c12,acc:['cape','ears','mask','emblem','belt'],emblem:'wing',fx:'shadow',req:{credits:2500}},
+    {k:'acrobat',name:'Rudý akrobat',desc:'Hbitý skokan v rudomodrém obleku s velkýma očima.',armor:0xc4142c,glow:0xe9f4ff,dark:0x1636a0,accent:0x1636a0,acc:['mask','emblem','belt'],emblem:'eye',fx:'sparks',req:{credits:2200}},
+    {k:'emerald',name:'Smaragdový lučištník',desc:'Lučištník v kápi s toulcem plným zářících šípů.',armor:0x1f6b2e,glow:0xb6ff5d,dark:0x0c2412,accent:0x2e8a3c,acc:['hood','quiver','mask'],fx:'leaves',req:{credits:1600}},
+    {k:'speedster',name:'Rudý blesk',desc:'Nejrychlejší muž arény. Za ním zůstává blesková stopa.',armor:0xb3121f,glow:0xffd23f,dark:0x5a0a10,accent:0xffc21a,acc:['helm','emblem','ears'],emblem:'bolt',metal:.4,fx:'lightning',req:{ach:'wins',tier:1}},
+    {k:'starlord',name:'Hvězdný tulák',desc:'Vesmírný dobrodruh v koženém kabátě s rudou maskou.',armor:0x5a2c1c,glow:0xff4f4f,dark:0x24120c,accent:0x8a8f99,cape:0x3a1d12,acc:['helm','cape','belt'],metal:.3,fx:'stars',req:{level:30}}],
+  guardian:[
+    {k:'ironclad',name:'Železný titán',desc:'Leštěná rudozlatá zbroj s reaktorem na hrudi.',armor:0xa8121c,glow:0x9fe8ff,dark:0x3a0a0e,accent:0xe0b030,acc:['helm','reactor','shoulders'],metal:1,fx:'sparks',req:{credits:3000}},
+    {k:'starshield',name:'Hvězdný štít',desc:'Voják v modrém s bílou hvězdou na hrudi.',armor:0x1c3a8a,glow:0xffffff,dark:0x0e1c44,accent:0xc4142c,acc:['helm','emblem','belt'],emblem:'star',metal:.3,fx:null,req:{credits:2500}},
+    {k:'colossus',name:'Smaragdový kolos',desc:'Zelený obr v roztrhaných fialových kalhotách.',armor:0x3f9a3a,glow:0xb6ff5d,dark:0x3b1a5c,accent:0x2f7a2c,acc:['shoulders','belt'],fx:'quake',req:{level:25}},
+    {k:'thunder',name:'Syn bouře',desc:'Bůh hromu s okřídlenou přilbou a rudým pláštěm.',armor:0x8a93a6,glow:0x9fd8ff,dark:0x1c2233,accent:0xc4c9d6,cape:0x9e1420,acc:['wingedHelm','cape','shoulders'],metal:.8,fx:'lightning',req:{ach:'bosses',tier:1}},
+    {k:'kryptonian',name:'Muž z oceli',desc:'Nezranitelný hrdina v modrém s rudým pláštěm a znakem.',armor:0x1d4fbf,glow:0xffd23f,dark:0x0e2a6b,accent:0xc4142c,cape:0xc4142c,acc:['cape','emblem','belt'],emblem:'diamond',metal:.2,fx:'stars',req:{credits:3500}}],
+  technician:[
+    {k:'mystic',name:'Mistr mystiky',desc:'Čaroděj s rudým pláštěm, amuletem a runovou svatozáří.',armor:0x1c3a6b,glow:0x5dffa8,dark:0x10162a,accent:0xc49a3a,cape:0xa0141c,acc:['cape','amulet','halo','belt'],fx:'runes',req:{credits:2500}},
+    {k:'scarlet',name:'Šarlatová čarodějka',desc:'Mocná čarodějka v karmínové s čelenkou a rudou magií.',armor:0x8a0f2c,glow:0xff3f6c,dark:0x3a0614,accent:0xb3123a,cape:0x6b0a1e,acc:['tiara','cape'],fx:'hex',req:{credits:2500}},
+    {k:'cyborg',name:'Kyborg',desc:'Napůl stroj s rudým okem a leštěnými pláty.',armor:0xb7bfcc,glow:0xff2a2a,dark:0x2a2f3a,accent:0x5c6372,acc:['mask','reactor','shoulders'],metal:1,fx:'sparks',req:{level:30}},
+    {k:'lantern',name:'Smaragdový strážce',desc:'Strážce vesmíru se zářícím prstenem a maskou.',armor:0x24342a,glow:0x3dff6a,dark:0x0a0d10,accent:0x23c454,acc:['mask','emblem','halo','belt'],emblem:'eye',fx:'leaves',req:{ach:'trophies',tier:1}},
+    {k:'panther',name:'Vibraniový panter',desc:'Král v černém obleku s fialovou energií a kočičíma ušima.',armor:0x2c2c3a,glow:0xc9a0ff,dark:0x101018,accent:0x4a4660,acc:['ears','mask','necklace','emblem'],emblem:'diamond',metal:.7,fx:'shadow',req:{credits:3000}}],
+  pyro:[
+    {k:'torch',name:'Živá pochodeň',desc:'Hrdina z čistého plamene.',armor:0xff6a1a,glow:0xffe14f,dark:0xa8300a,accent:0xffa02a,acc:['emblem'],emblem:'flame',fx:'embers',req:{credits:2500}},
+    {k:'rider',name:'Pekelný jezdec',desc:'Hořící lebka, řetězy a kožená bunda.',armor:0x24201c,glow:0xff7a1a,dark:0x0c0a08,accent:0xe8e0cc,acc:['skull','shoulders','belt'],metal:.4,fx:'embers',req:{level:35}},
+    {k:'phoenix',name:'Fénix',desc:'Zrozená z ohně, s ohnivými křídly.',armor:0xd4401c,glow:0xffd23f,dark:0x5a1408,accent:0xff8a2a,acc:['wings','emblem','tiara'],emblem:'wing',fx:'embers',req:{ach:'endless',tier:1}},
+    {k:'frost',name:'Mrazivý doktor',desc:'Ohnivý žhář naruby: brnění z ledu a mrazivá stopa.',armor:0x8fd6ff,glow:0xe9f8ff,dark:0x1c3a5a,accent:0x5ab0e0,acc:['helm','reactor'],metal:.9,fx:'frost',req:{credits:2000}},
+    {k:'demon',name:'Démon výhně',desc:'Obr z lávy s rohy a ohnivými křídly.',armor:0x2a0e0a,glow:0xff3a1a,dark:0x120604,accent:0x5a1a10,acc:['horns','wings','shoulders'],fx:'embers',req:{credits:1800}}]
+};
+for(const [k,list] of Object.entries(LEGEND_SKINS))SKINS[k].push(...list.map(s=>({...s,legend:true})));
+export const SKIN_FX={shadow:0x6a3aff,sparks:0xffd23f,leaves:0x7dff6a,lightning:0xffe14f,stars:0xe9f4ff,quake:0x9dff5d,runes:0xffc66d,hex:0xff3f6c,embers:0xff7a1a,frost:0xbfeaff};
 export const skinOf=(k,s)=>SKINS[k]?.find(x=>x.k===s)||SKINS[k]?.[0];
 export function skinOwned(p,k,s){const d=skinOf(k,s);if(!d||d.k!==s)return false;if(!d.req)return true;
-  if(d.req.level)return p.level>=d.req.level;return (p.skins||[]).includes(k+':'+s)}
+  if(d.req.level)return p.level>=d.req.level;
+  if(d.req.ach){const A=achById(d.req.ach);return!!A&&achReached(A,A.v(p))>d.req.tier}
+  return (p.skins||[]).includes(k+':'+s)}
+export const skinReqText=r=>!r?'':r.level?`Od úrovně ${r.level}`:r.credits?`${r.credits.toLocaleString('cs-CZ')} kreditů v Obchodě`:r.pass?'Ze sezónního průkazu':r.ach?`Úspěch „${achById(r.ach)?.name}“ · ${ACH_TIERS[r.tier].name.toLowerCase()}`:'Padá z bossů';
 
 // ---------- skill trees ----------
 // Branch tier t (0-4) needs t*3 points spent in that branch. Every class tree gets level-1 points.
@@ -543,14 +588,23 @@ export const MASTERY_ULT_BRANCHES=[
   [{k:'mend',name:'Záchranný impuls',desc:'Ultimátka tě vyléčí o 6 % max. HP.'},{k:'battery',name:'Zpětný tok',desc:'Ultimátka vrátí 20 energie.'}],
   [{k:'echo',name:'Ozvěna',desc:'Po ultimátce zůstane 25 % jejího nabití.'},{k:'focus',name:'Soustředění',desc:'Ultimátka zkrátí čekání všech schopností o 2 s.'}]
 ];
+// basic attack mastery: rank 5 unlocks the class element (Lovec bleed, Strážce poison, Technik shock, Žhář a stronger
+// burn); every rank adds 0.5 % basic attack damage; one XP per four hits
+export const MASTERY_BASIC={dmgPerRank:.005,hitsPerXp:4,elementRank:5,second:{striker:'shock',guardian:'burn',technician:'burn',pyro:'shock'}};
+export const MASTERY_BASIC_BRANCHES=[
+  [{k:'potent',name:'Síla živlu',desc:'Efekt živlu dává o 50 % víc poškození.'},{k:'lasting',name:'Trvalost',desc:'Efekt živlu trvá o 2 s déle.'}],
+  [{k:'spark',name:'Jiskra',desc:'Každý 5. zásah přeskočí na dalšího soupeře do 6 m (25 % síly) a přenese živel.'},{k:'expose',name:'Rozklad',desc:'Soupeři pod tvým živlem dostávají od tebe o 6 % víc.'}],
+  [{k:'siphon',name:'Vysátí',desc:'Vyléčíš se o 15 % poškození, které způsobí tvůj živel.'},{k:'spread',name:'Šíření',desc:'Když soupeř pod tvým živlem padne, živel přeskočí na soupeře do 4 m.'}],
+  [{k:'detonate',name:'Exploze',desc:'Každý 8. zásah okamžitě vybuchne zbytek živlu na cíli.'},{k:'dual',name:'Dvojí živel',desc:'Zásahy přidají i druhý živel (3 HP/s na 2 s).'}]
+];
 // mastery keys: "striker:c0" for class skills, "striker:ult" for ultimates, the plain id for profession skills
-export const masteryKey=(cls,id)=>id==='ult'?cls+':ult':id&&id[0]==='c'&&id.length===2?cls+':'+id:id;
+export const masteryKey=(cls,id)=>id==='ult'||id==='basic'?cls+':'+id:id&&id[0]==='c'&&id.length===2?cls+':'+id:id;
 export function masteryName(key){
   const [a,b]=String(key).split(':');
-  if(b==='ult')return CLASSES[a]?.ult.name||key;if(b)return CLASSES[a]?.skills[+b[1]]?.name||key;return PROF_SKILLS[a]?.name||key;
+  if(b==='ult')return CLASSES[a]?.ult.name||key;if(b==='basic')return CLASSES[a]?.basic.name||key;if(b)return CLASSES[a]?.skills[+b[1]]?.name||key;return PROF_SKILLS[a]?.name||key;
 }
 // the abilities a player can master with a class: three class skills, the ultimate and profession skills they can slot
-export function masteryKeys(p,k){return[...[0,1,2].map(i=>k+':c'+i),k+':ult',...availableSkills(p,k).filter(id=>!(id[0]==='c'&&id.length===2))]}
+export function masteryKeys(p,k){return[k+':basic',...[0,1,2].map(i=>k+':c'+i),k+':ult',...availableSkills(p,k).filter(id=>!(id[0]==='c'&&id.length===2))]}
 // what goes into a match: rank and chosen branches per ability (ranks capped for ranked matches)
 export function masteryLoadout(p,cap=MASTERY.max){
   const out={};for(const [key,m] of Object.entries(p?.mastery||{})){const r=Math.min(cap,masteryRank(m.xp|0).rank);if(!r)continue;

@@ -627,7 +627,7 @@ function drawHUD(){
     $('#hpFill').style.width=(mv.h/mv.mh*100)+'%';$('#shFill').style.width=Math.min(100,mv.s/mv.mh*100)+'%';
     setTxt('hpText',`${Math.max(0,Math.ceil(mv.h))} / ${mv.mh}${mv.s>1?` · štít ${Math.round(mv.s)}`:''}`);
     $('#enFill').style.width=me.e+'%';setTxt('enText',`energie ${me.e}`);
-    const f=mv.fl,tags=[];if(me.rt>0)tags.push(`relikvie ${me.rt} s`);if(me.dr)tags.push(`průnik ×${me.dr}`);if(f&32)tags.push('maskování');if(me.am)tags.push('přepad');if(f&1)tags.push('omráčen');if(f&2)tags.push('umlčen');if(f&8)tags.push('zpomalen');if(f&4)tags.push('krvácíš');if(f&16384)tags.push('hoříš');if(f&1024)tags.push('BŘEMENO · uteč od týmu');if(f&2048)tags.push(`mor nanitů · ${me.nn} zásahů${me.tc?.[0]==='decon'?' · T: Dekontaminace':''}`);if(f&4096)tags.push('dekontaminace');if(f&8192)tags.push('označen');
+    const f=mv.fl,tags=[];if(me.rt>0)tags.push(`relikvie ${me.rt} s`);if(me.dr)tags.push(`průnik ×${me.dr}`);if(f&32)tags.push('maskování');if(me.am)tags.push('přepad');if(f&1)tags.push('omráčen');if(f&2)tags.push('umlčen');if(f&8)tags.push('zpomalen');if(f&4)tags.push('krvácíš');if(f&16384)tags.push('hoříš');if(f&32768)tags.push('otrávený · léčení −30 %');if(f&65536)tags.push('šok');if(f&1024)tags.push('BŘEMENO · uteč od týmu');if(f&2048)tags.push(`mor nanitů · ${me.nn} zásahů${me.tc?.[0]==='decon'?' · T: Dekontaminace':''}`);if(f&4096)tags.push('dekontaminace');if(f&8192)tags.push('označen');
     setTxt('meStatus',tags.join(' · ')||C.talent);
     document.querySelectorAll('#slots .slot').forEach((el,i)=>{
       if(i===4){const [tk,tc]=me.tc||['dodge',0],cd=S.TACTICS[tk]?.cd||1;el.style.setProperty('--cd',Math.min(1,tc/cd).toFixed(3));el.querySelector('.t').textContent=tc>0?Math.ceil(tc):''}
@@ -653,6 +653,22 @@ function drawHUD(){
   mg.restore();
 }
 
+// ---------- legendary skin trails: particles that follow the hero, more while moving ----------
+function skinTrail(v,fx,sp,dt){
+  const rate=(sp>1?14:3)*Cfg.get('particles');if(Math.random()>rate*dt)return;
+  const c=S.SKIN_FX[fx]??0xffffff,p={x:v.x+rnd(-.35,.35),z:v.z+rnd(-.35,.35)};
+  switch(fx){
+    case 'embers':burst(p,Math.random()<.5?c:0xffd23f,2,.6,3.2,.7,rnd(.4,1.8));break;
+    case 'frost':burst(p,c,2,.5,.4,1,rnd(.1,1.2));break;
+    case 'shadow':burst(p,c,2,.3,.2,.9,rnd(.05,.6));break;
+    case 'lightning':if(sp>1&&Math.random()<.35)boltFx(new V3(v.x-v.vx*.12,1,v.z-v.vz*.12),new V3(v.x,1.2,v.z),c);else burst(p,c,2,1.5,1,.25,1);break;
+    case 'stars':burst({x:v.x+rnd(-.8,.8),z:v.z+rnd(-.8,.8)},c,1,.2,.6,1,rnd(1,2.6));break;
+    case 'quake':burst(p,c,2,1.8,.4,.4,.05);break;
+    case 'runes':case 'hex':burst({x:v.x+Math.cos(performance.now()/300)*.8,z:v.z+Math.sin(performance.now()/300)*.8},c,1,.2,.8,.8,1.2);break;
+    default:burst(p,c,2,1,1.5,.5,1);
+  }
+}
+
 // ---------- per-frame unit visuals ----------
 function unitVisual(v,st,dt,t){
   const M=v.model,b=v.bar;
@@ -674,12 +690,15 @@ function unitVisual(v,st,dt,t){
   if(M.armL){M.armL.rotation.x=-sw*.6;M.armR.rotation.x=sw*.6-v.attackAnim*1.5}
   if(M.legL){M.body.position.y=Math.abs(Math.sin(v.phase))*.06*amp;M.body.rotation.x=amp*.08}
   M.anim?.(dt,t,sp,amp);
+  if(M.fx)skinTrail(v,M.fx,sp,dt);
   if(M.drone){M.drone.position.set(Math.sin(t*2+v.id)*.85,2.3+Math.sin(t*3)*.12,Math.cos(t*2+v.id)*.85);M.drone.rotation.y=t*3}
   const op=st.fl&32?.25:st.fl&64?.55+.45*Math.sin(t*22):1;for(const m of M.mats)m.opacity=op;
   v.flash=Math.max(0,v.flash-dt);const fl=v.flash>0?v.flash*7:0;for(const m of M.flash)m.emissive.setRGB(fl,fl*.9,fl*.85);
   M.bubble.visible=st.s>1||!!(st.fl&256);M.bubble.material.opacity=st.fl&256?.45:Math.min(.38,.06+st.s/250);M.bubble.rotation.y=t*.8;
   M.halo.visible=!!(st.fl&16);M.stun.visible=!!(st.fl&1);M.stun.rotation.z=t*6;M.meRing.visible=v.id===G.you;
   if(st.fl&2048&&Math.random()<dt*8)burst({x:v.x,z:v.z},0x7dff9a,2,1.5,2,.6,1.4);
+  if(st.fl&32768&&Math.random()<dt*7)burst({x:v.x,z:v.z},0x9dff5d,2,.8,1.5,.7,1.6);
+  if(st.fl&65536&&Math.random()<dt*9)burst({x:v.x+rnd(-.4,.4),z:v.z+rnd(-.4,.4)},0x9fd8ff,3,4,2,.18,1.3);
   if(st.fl&16384&&Math.random()<dt*10)burst({x:v.x,z:v.z},Math.random()<.5?0xff6a1a:0xffc66d,2,1,3.5,.5,1.2);
   if(st.fl&8192&&Math.random()<dt*5)burst({x:v.x,z:v.z},0xff5d6c,1,.6,3,.5,2.6);
   if(st.fl&128)burst(v,v.kind==='h'?CLASSES[v.k].color:0xff5d6c,3,1,1,.35,.8);
@@ -687,7 +706,7 @@ function unitVisual(v,st,dt,t){
   const s=toScreen(v,M.height+.8);if(s.off){b.el.style.display='none';return}
   b.el.style.display='';b.el.style.transform=`translate(${s.x-38}px,${s.y-30}px)`;
   b.h.style.width=Math.max(0,st.h/v.mh*100)+'%';b.s.style.width=Math.min(100,st.s/v.mh*100)+'%';
-  const f=st.fl;b.em.textContent=f&1024?'BŘEMENO':f&2048?'NAKAŽEN':f&8192?'OZNAČEN':f&1?'OMRÁČEN':f&2?'UMLČEN':f&4?'KRVÁCÍ':f&16384?'HOŘÍ':f&8?'ZPOMALEN':f&16?'RELIKVIE':'';
+  const f=st.fl;b.em.textContent=f&1024?'BŘEMENO':f&2048?'NAKAŽEN':f&8192?'OZNAČEN':f&1?'OMRÁČEN':f&2?'UMLČEN':f&4?'KRVÁCÍ':f&16384?'HOŘÍ':f&32768?'OTRÁVEN':f&65536?'ŠOK':f&8?'ZPOMALEN':f&16?'RELIKVIE':'';
 }
 
 // ---------- hero preview for the hub ----------

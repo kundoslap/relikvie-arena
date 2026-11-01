@@ -158,7 +158,7 @@ function classDetail(k){
   const c=D.CLASSES[k],lab=['Výdrž','Útok','TECH','Rychlost'];
   const rows=H.profile?derived(k).rows.map(([a,b])=>`<div class="stat">${a}<b>${b}</b></div>`).join(''):c.bars.map((v,i)=>`<div class="stat">${lab[i]}<i style="--v:${v*100}%"></i></div>`).join('');
   return`<div class="detail" style="--c:${c.css}"><div class="stats">${rows}<p class="talent"><b>${c.talent}.</b> ${c.talentDesc}<br><b>Relikvie.</b> ${c.relic}</p></div>
-    <div class="skl"><div class="sk"><kbd>LMB</kbd><div><b>${c.basic.name}</b>${c.basic.type==='melee'?'Úder na blízko do oblouku.':'Rychlá střela na dálku.'}</div></div>
+    <div class="skl"><div class="sk"><kbd>LMB</kbd><div><b>${c.basic.name}</b>${c.basic.type==='melee'?'Úder na blízko do oblouku.':'Rychlá střela na dálku.'} <span style="color:${D.DOTS[c.basic.dot?.kind]?.color||'inherit'}">${D.basicFxText(k)}</span></div></div>
     ${c.skills.map((s,i)=>`<div class="sk"><kbd>${'QER'[i]}</kbd><div><b>${s.name}</b>${s.desc} <small>${s.cost} en · ${s.cd} s</small></div></div>`).join('')}
     <div class="sk"><kbd class="u">F</kbd><div><b>${c.ult.name}</b>${c.ult.desc}</div></div></div></div>`;
 }
@@ -555,8 +555,9 @@ function tabHero(){
     <div class="grid2">
       <section class="panel"><h3>${D.CLASSES[k].name} · vzhled</h3><canvas id="preview" width="520" height="520"></canvas>
         <div class="skins">${D.SKINS[k].map(s=>{const own=D.skinOwned(p,k,s.k),r=s.req;
-          const note=own?(s.k===cur?'Nasazeno':'Vlastníš'):r?.level?`Od úrovně ${r.level}`:r?.credits?`${num(r.credits)} kreditů v Obchodě`:r?.pass?'Ze sezónního průkazu':'Padá z bossů';
-          return`<button type="button" class="skin${s.k===cur?' cur':''}" data-skin="${s.k}" style="--a:${hex(s.armor)};--g:${hex(s.glow)}" ${own?'':'disabled'}><div class="sw"></div><b>${s.name}</b><small>${note}</small></button>`}).join('')}</div></section>
+          const note=own?(s.k===cur?'Nasazeno':'Vlastníš'):D.skinReqText(r);
+          return`<button type="button" class="skin${s.k===cur?' cur':''}${s.legend?' legend':''}${own?'':' locked'}${H.trySkin===s.k?' try':''}" data-skin="${s.k}" data-own="${own?1:''}" title="${esc(s.desc||'')}" style="--a:${hex(s.armor)};--g:${hex(s.glow)};--x:${hex(s.accent??s.armor)}"><div class="sw"></div><b>${s.name}</b><small>${note}</small></button>`}).join('')}</div>
+        <p class="help">${(()=>{const s=D.skinOf(k,H.trySkin||cur);return s.desc?`<b style="color:${hex(s.glow)}">${esc(s.name)}:</b> ${esc(s.desc)}`:'Kliknutím na zamčený vzhled si ho prohlédneš na modelu.'})()}</p></section>
       <section class="panel"><h3>Vlastnosti</h3><div class="stats">${d.rows.map(([a,b])=>`<div class="stat">${a}<b>${b}</b></div>`).join('')}</div>
         <div class="lbl">Bonusy z implantátů a stromu</div><div class="mods">${mods}</div>${uniq}
         <div class="lbl">Implantáty</div><div class="items">${D.SLOT_KEYS.map(s=>itemCard(p.inv.find(i=>i.id===p.eq[s]),{slot:s,eq:true})).join('')}</div>
@@ -571,7 +572,8 @@ function tabHero(){
         return`<div class="lrow"><div><b>${esc(b.name)}</b><small>${D.CLASSES[b.cls].name} · ${D.treeSpent(b.tree)} b. ve stromu · ${eq.map(i=>`<span style="color:${D.RARITIES[i.r].color}">${esc(i.name)}</span>`).join(', ')||'bez implantátů'}${b.slots?' · '+b.slots.map(id=>D.skillDef(b.cls,id)?.name).join(', '):''}</small></div>
           <button class="go sm" type="button" data-bl="${b.id}">Načíst</button><button class="ghost sm" type="button" data-bd="${b.id}">Smazat</button></div>`}).join('')||'<p class="help">Zatím žádná sestava.</p>'}</div></section>`;
   bindClassCards();
-  document.querySelectorAll('[data-skin]').forEach(b=>b.onclick=()=>act('skin',{cls:k,skin:b.dataset.skin},'Vzhled nasazen.'));
+  // an owned skin is equipped; a locked one is only shown on the preview model
+  document.querySelectorAll('[data-skin]').forEach(b=>b.onclick=()=>{if(b.dataset.own){H.trySkin=null;act('skin',{cls:k,skin:b.dataset.skin},'Vzhled nasazen.')}else{H.trySkin=b.dataset.skin;tabHero()}});
   document.querySelectorAll('[data-tac]').forEach(b=>b.onclick=()=>act('tactic',{tactic:b.dataset.tac},'Taktická akce nastavena.'));
   document.querySelectorAll('[data-title]').forEach(b=>b.onclick=()=>act('title',{title:b.dataset.title||null},'Titul nastaven.'));
   document.querySelectorAll('#hubBody .item[data-id]').forEach(b=>b.onclick=()=>{H.inv.sel=b.dataset.id;H.tab='inv';renderHub()});
@@ -579,7 +581,8 @@ function tabHero(){
   document.querySelectorAll('[data-bl]').forEach(b=>b.onclick=async()=>{const j=await act('buildLoad',{id:b.dataset.bl},j=>j.missing.length?`Načteno, chybí: ${j.missing.join(', ')}.`:'Sestava načtena.');
     if(j){H.cls=j.profile.cls;store.set('cls',H.cls);H.pd=null;H.tree.draft=null;renderHub()}});
   document.querySelectorAll('[data-bd]').forEach(b=>b.onclick=()=>act('buildDelete',{id:b.dataset.bd},'Sestava smazána.'));
-  H.cb.preview($('#preview'),k,cur);
+  if(H.trySkin&&!D.SKINS[k].some(s=>s.k===H.trySkin))H.trySkin=null;
+  H.cb.preview($('#preview'),k,H.trySkin||cur);
 }
 
 // ---------- Inventář ----------
@@ -646,12 +649,14 @@ const salvMsg=j=>`Rozloženo ${j.n}× · +${num(j.essence)} esence${j.frags?` ·
 function tabMastery(){
   const p=H.profile,k=H.mcls&&D.CLASSES[H.mcls]?H.mcls:H.cls,M=D.MASTERY;
   const card=key=>{
-    const ult=key.endsWith(':ult'),m=p.mastery?.[key]||{xp:0,br:[]},R=D.masteryRank(m.xp|0),r=R.rank,B=ult?D.MASTERY_ULT_BRANCHES:D.MASTERY_BRANCHES;
-    const kind=ult?'Ultimátka':key.includes(':')?'Schopnost povolání':'Schopnost profese';
-    const bonus=ult?`+${r*M.ultPerRank} % nabíjení ultimátky`:`−${(r*M.perRank*100).toFixed(1).replace('.',',')} % energie a čekání`;
+    const ult=key.endsWith(':ult'),basic=key.endsWith(':basic'),m=p.mastery?.[key]||{xp:0,br:[]},R=D.masteryRank(m.xp|0),r=R.rank,B=ult?D.MASTERY_ULT_BRANCHES:basic?D.MASTERY_BASIC_BRANCHES:D.MASTERY_BRANCHES;
+    const kind=ult?'Ultimátka':basic?'Základní útok':key.includes(':')?'Schopnost povolání':'Schopnost profese';
+    const dot=basic?D.CLASSES[k].basic.dot:null,el=dot?D.DOTS[dot.kind]:null;
+    const bonus=ult?`+${r*M.ultPerRank} % nabíjení ultimátky`:basic?`+${(r*D.MASTERY_BASIC.dmgPerRank*100).toFixed(1).replace('.',',')} % poškození základního útoku${r>=D.MASTERY_BASIC.elementRank?` · ${el.name.toLowerCase()} ${dot.dps} HP/s`:''}`:`−${(r*M.perRank*100).toFixed(1).replace('.',',')} % energie a čekání`;
     return`<div class="mst${r>=M.max?' done':''}"><div class="row"><div><small class="help">${kind}</small><b>${esc(D.masteryName(key))}</b></div><span class="rkb sm" style="--c:${r>=20?'var(--gold)':r>=10?'#c08bff':'#4fb4ff'}">${r} / ${M.max}</span></div>
-      ${r<M.max?`<div class="xpbar" style="width:100%"><i style="width:${R.into/R.need*100}%"></i></div><small class="help">${R.into} / ${R.need} do úrovně ${r+1} · ${ult?`každé použití ${M.ultXp} bodů`:'každé použití 1 bod'}</small>`:'<small class="help" style="color:var(--gold)">Plné mistrovství</small>'}
+      ${r<M.max?`<div class="xpbar" style="width:100%"><i style="width:${R.into/R.need*100}%"></i></div><small class="help">${R.into} / ${R.need} do úrovně ${r+1} · ${ult?`každé použití ${M.ultXp} bodů`:basic?`1 bod za ${D.MASTERY_BASIC.hitsPerXp} zásahy`:'každé použití 1 bod'}</small>`:'<small class="help" style="color:var(--gold)">Plné mistrovství</small>'}
       <small class="help">Teď: ${r?bonus:'zatím bez bonusu'}</small>
+      ${basic?`<small style="color:${el.color}">Živel · ${el.name}: ${el.desc} ${dot.dps} HP/s na ${dot.t} s při každém zásahu${r>=D.MASTERY_BASIC.elementRank?' · odemčeno':` · odemkne se na úrovni ${D.MASTERY_BASIC.elementRank}`}</small>`:''}
       <div class="msl">${M.tiers.map((t,i)=>`<div class="msr${r>=t?'':' lock'}"><small>Úr. ${t}</small>${B[i].map((b,j)=>`<button type="button" class="chip" data-mk="${esc(key)}" data-t="${i}" data-c="${j}" aria-pressed="${m.br?.[i]===j}" ${r>=t?'':'disabled'} title="${esc(b.desc)}">${b.name}<small>${b.desc}</small></button>`).join('')}</div>`).join('')}</div></div>`};
   const keys=D.masteryKeys(p,k),total=keys.reduce((a,key)=>a+D.masteryRank(p.mastery?.[key]?.xp|0).rank,0);
   $('#hubBody').innerHTML=`<section class="panel"><div class="row"><div><h3>Mistrovství schopností</h3><p class="help">Schopnost sílí tím, jak ji používáš v zápasech s účtem: každá úroveň (0–${M.max}) zlevní energii a zkrátí čekání o ${(M.perRank*100).toLocaleString('cs-CZ')} %, ultimátce zrychlí nabíjení o ${M.ultPerRank} %. Na úrovních ${M.tiers.join(', ')} si vybereš jednu ze dvou větví; měnit je můžeš zdarma mimo zápas. V hodnocené hře se počítá nejvýš úroveň ${M.rankedCap}.</p></div>

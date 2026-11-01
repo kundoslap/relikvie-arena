@@ -286,6 +286,10 @@ h2.sec{margin:0;font-family:var(--display);font-size:26px;font-weight:800;letter
 .skin .sw{height:34px;border-radius:2px;background:linear-gradient(135deg,var(--a) 0 55%,var(--g) 55% 62%,var(--a) 62%)}
 .skin b{font-size:13px}.skin small{font-size:11px;color:var(--muted)}
 .skin.cur{border-color:var(--gold)}
+.skin.legend .sw{background:linear-gradient(135deg,var(--a) 0 40%,var(--x) 40% 70%,var(--g) 70% 76%,var(--a) 76%);box-shadow:0 0 10px color-mix(in srgb,var(--g) 40%,transparent)}
+.skin.legend b::after{content:" ★";color:var(--gold);font-size:11px}
+.skin.locked{opacity:.6}.skin.locked:hover{opacity:.85}
+.skin.try{outline:1px dashed var(--g);opacity:1}
 #toast{position:fixed;left:50%;bottom:calc(var(--gb) + 10px);transform:translateX(-50%);background:var(--panel);border:1px solid var(--gold);color:var(--ink);padding:10px 16px;border-radius:3px;font-size:14px;z-index:20;max-width:calc(100vw - 32px)}
 #toast.bad{border-color:var(--red)}
 /* lobby */
