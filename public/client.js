@@ -159,9 +159,24 @@ function updFlagMeshes(t){
     F.relic.rotation.y+=.03;F.relic.scale.setScalar(st===2?1+.15*Math.sin(t*8):1);
     F.ring.material.opacity=st===0?.9:.25+.2*Math.sin(t*6)}
 }
+// Eliminace: a red wall and a line on the floor mark the closing circle
+let elimWall=null;
+function buildElimWall(info){
+  if(elimWall){scene.remove(elimWall.g);for(const m of [elimWall.wall,elimWall.ring]){m.geometry.dispose();m.material.dispose()}elimWall=null}
+  if(info.mode!=='elim')return;
+  const R=MAPS[info.map].r,g=new THREE.Group();
+  const wall=new THREE.Mesh(new THREE.CylinderGeometry(1,1,5,128,1,true),addMat(0xff3f5e,.45));wall.position.y=2.5;
+  const ring=new THREE.Mesh(new THREE.RingGeometry(.985,1,128),addMat(0xff3f5e,2.2));ring.rotation.x=-Math.PI/2;ring.position.y=.1;
+  g.add(wall,ring);g.visible=false;scene.add(g);elimWall={g,wall,ring,R,cur:R};
+}
+function updElimWall(dt,t){
+  if(!elimWall)return;const E=elimWall,r=G.last?.el?G.last.el[2]:E.R;
+  E.cur+=(r-E.cur)*Math.min(1,dt*5);E.g.visible=E.cur<E.R-.05&&E.cur>.05;
+  E.g.scale.set(E.cur,1,E.cur);E.wall.material.opacity=.7+.3*Math.sin(t*5);
+}
 const flagText=(f,mine)=>!f?'':f[0]===0?'doma':f[0]===1?`unesena · ${esc(nameOf(f[3]))}`:`leží · vrátí se za ${f[4]} s`;
 function setInfo(info){
-  G.info=info;setMap(info.map);buildFlags(info);
+  G.info=info;setMap(info.map);buildFlags(info);buildElimWall(info);
   for(const m of pointMeshes)scene.remove(m.g);pointMeshes=[];
   if(info.mode==='control')MAPS[info.map].points.forEach((p,i)=>{
     const g=new THREE.Group();g.position.set(p.x,.08,p.z);
@@ -300,6 +315,10 @@ const EV={
   waveClear:e=>{banner(`Vlna ${e.w} zvládnuta`,e.w%5===0?'Bonusový život pro tým':'Krátká pauza, doplň síly na základně',2,'var(--green)');ui('clear',{dur:1})},
   point:e=>{const L='ABC'[e.i];feed(e.o<0?`Bod ${L} je neutrální`:`<span class="t${e.o}">${TEAM_NAME[e.o]}</span> obsadili bod ${L}`);if(e.o>=0)ui('point',{mine:e.o===(G.roster.get(G.you)?.t??0)})},
   sig:e=>onSignal(e),
+  round:e=>{const my=G.roster.get(G.you)?.t??0;
+    if(e.w<0){banner(`Kolo ${e.n} · remíza`,'Oba týmy padly zároveň, bod nikdo nezíská',2.4,'var(--gold)');ui('warn',{gap:.5})}
+    else{banner(e.w===my?`Kolo ${e.n} je vaše`:`Kolo ${e.n} pro soupeře`,`${TEAM_NAME[e.w]} zůstali stát`,2.4,e.w===my?'var(--gold)':'var(--red)');ui(e.w===my?'win':'lose',{dur:1.6})}
+    feed(e.w<0?`Kolo ${e.n}: remíza`:`Kolo ${e.n}: <span class="t${e.w}">${TEAM_NAME[e.w]}</span>`)},
   flag:e=>{const my=G.roster.get(G.you)?.t??0,ours=e.team===my,who=tag(e.u);
     if(e.k==='take'){feed(`${who} unesl ${ours?'vaši':'soupeřovu'} relikvii`);banner(ours?'Vaše relikvie je unesena!':'Relikvie je vaše, neste ji domů!',ours?`Nese ji ${nameOf(e.u)}`:`Nese ji ${nameOf(e.u)}`,2.2,ours?'var(--red)':'var(--gold)');ui(ours?'relicFoe':'relicMine',{dur:1.2})}
     else if(e.k==='cap'){feed(`${who} donesl relikvii · <span class="g">bod</span>`);banner(ours?'Soupeř bodoval':'Únos! +1 bod',`${nameOf(e.u)} donesl relikvii`,2.6,ours?'var(--red)':'var(--gold)');ui(ours?'lose':'win',{dur:2})}
@@ -353,6 +372,13 @@ const atkBtn=$('#tAtk');atkBtn.addEventListener('pointerdown',e=>{touchAtk=true;
 ['pointerup','pointercancel'].forEach(n=>atkBtn.addEventListener(n,()=>touchAtk=false));
 function applyTouch(){document.body.classList.toggle('touch',isTouch);$('#touch').hidden=!isTouch}
 function myPos(){if(G.show)return G.show;const v=views.get(G.you);return v||{x:0,z:0,f:0}}
+// Eliminace: once you fall, the camera follows a teammate who is still standing until the round ends
+function camFocus(){
+  const me=views.get(G.you);if(G.info.mode!=='elim'||!me||!me.dead){G.watchMate=0;return myPos()}
+  let v=views.get(G.watchMate);
+  if(!v||v.dead||v.t!==me.t){v=[...views.values()].find(x=>x.kind==='h'&&x.t===me.t&&!x.dead&&x.id!==G.you);G.watchMate=v?.id||0}
+  return v||myPos();
+}
 function autoAim(){const me=myPos(),mine=G.roster.get(G.you);let best=null,bd=20;
   for(const v of views.values()){if(!mine||v.t===mine.t||v.dead||v.hid)continue;const d=Math.hypot(v.x-me.x,v.z-me.z);if(d<bd){bd=d;best=v}}
   const f=views.get(G.you)?.f||0;return best?{x:best.x,z:best.z}:{x:me.x+Math.sin(f)*6,z:me.z+Math.cos(f)*6}}
@@ -716,6 +742,8 @@ function drawHUD(){
   let mb='';
   if(MODES[mode]?.pvp){setTxt('sL','Modří');setTxt('sR','Rudí');setTxt('s0',s.sc[0]);setTxt('s1',s.sc[1]);setTxt('scoreSub','do '+MODES[mode].win);
     if(mode==='ctf'&&s.fg){const my=meInfo?.t??0;mb=`<div class="flags">${[my,1-my].map(team=>`<div class="fl${team}"><b>${team===my?'Vaše':'Soupeřova'} relikvie</b> ${flagText(s.fg[team])}</div>`).join('')}</div>`}
+    if(mode==='elim'&&s.el){const [n,pause,,a0,a1,shrinkIn]=s.el,my=meInfo?.t??0,size=S.teamSize(mode),dots=(k,t)=>`<span class="t${t}">${'●'.repeat(k)}${'○'.repeat(Math.max(0,size-k))}</span>`;
+      mb=`<div class="elimbar"><b>Kolo ${n}</b> ${dots(my?a1:a0,my)} <small>proti</small> ${dots(my?a0:a1,1-my)}<small>${pause?`další kolo za ${pause} s`:shrinkIn?`kruh se zmenší za ${shrinkIn} s`:'aréna se zmenšuje'}</small></div>`}
     if(mode==='control')mb=`<div class="pts">${s.pt.map(([o,pr],i)=>`<div class="pt${o>=0?' o'+o:''}" style="background:linear-gradient(0deg,${pr<0?'rgba(63,184,255,.35)':'rgba(255,63,142,.35)'} ${Math.abs(pr)}%,var(--panel) 0)">${'ABC'[i]}</div>`).join('')}</div>`}
   else{const wv=s.wv,W=MODES[mode]?.waves;setTxt('sL',W?'Vlna':'Životy');setTxt('s0',W?wv?.[0]??0:s.lv);setTxt('sR',W?'Životy':'Boss');
     setTxt('s1',W?s.lv:(s.bs?Math.ceil(s.bs[1]/s.bs[2]*100)+'%':'—'));
@@ -737,7 +765,9 @@ function drawHUD(){
       else if(i===3){el.style.setProperty('--cd',(1-me.u/100).toFixed(3));el.classList.toggle('ready',me.u>=100);el.querySelector('.t').textContent=me.u>=100?'':me.u+'%'}
       else{const sk=(sk0=>sk0?.defs[i])(mySkills())||C.skills[i];el.style.setProperty('--cd',Math.min(1,me.c[i]/sk.cd).toFixed(3));el.querySelector('.t').textContent=me.c[i]>0?Math.ceil(me.c[i]):'';el.classList.toggle('poor',me.e<sk.cost)}
     });
-    const mu=s.um.get(G.you);$('#dead').hidden=!(mu&&mu.d);if(mu&&mu.d)setTxt('deadT',mu.d);
+    const mu=s.um.get(G.you);$('#dead').hidden=!(mu&&mu.d);
+    if(mu&&mu.d){const html=mode==='elim'?'Vyřazen · sleduješ spoluhráče do konce kola':'Zničen · obnova za <b id="deadT"></b> s';
+      if($('#dead').dataset.m!==mode){$('#dead').dataset.m=mode;$('#dead').innerHTML=html}if(mode!=='elim')setTxt('deadT',mu.d)}
   }
   setTxt('relicInfo',mode==='arena'?(s.rl[0]?'Relikvie čeká ve středu':`Relikvie za ${s.rl[1]} s`):(!MODES[mode].pvp&&me?`Kořist v batohu: ${me.bag}`:''));
   // minimap
@@ -748,6 +778,8 @@ function drawHUD(){
   mg.fillStyle='rgba(255,106,26,.45)';for(const h of map.hazards){mg.beginPath();mg.arc(toM(h.x),toM(h.z),h.r*sc,0,Math.PI*2);mg.fill()}
   mg.fillStyle='#2a3350';for(const [x,z,r] of map.pillars){mg.beginPath();mg.arc(toM(x),toM(z),r*sc,0,Math.PI*2);mg.fill()}
   if(mode==='control')map.points.forEach((p,i)=>{const o=s.pt[i]?.[0];mg.strokeStyle=o===0?'#3fb8ff':o===1?'#ff3f8e':'#ffc66d';mg.lineWidth=4;mg.beginPath();mg.arc(toM(p.x),toM(p.z),4*sc,0,Math.PI*2);mg.stroke()});
+  if(mode==='elim'&&s.el&&s.el[2]<map.r){mg.fillStyle='rgba(255,40,80,.22)';mg.beginPath();mg.arc(cx,cx,cx,0,Math.PI*2);mg.arc(cx,cx,s.el[2]*sc,0,Math.PI*2,true);mg.fill();
+    mg.strokeStyle='#ff3f5e';mg.lineWidth=3;mg.beginPath();mg.arc(cx,cx,s.el[2]*sc,0,Math.PI*2);mg.stroke()}
   if(s.rl[0]&&mode==='arena'){mg.fillStyle='#ffc66d';mg.beginPath();mg.arc(cx,cx,7,0,Math.PI*2);mg.fill()}
   for(const L of s.lt){mg.fillStyle=RARITIES[L[3]].color;mg.fillRect(toM(L[1])-4,toM(L[2])-4,8,8)}
   if(mode==='ctf'&&s.fg)s.fg.forEach(([st,x,z],team)=>{const h=(map.flags||map.bases)[team];mg.strokeStyle=team?'#ff3f8e':'#3fb8ff';mg.lineWidth=3;mg.beginPath();mg.arc(toM(h.x),toM(h.z),9,0,Math.PI*2);mg.stroke();
@@ -917,7 +949,7 @@ function frame(){
     if(Math.random()<(hiQ?.7:.35)){_c.set(m.userData.c);parts.push({x:m.position.x,y:1.3,z:m.position.z,vx:rnd(-.3,.3),vy:rnd(-.2,.2),vz:rnd(-.3,.3),l:.25,m:.25,r:_c.r*2,g:_c.g*2,b:_c.b*2})}}
   for(const m of zoneMeshes.values()){m.material.opacity=.22*Math.min(1,m.userData.t)+.06*Math.sin(t*8);m.rotation.z+=dt*.6;
     if(Math.random()<.6){const a=rnd(0,6.28),r=rnd(0,3.5);burst({x:m.position.x+Math.cos(a)*r,z:m.position.z+Math.sin(a)*r},m.userData.c,1,.6,2.2,.7,0)}}
-  updSignals(t);updFlagMeshes(t);
+  updSignals(t);updFlagMeshes(t);updElimWall(dt,t);
   if(tutMark){tutMark.children[0].scale.setScalar(2.4+Math.sin(t*4)*.25);tutMark.children[1].material.opacity=.5+.3*Math.sin(t*6)}
   for(const g of lootMeshes.values()){g.userData.gem.rotation.y+=dt*2;g.userData.gem.position.y=1+Math.sin(t*3)*.15}
   for(const g of beamMeshes.values())g.userData.glow.material.opacity=.5+.3*Math.sin(t*30);
@@ -930,7 +962,7 @@ function frame(){
   if(!$('#fps').hidden){fpsN++;fpsT+=dt;if(fpsT>=.5){$('#fps').textContent=`${Math.round(fpsN/fpsT)} FPS`;fpsN=0;fpsT=0}}
   autoQuality(dt);
   if(G.mode==='menu'){menuAngle+=dt*.06;camera.position.set(Math.cos(menuAngle)*46,30,Math.sin(menuAngle)*46);camera.lookAt(-6,0,0)}
-  else{const p=myPos();camPos.lerp(new V3(p.x,0,p.z),1-Math.exp(-dt*6));const far=(camera.aspect<1?1.45:1)*Cfg.get('zoom'),boss=G.info.mode==='boss'||G.last?.bs?1.12:1;
+  else{const p=camFocus();camPos.lerp(new V3(p.x,0,p.z),1-Math.exp(-dt*6));const far=(camera.aspect<1?1.45:1)*Cfg.get('zoom'),boss=G.info.mode==='boss'||G.last?.bs?1.12:1;
     const sx=(Math.random()-.5)*G.shake*.9,sz=(Math.random()-.5)*G.shake*.9;
     camera.position.set(camPos.x+sx,26*far*boss,camPos.z+17*far*boss+sz);camera.lookAt(camPos.x+sx*.5,0,camPos.z-1+sz*.5)}
   ray.setFromCamera(ndc,camera);ray.ray.intersectPlane(groundPlane,mouseWorld);

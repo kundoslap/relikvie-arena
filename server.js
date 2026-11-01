@@ -270,7 +270,10 @@ function joinMatch(room,c){
   const M=room.match,pvp=M.D.pvp,n=teamCounts(room);n[c.team]--;
   const order=pvp?(n[0]<=n[1]?[0,1]:[1,0]):[0];
   for(const team of order){const b=M.units.find(x=>x.kind==='hero'&&x.ctrl==='bot'&&x.team===team);
-    if(b){b.remove=true;const u=S.addUnit(M,c.cls,team,'human',c.name,loadOf(c));u.joinedAt=M.time;c.team=team;c.unitId=u.id;return true}}
+    if(b){b.remove=true;const u=S.addUnit(M,c.cls,team,'human',c.name,loadOf(c));u.joinedAt=M.time;c.team=team;c.unitId=u.id;
+      // Eliminace: taking over a bot that already fell this round means waiting for the next one
+      if(M.elim&&b.dead){u.dead=true;u.hp=0;u.respawn=1e9}
+      return true}}
   return false;
 }
 function leave(c){

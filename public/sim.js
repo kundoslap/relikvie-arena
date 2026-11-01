@@ -25,7 +25,8 @@ export function createMatch(o={}){
   const mode=MODES[o.mode]?o.mode:'arena',D=MODES[mode];
   const mapKey=MAPS[o.map]&&D.maps.includes(o.map)?o.map:D.maps[0],map=MAPS[mapKey];
   return{mode,D,mapKey,map,units:[],log:[],bossKeys:[],projs:[],zones:[],timers:[],events:[],beams:[],rings:[],loot:[],danger:[],
-    score:[0,0],time:0,timeLeft:D.waves?1e9:MATCH_TIME,countdown:3,state:'countdown',
+    score:[0,0],time:0,timeLeft:D.waves?1e9:D.time||MATCH_TIME,countdown:3,state:'countdown',
+    elim:D.rounds?{n:1,state:'fight',t:0,t0:-1,r:map.r}:null,
     relic:{state:mode==='arena'?'wait':'off',t:20},
     points:mode==='control'?map.points.map(p=>({x:p.x,z:p.z,r:4,own:-1,prog:0})):[],
     lives:D.lives||0,wave:0,waveState:'break',waveT:6,bossKey:BOSSES[o.boss]?o.boss:'collector',bossId:0,
@@ -160,7 +161,7 @@ function kill(M,t,src){
   const k=src||(t.lastHit&&M.time-t.lastHitT<6?t.lastHit:null);
   fx(M,{t:'death',x:r2(t.x),z:r2(t.z),g:t.id});
   if(t.kind==='hero'){
-    t.respawn=M.D.pvp?5+Math.min(4,t.deaths*.4):6+Math.min(4,t.deaths*.5);
+    t.respawn=M.elim?1e9:M.D.pvp?5+Math.min(4,t.deaths*.4):6+Math.min(4,t.deaths*.5);
     if(k&&k.team!==t.team&&k.kind==='hero'){k.kills++;k.ult=Math.min(100,k.ult+15);echoReset(M,k)}
     if(M.mode==='arena'||M.mode==='duel'){if(k&&k.team!==t.team)M.score[k.team]++;else M.score[1-t.team]++}
     if(!M.D.pvp){M.lives=Math.max(0,M.lives-1);if(M.lives<=0&&M.state==='play')endMatch(M,1)}
@@ -703,6 +704,9 @@ function botUpdate(M,u,dt){
   // carrying Nositel's burden: run away from the rest of the team
   if(u.bomb){const fr=heroesOf(M,u.team).filter(x=>x!==u);if(fr.length){let cx=0,cz=0;for(const f of fr){cx+=f.x;cz+=f.z}cx/=fr.length;cz/=fr.length;
     const dx=u.x-cx,dz=u.z-cz,l=Math.hypot(dx,dz)||1;goal=inArena(M,{x:u.x+dx/l*10,z:u.z+dz/l*10},3)}}
+  // Eliminace: keep inside the closing circle with a margin; a goal outside it is pulled in, and a bot caught outside walks in first
+  if(M.elim){const lim=Math.max(1.5,M.elim.r-3),pull=(p,r)=>{const l=Math.hypot(p.x,p.z);return l<=r?p:{x:p.x/l*r,z:p.z/l*r}};
+    if(Math.hypot(u.x,u.z)>lim)goal=pull(u,Math.max(0,lim-2));else if(goal)goal=pull(goal,lim)}
   if(goal){const g=navNext(M,u,goal);wx=g.x-u.x;wz=g.z-u.z;if(Math.hypot(goal.x-u.x,goal.z-u.z)<1)wx=wz=0}
   else if(t){
     const way=seen?t:navNext(M,u,t);let tx=way.x-u.x,tz=way.z-u.z;const l=Math.hypot(tx,tz)||1;tx/=l;tz/=l;const pref=u.C.pref+(t.kind==='boss'&&u.clsKey!=='guardian'?3:0);
@@ -1001,6 +1005,33 @@ function updPoints(M,dt){
   M.scoreAcc+=dt;while(M.scoreAcc>=2){M.scoreAcc-=2;for(const p of M.points)if(p.own>=0)M.score[p.own]++}
   checkWin(M);
 }
+// Eliminace: rounds without respawns. A team that has nobody standing loses the round. After `shrinkAt` seconds the
+// arena closes in to nothing over `shrinkTime`; outside the circle heroes burn for `burn` of their max HP per second,
+// so every round ends. Between rounds the survivors are untouchable and everyone comes back for the next one.
+export const ELIM={shrinkAt:40,shrinkTime:45,burn:.08,pause:4};
+function updElim(M,dt){
+  const E=M.elim;if(M.state!=='play')return;
+  if(E.t0<0){E.t0=M.time;fx(M,{t:'ban',ti:'Kolo 1',sub:'Bez oživení · vyhrává tým, který zůstane stát',col:'var(--gold)',d:2.5})}
+  if(E.state==='pause'){E.t-=dt;if(E.t>0)return;
+    E.n++;E.state='fight';E.t0=M.time;E.r=M.map.r;
+    M.projs=[];M.zones=[];M.beams=[];M.rings=[];M.danger=[];M.timers=[];
+    for(const u of M.units)if(u.kind==='hero'){const ult=u.ult;resetUnit(u,M);u.ult=ult;fx(M,{t:'spawn',x:r2(u.x),z:r2(u.z),g:u.id})}
+    fx(M,{t:'ban',ti:`Kolo ${E.n}`,sub:`${M.score[0]} : ${M.score[1]} · hraje se do ${M.D.win}`,col:'var(--gold)',d:2.5});return}
+  const el=M.time-E.t0,R=M.map.r;
+  E.r=el<ELIM.shrinkAt?R:Math.max(0,R*(1-(el-ELIM.shrinkAt)/ELIM.shrinkTime));
+  if(el>=ELIM.shrinkAt&&el-dt<ELIM.shrinkAt)fx(M,{t:'ban',ti:'Aréna se zmenšuje',sub:'Mimo kruh to pálí, drž se uvnitř',col:'var(--red)',d:2.5});
+  for(const u of M.units){if(u.kind!=='hero'||u.dead||Math.hypot(u.x,u.z)<=E.r){if(u.st)u.st.ringAcc=0;continue}
+    u.st.ringAcc=(u.st.ringAcc||0)+dt;if(u.st.ringAcc>=.5){u.st.ringAcc-=.5;damage(M,u,u.maxHp*ELIM.burn*.5,null,{dot:true,color:0xff3f5e})}}
+  const up=[0,1].map(t=>heroesOf(M,t).length);
+  if(up[0]&&up[1])return;
+  // the round is over: a point for the side still standing, nothing when both fell at once
+  const w=up[0]?0:up[1]?1:-1;
+  if(w>=0)M.score[w]++;
+  fx(M,{t:'round',n:E.n,w});
+  checkWin(M);if(M.state!=='play')return;
+  E.state='pause';E.t=ELIM.pause;
+  for(const u of M.units)if(u.kind==='hero'&&!u.dead){u.st.inv=ELIM.pause+.5;u.st.bleed=u.st.burn=u.st.poison=u.st.shock=u.st.nanite=null}
+}
 function spawnWave(M){
   const w=M.wave,h=Math.max(1,heroesOf(M,0).length+M.units.filter(x=>x.kind==='hero'&&x.dead).length);
   const hp=(1+.12*w)*(1+Math.max(0,w-16)*.08)*(.7+.15*h)*M.diff.hp,dmg=(1+.05*w)*M.diff.dmg;
@@ -1052,6 +1083,7 @@ export function step(M,dt=TICK){
   separate(M);recordHist(M);updProjs(M,dt);updZones(M,dt);updRings(M,dt);updBeams(M,dt);updRelic(M,dt);updLoot(M,dt);
   if(M.mode==='control')updPoints(M,dt);
   if(M.flags)updFlags(M,dt);
+  if(M.elim)updElim(M,dt);
   if(M.D.waves)updWaves(M,dt);
   if(M.units.some(u=>u.remove)){M.units=M.units.filter(u=>!u.remove);M.rosterVer++}
 }
@@ -1072,6 +1104,7 @@ export function snapshotFor(M,uid,events){
     rl:[M.relic.state==='up'?1:0,Math.ceil(M.relic.t)],
     pt:M.points.map(p=>[p.own,Math.round(p.prog)]),lv:M.lives,
     fg:M.flags?M.flags.map(f=>[{home:0,carried:1,dropped:2}[f.state],r2(f.x),r2(f.z),f.carrier,Math.ceil(f.t)]):null,
+    el:M.elim?[M.elim.n,M.elim.state==='pause'?Math.ceil(M.elim.t):0,r2(M.elim.r),heroesOf(M,0).length,heroesOf(M,1).length,Math.max(0,Math.ceil(M.elim.t0+ELIM.shrinkAt-M.time))]:null,
     wv:M.D.waves?[M.wave,M.waveState==='break'?Math.ceil(M.waveT):0,M.units.filter(u=>u.team===1).length]:null,
     bs:boss?[boss.id,Math.ceil(boss.hp),boss.maxHp,Math.round(boss.shield),boss.invuln?1:0,boss.ai.fortT>0?Math.ceil(boss.ai.fortT):0]:null,
     u:M.units.map(u=>u.dead?{i:u.id,d:Math.ceil(u.respawn)}:vis(u)?{i:u.id,x:r2(u.x),z:r2(u.z),vx:r2(u.vx),vz:r2(u.vz),f:r2(u.face),h:Math.ceil(u.hp),s:Math.round(u.shield),fl:flags(u)}:{i:u.id,hid:1}),
