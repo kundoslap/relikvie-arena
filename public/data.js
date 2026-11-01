@@ -459,6 +459,25 @@ export function echoOfWeek(wk){
   return{boss,map:{collector:'core',armor:'forge',archivist:'archive',voice:'sanctum',matrona:'archive',omega:'sanctum',carrier:'forge',manticore:'archive',seraph:'sanctum',archon:'core'}[boss],mods:[a,b]};
 }
 
+// Mutace týdne: an Aréna with two extra rules picked from the week number, the same for everyone.
+// swift and surge mean the same as in Ozvěna jádra; the rest are PvP rules for all heroes.
+export const MUTATORS={
+  swift:{name:'Rychlé čekání',desc:'Schopnosti mají o 25 % kratší čekání.'},
+  surge:{name:'Přebití',desc:'Energie se obnovuje o 50 % rychleji.'},
+  haste:{name:'Zrychlení',desc:'Všichni se pohybují o 20 % rychleji.'},
+  ultra:{name:'Ultimátní nával',desc:'Ultimátky se nabíjejí dvakrát rychleji.'},
+  glass:{name:'Skleněná děla',desc:'Hrdinové mají o 35 % méně HP.'},
+  vamp:{name:'Upíří krev',desc:'Přímé zásahy léčí útočníka o 12 % způsobeného poškození.'},
+  rapid:{name:'Rychlý návrat',desc:'Oživení trvá polovinu času.'},
+  relic:{name:'Relikviová horečka',desc:'Relikvie se objevuje dvakrát častěji.'}
+};
+export function mutatorsOfWeek(wk=weekKey()){
+  const n=parseInt(String(wk).replace(/\D/g,''),10)||0,keys=Object.keys(MUTATORS),a=keys[n%keys.length];
+  let b=keys[(n*5+3)%keys.length];if(b===a)b=keys[(n+1)%keys.length];return[a,b];
+}
+// modes that play by the Aréna rules: relic in the middle, a point for each kill
+export const arenaLike=k=>k==='arena'||k==='mutant';
+
 // ---------- daily and weekly goals ----------
 // stat keys are filled in by the server from each finished match
 export const GOALS={
@@ -553,6 +572,7 @@ export const MODES={
   arena:{name:'Aréna',desc:'3 proti 3. Body za zničení soupeřů a za relikvii ve středu. Vyhrává 20 bodů.',pvp:true,maps:['core','forge','archive','observ'],max:6,win:20},
   control:{name:'Ovládnutí',desc:'3 proti 3 o tři body. Každý držený bod přidává skóre, vyhrává 100.',pvp:true,maps:['core','forge','archive','observ'],max:6,win:100},
   ctf:{name:'Únos relikvie',desc:'3 proti 3 v Pevnosti relikvií. Ukradni soupeřovu relikvii a dones ji ke své, která musí být doma. Vyhrávají 3 únosy.',pvp:true,maps:['bastion'],max:6,win:3},
+  mutant:{name:'Mutace týdne',desc:'3 proti 3 podle pravidel Arény, ale s dvěma mutacemi, které se mění každé pondělí. Vyhrává 20 bodů.',pvp:true,mutators:true,maps:['core','forge','archive','observ'],max:6,win:20},
   elim:{name:'Eliminace',desc:'3 proti 3 na kola bez oživení. Kolo vyhrává tým, který zůstane stát. Po 40 s se aréna začne zmenšovat a mimo kruh to pálí. Vyhrávají 4 kola.',pvp:true,rounds:true,maps:['core','forge','archive','observ'],max:6,win:4,time:900},
   duel:{name:'Souboj',desc:'1 proti 1 bez relikvie a bodů. Vyhrává, kdo první pětkrát zničí soupeře.',pvp:true,team:1,maps:['archive','core','sanctum'],max:2,win:5},
   boss:{name:'Lov bosse',desc:'Až 4 hráči proti bossovi s mechanikami. Tým má společné životy.',pvp:false,maps:['sanctum','core','forge','archive','observ'],max:4,lives:8},
@@ -766,4 +786,4 @@ export const BOSS_KEYS=Object.keys(BOSSES);
 // Lookup tables are indexed by names that come from players (class, mode, crate, slot…). Without a prototype,
 // keys like "constructor" or "toString" are simply missing instead of resolving to built-in functions.
 for(const T of [CLASSES,DIFF_REWARD,STATS,SLOTS,AFFIX_BASE,AFFIX_POOLS,BASE_NAMES,UNIQUES,CRATES,SKINS,TREES,SCHOOLS,PROF_SKILLS,PASSIVES,ULT_MODS,
-  TACTICS,BOT_TACTIC,ACTS,ECHO_MODS,GOALS,WEEKLY_GOALS,MAPS,MODES,NPCS,BOSSES])Object.setPrototypeOf(T,null);
+  TACTICS,BOT_TACTIC,ACTS,ECHO_MODS,MUTATORS,GOALS,WEEKLY_GOALS,MAPS,MODES,NPCS,BOSSES])Object.setPrototypeOf(T,null);

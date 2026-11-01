@@ -106,6 +106,7 @@ let bannerT=0;
 function banner(title,sub='',dur=2.2,color='var(--gold)'){if(G.mode==='menu')return;const b=$('#banner');b.querySelector('b').textContent=title;b.querySelector('b').style.color=color;b.querySelector('small').textContent=sub;b.classList.add('on');bannerT=dur}
 function feed(html){if(G.mode==='menu')return;const el=document.createElement('div');el.innerHTML=html;const f=$('#feed');f.prepend(el);while(f.children.length>5)f.lastChild.remove();setTimeout(()=>el.remove(),6000)}
 const nameOf=id=>G.roster.get(id)?.n||'?';
+const mutNames=mods=>(mods||[]).map(k=>S.MUTATORS[k]?.name).filter(Boolean).join(' + ');
 const tag=id=>{const r=G.roster.get(id);return r?`<span class="t${r.t}">${esc(r.n)}</span>`:'?'};
 let flashT=0;function screenFlash(k=.8){if(Cfg.get('flash'))flashT=Math.max(flashT,k)}
 
@@ -248,6 +249,20 @@ function reconcile(s){
   const map=MAPS[G.info.map];for(const h of G.hist)S.walk(p,h.mx,h.mz,TICK,s.st==='countdown',map);
   if(!G.pred){G.pred=p;G.show={x:p.x,z:p.z}}
 }
+// death recap: who hit you in the last seconds, split into direct hits, ultimates and damage over time
+function showRecap(e){
+  const el=$('#recap');if(!el)return;
+  const tot=e.src.reduce((s,x)=>s+x.h+x.u+x.d,0);
+  if(!tot){el.hidden=true;return}
+  const who=x=>x.i?`<b class="t${x.tm}">${esc(x.n)}</b> <small>${x.c?CLASSES[x.c]?.name||'':x.b?'boss':''}</small>`:'<b>Prostředí</b> <small>láva, kruh, cizí základna</small>';
+  const killer=e.src.find(x=>x.i===e.k);
+  const bar=x=>{const t=x.h+x.u+x.d;return`<i class="rb">${[['h',x.h],['u',x.u],['d',x.d]].filter(([,v])=>v).map(([k,v])=>`<em class="${k}" style="width:${v/tot*100}%"></em>`).join('')}</i>`};
+  el.innerHTML=`<div class="lbl">Rozbor smrti · posledních ${S.RECAP_WIN} s</div>
+    ${killer?`<p>Dorazil tě ${who(killer)}${e.kh?` · zbylo mu <b>${e.kh[0]}</b> / ${e.kh[1]} HP`:''}</p>`:''}
+    ${e.src.map(x=>`<div class="rr"><span>${who(x)}</span>${bar(x)}<b>${x.h+x.u+x.d}</b></div>`).join('')}
+    <p class="rl"><span><em class="h"></em>zásahy</span><span><em class="u"></em>ultimátka</span><span><em class="d"></em>v čase</span><span>celkem <b>${tot}</b></span></p>`;
+  el.hidden=false;G.recapAt=performance.now();
+}
 function sample(id,rt){
   const sn=G.snaps;if(!sn.length)return null;
   let i=sn.length-1;while(i>0&&sn[i].recv>rt)i--;
@@ -286,6 +301,7 @@ const EV={
     burst(e,c,v.kind==='b'?120:40,v.kind==='b'?14:10,6,1);burst(e,TEAM_COL[v.t],30,8,5,.9);ringFx(e,TEAM_COL[v.t],.5,v.kind==='b'?12:5,.6);
     if(v.kind==='b'){columnFx(e,BOSSES[v.k].color);G.shake=1}if(e.g===G.you){G.shake=Math.max(G.shake,.8);screenFlash(1)}
     if(v.kind==='b')ui('boom',{s:2.2,gap:.2});if(e.g===G.you)ui('died',{dur:1.4});else sfx('death',e,{f:v.kind==='n'?700:460,gap:.04,vol:v.kind==='n'?.55:.85})},
+  recap:e=>{if(e.only===G.you)showRecap(e)},
   tp:e=>{const c=0x7df9ff,to={x:e.x,z:e.z};burst({x:e.x0,z:e.z0},c,24,5,5,.6,.3);ringFx({x:e.x0,z:e.z0},c,.3,2.5,.4);burst(to,c,30,5,6,.7,.4);ringFx(to,c,.3,3,.45);
     if(e.g===G.you)ui('warp',{vol:.8});else sfx('warp',to,{gap:.05,vol:.6})},
   spawn:e=>{const v=views.get(e.g);if(!v)return;burst(e,TEAM_COL[v.t]??0xffffff,30,4,6,.8,.4);ringFx(e,TEAM_COL[v.t]??0xffffff,.4,3,.5);if(e.g===G.you)ui('spawn',{vol:.7})},
@@ -589,7 +605,7 @@ function onNet(m){
   }
 }
 function enterOnlineMatch(){
-  clearWorld();G.M=null;G.mode='on';G.paused=false;G.inAcc=0;
+  clearWorld();G.M=null;G.mode='on';G.paused=false;G.inAcc=0;G.ended=false;
   showOnly('hud');applyTouch();
 }
 const hostOpts=o=>({mode:o.mode,map:o.map,boss:o.boss,diff:o.diff,cls:o.cls,name:o.name,pub:!!o.pub});
@@ -606,6 +622,7 @@ const hubCallbacks={
   tutorial:o=>{closeWs();startTutorial(o)},
   spectate:pid=>connect({type:'spectate',friend:pid})
 };
+const mutatorsText=()=>'Tento týden: '+S.mutatorsOfWeek().map(k=>`<b>${S.MUTATORS[k].name}</b> (${S.MUTATORS[k].desc.toLowerCase().replace(/\.$/,'')})`).join(' a ')+'.';
 // custom rules of a created room: score to win and match length (PvP) and filling empty seats with bots
 function rulesHTML(L,seg){
   const r=L.rules,pvp=MODES[L.mode].pvp,v=k=>S.ruleValues(L.mode,{[k]:'short'}),n=S.ruleValues(L.mode,{}),l=k=>S.ruleValues(L.mode,{[k]:'long'});
@@ -633,7 +650,7 @@ function renderLobby(){
     ${L.mode==='boss'?seg('lBoss',Object.entries(BOSSES).map(([k,b])=>[k,b.name]),L.boss):''}
     ${seg('lDiff',[['easy','Lehká'],['normal','Normální'],['hard','Těžká']],L.diff)}
     ${L.rules?rulesHTML(L,seg):''}
-    <p class="help">${M.desc}${host?'':' Nastavení mění hostitel.'}</p></div>`;
+    <p class="help">${M.desc}${M.mutators?' '+mutatorsText():''}${host?'':' Nastavení mění hostitel.'}</p></div>`;
   const cfg=(id,key)=>document.querySelectorAll(`#${id} button`).forEach(b=>b.onclick=()=>wsSend({type:'cfg',[key]:b.dataset.v}));
   const rule=(id,key,val=v=>v)=>document.querySelectorAll(`#${id} button`).forEach(b=>b.onclick=()=>wsSend({type:'cfg',rules:{[key]:val(b.dataset.v)}}));
   if(!ms&&!L.ranked){cfg('lMode','mode');cfg('lMap','map');cfg('lBoss','boss');cfg('lDiff','diff');rule('lWin','win');rule('lTime','time');rule('lBots','bots',v=>v==='1')}
@@ -725,7 +742,8 @@ function showEnd(m){
   $('#againBtn').hidden=room;$('#menuBtn').textContent=room?'Opustit místnost':'Zpět do hubu';
   showOnly('end');
 }
-$('#againBtn').onclick=()=>{const o=G.lastOpts;if(!o)return toHub();if(o.local)startLocal(o);else if(o.mission)hubCallbacks.mission(o.mission,o);else hubCallbacks.solo(o)};
+// the finished online match leaves mode 'on'; without resetting it the new match's roster would not switch to the HUD
+$('#againBtn').onclick=()=>{const o=G.lastOpts;if(!o)return toHub();if(G.mode==='on'){closeWs();startAttract()}G.ended=false;if(o.local)startLocal(o);else if(o.mission)hubCallbacks.mission(o.mission,o);else hubCallbacks.solo(o)};
 $('#menuBtn').onclick=()=>toHub();
 $('#resumeBtn').onclick=()=>setPause(false);
 $('#quitBtn').onclick=()=>toHub();
@@ -782,10 +800,11 @@ function drawHUD(){
       else{const sk=(sk0=>sk0?.defs[i])(mySkills())||C.skills[i];el.style.setProperty('--cd',Math.min(1,me.c[i]/sk.cd).toFixed(3));el.querySelector('.t').textContent=me.c[i]>0?Math.ceil(me.c[i]):'';el.classList.toggle('poor',me.e<sk.cost)}
     });
     const mu=s.um.get(G.you);$('#dead').hidden=!(mu&&mu.d);
+    const rc=$('#recap');if(!rc.hidden&&(!(mu&&mu.d)||performance.now()-G.recapAt>9000))rc.hidden=true;
     if(mu&&mu.d){const html=mode==='elim'?'Vyřazen · sleduješ spoluhráče do konce kola':'Zničen · obnova za <b id="deadT"></b> s';
       if($('#dead').dataset.m!==mode){$('#dead').dataset.m=mode;$('#dead').innerHTML=html}if(mode!=='elim')setTxt('deadT',mu.d)}
   }
-  setTxt('relicInfo',mode==='arena'?(s.rl[0]?'Relikvie čeká ve středu':`Relikvie za ${s.rl[1]} s`):(!MODES[mode].pvp&&me?`Kořist v batohu: ${me.bag}`:''));
+  setTxt('relicInfo',S.arenaLike(mode)?(s.rl[0]?'Relikvie čeká ve středu':`Relikvie za ${s.rl[1]} s`)+(MODES[mode].mutators?' · '+mutNames(info.mods):''):(!MODES[mode].pvp&&me?`Kořist v batohu: ${me.bag}`:''));
   // minimap
   const map=MAPS[info.map],W=mini.width,sc=W/((map.r+2)*2),cx=W/2,toM=x=>cx+x*sc;
   mg.clearRect(0,0,W,W);mg.save();mg.beginPath();mg.arc(cx,cx,cx-2,0,Math.PI*2);mg.clip();
@@ -797,7 +816,7 @@ function drawHUD(){
   if(mode==='control')map.points.forEach((p,i)=>{const o=s.pt[i]?.[0];mg.strokeStyle=o===0?'#3fb8ff':o===1?'#ff3f8e':'#ffc66d';mg.lineWidth=4;mg.beginPath();mg.arc(toM(p.x),toM(p.z),4*sc,0,Math.PI*2);mg.stroke()});
   if(mode==='elim'&&s.el&&s.el[2]<map.r){mg.fillStyle='rgba(255,40,80,.22)';mg.beginPath();mg.arc(cx,cx,cx,0,Math.PI*2);mg.arc(cx,cx,s.el[2]*sc,0,Math.PI*2,true);mg.fill();
     mg.strokeStyle='#ff3f5e';mg.lineWidth=3;mg.beginPath();mg.arc(cx,cx,s.el[2]*sc,0,Math.PI*2);mg.stroke()}
-  if(s.rl[0]&&mode==='arena'){mg.fillStyle='#ffc66d';mg.beginPath();mg.arc(cx,cx,7,0,Math.PI*2);mg.fill()}
+  if(s.rl[0]&&S.arenaLike(mode)){mg.fillStyle='#ffc66d';mg.beginPath();mg.arc(cx,cx,7,0,Math.PI*2);mg.fill()}
   for(const L of s.lt){mg.fillStyle=RARITIES[L[3]].color;mg.fillRect(toM(L[1])-4,toM(L[2])-4,8,8)}
   if(mode==='ctf'&&s.fg)s.fg.forEach(([st,x,z],team)=>{const h=(map.flags||map.bases)[team];mg.strokeStyle=team?'#ff3f8e':'#3fb8ff';mg.lineWidth=3;mg.beginPath();mg.arc(toM(h.x),toM(h.z),9,0,Math.PI*2);mg.stroke();
     mg.fillStyle=team?'#ff3f8e':'#3fb8ff';mg.save();mg.translate(toM(x),toM(z));mg.rotate(Math.PI/4);const k=st===2?7+3*Math.sin(performance.now()/120):8;mg.fillRect(-k/2,-k/2,k,k);mg.restore()});
@@ -972,7 +991,7 @@ function frame(){
   for(const g of beamMeshes.values())g.userData.glow.material.opacity=.5+.3*Math.sin(t*30);
   if(G.last&&pointMeshes.length)for(const P of pointMeshes){const [o,pr]=G.last.pt[P.i]||[-1,0],c=o===0?TEAM_COL[0]:o===1?TEAM_COL[1]:0xffc66d;
     P.ring.material.color.copy(HDR(c,1.6));P.col.material.color.copy(HDR(c,.6));P.fill.scale.setScalar(Math.max(.05,Math.abs(pr)/100*4));P.fill.material.color.copy(HDR(pr<0?TEAM_COL[0]:TEAM_COL[1],.8))}
-  const up=!!(G.last&&G.last.rl[0]&&G.info.mode==='arena');relicMesh.visible=up;
+  const up=!!(G.last&&G.last.rl[0]&&S.arenaLike(G.info.mode));relicMesh.visible=up;
   if(up){relicMesh.rotation.y+=dt*1.4;relicMesh.rotation.x+=dt*.6;relicMesh.position.y=1.6+Math.sin(t*2)*.15;relicLight.intensity=10+Math.sin(t*4)*3;if(Math.random()<.4)burst({x:0,z:0},0xffc66d,1,1.2,2,.8,1.2)}
   else relicLight.intensity=Math.max(0,relicLight.intensity-dt*20);
   G.shake=Cfg.get('shake')?Math.max(0,G.shake-dt*2.2):0;

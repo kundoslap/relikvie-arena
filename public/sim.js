@@ -1,6 +1,6 @@
 // Relikvie Aréna — authoritative simulation. Runs on the server and, for offline matches, in the browser.
 // Pure logic: no rendering. Visual effects leave the simulation as events in M.events.
-import {CLASSES,CLASS_KEYS,MAPS,MODES,NPCS,BOSSES,BOSS_KEYS,ENDLESS_MODS,ECHO_MODS,TACTICS,BOT_TACTIC,rollItem,skillDef,MASTERY,masteryKey,BURN,POISON_HEAL,MASTERY_BASIC} from './data.js';
+import {CLASSES,CLASS_KEYS,MAPS,MODES,NPCS,BOSSES,BOSS_KEYS,ENDLESS_MODS,ECHO_MODS,TACTICS,BOT_TACTIC,rollItem,skillDef,MASTERY,masteryKey,BURN,POISON_HEAL,MASTERY_BASIC,MUTATORS,mutatorsOfWeek,arenaLike} from './data.js';
 export * from './data.js';
 
 export const MATCH_TIME=360, RELIC_EVERY=40, TICK=1/30, TEAM_SIZE=3;
@@ -35,10 +35,10 @@ export function createMatch(o={}){
   return{mode,D,mapKey,map,units:[],log:[],bossKeys:[],projs:[],zones:[],timers:[],events:[],beams:[],rings:[],loot:[],danger:[],
     score:[0,0],time:0,timeLeft:D.waves?1e9:o.time>0?o.time:D.time||MATCH_TIME,countdown:3,state:'countdown',custom:!!o.custom,
     elim:D.rounds?{n:1,state:'fight',t:0,t0:-1,r:map.r}:null,
-    relic:{state:mode==='arena'?'wait':'off',t:20},
+    relic:{state:arenaLike(mode)?'wait':'off',t:20},
     points:mode==='control'?map.points.map(p=>({x:p.x,z:p.z,r:4,own:-1,prog:0})):[],
     lives:D.lives||0,wave:0,waveState:'break',waveT:6,bossKey:BOSSES[o.boss]?o.boss:'collector',bossId:0,
-    last:o.last||D.last||0,waveBoss:BOSSES[o.waveBoss]?o.waveBoss:null,emod:new Set(o.mods||[]),mission:o.mission||null,
+    last:o.last||D.last||0,waveBoss:BOSSES[o.waveBoss]?o.waveBoss:null,emod:new Set(o.mods||(D.mutators?mutatorsOfWeek():[])),mission:o.mission||null,
     nextId:1,diffKey:DIFF[o.diff]?o.diff:'normal',diff:DIFF[o.diff]||DIFF.normal,winner:null,rosterVer:1,scoreAcc:0};
 }
 const NO_PROF={skills:['c0','c1','c2'],pass:[],branch:null,mod:null,ultMod:false,cap:null};
@@ -58,7 +58,10 @@ export function addUnit(M,k,team,ctrl,name,load){
   u.mast=load?.mastery&&typeof load.mastery==='object'?load.mastery:{};u.mcount={};
   if(u.mast[k+':ult']?.b?.[0]===1)u.ult=25;
   if(M.emod.has('swift'))u.mods.cdr=(u.mods.cdr||0)+25;
-  u.maxHp=Math.round(u.C.hp*(1+m(u,'hp')/100));u.radius=k==='guardian'?.85:.7;
+  // Mutace týdne
+  if(M.emod.has('haste'))u.mods.speed=(u.mods.speed||0)+20;
+  if(M.emod.has('ultra'))u.mods.ult=(u.mods.ult||0)+100;
+  u.maxHp=Math.round(u.C.hp*(1+m(u,'hp')/100)*(M.emod.has('glass')?.65:1));u.radius=k==='guardian'?.85:.7;
   resetUnit(u,M);M.units.push(u);M.rosterVer++;return u;
 }
 function addNpc(M,key,x,z,hpScale=1,dmgScale=1,team=1){
@@ -86,7 +89,7 @@ function spawnAt(u,x,z,M){
 export function resetUnit(u,M){
   const b=M.map.bases[u.team],a=rnd(0,Math.PI*2),r=rnd(0,2.4);
   u.x=b.x+Math.cos(a)*r;u.z=b.z+Math.sin(a)*r;u.vx=u.vz=0;u.face=u.team===0?Math.PI/2:-Math.PI/2;
-  u.hp=u.maxHp;u.shield=u.pass.has('reserve')?60:0;u.energy=u.uniq.has('capacitor')?100:Math.min(100,60+m(u,'start'));u.cds=[0,0,0];u.atkCd=0;u.dead=false;u.respawn=0;
+  u.hp=u.maxHp;u.dlog=[];u.shield=u.pass.has('reserve')?60:0;u.energy=u.uniq.has('capacitor')?100:Math.min(100,60+m(u,'start'));u.cds=[0,0,0];u.atkCd=0;u.dead=false;u.respawn=0;
   u.st={stun:0,slow:0,silence:0,cloak:0,inv:1.5,relic:0,bleed:null,hot:null,fieldAcc:0,hazAcc:0,haste:0,hasteK:1,bulwark:0,nanite:null,decon:0,marked:0};
   u.ambush=0;u.ambushK=0;u.drive=null;u.bomb=null;u.hurtT=-99;u.dash=null;u.lastHit=null;u.lastHitT=-99;u.ai.retreat=false;u.ai.lane=rnd(-12,12);u.hist=[];
 }
@@ -141,8 +144,12 @@ function damage(M,t,amt,src,o={}){
   if(src){src.dmgDealt+=amt;t.lastHit=src;t.lastHitT=M.time;
     if(src.kind==='hero')src.ult=Math.min(100,src.ult+amt*.3*(1+m(src,'ult')/100));
     if(!o.dot&&m(src,'leech')>0&&!src.dead)heal(M,src,amt*m(src,'leech')/100,null,true);
+    if(!o.dot&&src!==t&&src.kind==='hero'&&M.emod.has('vamp')&&!src.dead)heal(M,src,amt*.12,null,true);
     if(t.kind==='boss')t.threat[src.id]=(t.threat[src.id]||0)+amt}
   if(t.kind==='hero'){t.ult=Math.min(100,t.ult+amt*.08);t.hurtT=M.time;t.dmgTaken=(t.dmgTaken||0)+amt;
+    // for the death recap: who hit this hero lately, and whether directly, with an ultimate or over time
+    const L=t.dlog||(t.dlog=[]);L.push({t:M.time,s:src?src.id:0,a:amt,k:o.dot?'d':o.ult?'u':'h'});
+    while(L.length&&(M.time-L[0].t>RECAP_WIN||L.length>240))L.shift();
     if(src&&!o.dot&&src.kind!=='hero'&&M.emod.has('bleed')&&!t.st.bleed)t.st.bleed={dps:5,t:3,acc:0,src}}
   fx(M,{t:'dmg',x:r2(t.x),z:r2(t.z),a:amt,s:src?src.id:0,g:t.id,o:o.dot?1:0,c:o.color??0xffffff});
   if(src&&!o.dot&&!o.noThorn&&src!==t){
@@ -169,9 +176,10 @@ function kill(M,t,src){
   const k=src||(t.lastHit&&M.time-t.lastHitT<6?t.lastHit:null);
   fx(M,{t:'death',x:r2(t.x),z:r2(t.z),g:t.id});
   if(t.kind==='hero'){
-    t.respawn=M.elim?1e9:M.D.pvp?5+Math.min(4,t.deaths*.4):6+Math.min(4,t.deaths*.5);
+    deathRecap(M,t,k);
+    t.respawn=(M.elim?1e9:M.D.pvp?5+Math.min(4,t.deaths*.4):6+Math.min(4,t.deaths*.5))*(M.emod.has('rapid')?.5:1);
     if(k&&k.team!==t.team&&k.kind==='hero'){k.kills++;k.ult=Math.min(100,k.ult+15);echoReset(M,k)}
-    if(M.mode==='arena'||M.mode==='duel'){if(k&&k.team!==t.team)M.score[k.team]++;else M.score[1-t.team]++}
+    if(arenaLike(M.mode)||M.mode==='duel'){if(k&&k.team!==t.team)M.score[k.team]++;else M.score[1-t.team]++}
     if(!M.D.pvp){M.lives=Math.max(0,M.lives-1);if(M.lives<=0&&M.state==='play')endMatch(M,1)}
     fx(M,k&&k.team!==t.team?{t:'feed',k:'kill',a:k.id,b:t.id}:{t:'feed',k:'field',b:t.id});
   }else{
@@ -186,6 +194,18 @@ function kill(M,t,src){
     }
   }
   checkWin(M);
+}
+// Death recap, sent only to the fallen hero's player: damage taken in the last RECAP_WIN seconds per attacker
+// (direct hits, ultimates, damage over time; the arena itself as id 0) and how much health the killer had left.
+export const RECAP_WIN=10;
+function deathRecap(M,t,k){
+  const by=new Map();
+  for(const e of t.dlog||[])if(M.time-e.t<=RECAP_WIN){const r=by.get(e.s)||{h:0,u:0,d:0};r[e.k]+=e.a;by.set(e.s,r)}
+  t.dlog=[];
+  const src=[...by].map(([id,r])=>{const u=id?M.units.find(x=>x.id===id):null;
+    return{i:id,n:u?u.name:'',c:u?.kind==='hero'?u.clsKey:null,b:u?.kind==='boss'?u.key:null,tm:u?u.team:-1,h:Math.round(r.h),u:Math.round(r.u),d:Math.round(r.d)}})
+    .sort((a,b)=>b.h+b.u+b.d-(a.h+a.u+a.d)).slice(0,5);
+  fx(M,{t:'recap',only:t.id,k:k?k.id:0,kh:k&&!k.dead?[Math.ceil(k.hp),k.maxHp]:null,src});
 }
 function echoReset(M,k){
   if(!k.pass.has('echo'))return;let i=0;for(let j=1;j<3;j++)if(k.cds[j]>k.cds[i])i=j;
@@ -985,7 +1005,7 @@ function updRelic(M,dt){
   const R=M.relic;if(R.state==='off')return;
   if(R.state==='wait'){R.t-=dt;if(R.t<=0){R.state='up';fx(M,{t:'relicUp'})}}
   else for(const u of M.units){if(u.dead||u.kind!=='hero'||Math.hypot(u.x,u.z)>1.7)continue;
-    R.state='wait';R.t=RELIC_EVERY;u.st.relic=20;u.relics++;M.score[u.team]++;
+    R.state='wait';R.t=RELIC_EVERY*(M.emod.has('relic')?.5:1);u.st.relic=20;u.relics++;M.score[u.team]++;
     if(u.clsKey==='guardian')u.shield=Math.min(maxShield(u)+150,u.shield+150);
     fx(M,{t:'feed',k:'relic',a:u.id});checkWin(M);break}
 }
@@ -1095,7 +1115,8 @@ function updLoot(M,dt){
 export function step(M,dt=TICK){
   if(M.state==='end')return;
   M.time+=dt;
-  if(M.state==='countdown'){M.countdown-=dt;if(M.countdown<=0)M.state='play'}
+  if(M.state==='countdown'){M.countdown-=dt;if(M.countdown<=0){M.state='play';
+    if(M.D.mutators)fx(M,{t:'ban',ti:'Mutace týdne',sub:[...M.emod].map(k=>MUTATORS[k]?.name).join(' + '),col:'var(--gold)',d:3.5})}}
   else if(M.state==='play'){M.timeLeft-=dt;if(M.timeLeft<=0){endMatch(M,M.D.pvp?undefined:1);return}}
   for(let i=M.timers.length-1;i>=0;i--){const T=M.timers[i];T.t-=dt;if(T.t<=0){M.timers.splice(i,1);T.fn()}}
   M.danger=M.danger.filter(g=>g.until>M.time);
@@ -1139,5 +1160,5 @@ export function snapshotFor(M,uid,events){
     lt:M.loot.filter(L=>L.owner===uid).map(L=>[L.id,r2(L.x),r2(L.z),L.item.r]),
     me:me?{i:me.id,e:Math.floor(me.energy),u:Math.floor(me.ult),c:me.cds.map(c=>Math.round(c*10)/10),am:me.ambush>0?1:0,rt:Math.ceil(me.st.relic),q:me.lastSeq,
       x:me.x,z:me.z,vx:me.vx,vz:me.vz,ss:[me.st.slow,me.st.stun,me.st.cloak],spd:r2(speedOf(me)),bag:me.bag.length,sk:me.prof.skills,dr:me.drive?.n||0,tc:[me.tactic,Math.round(me.tcd*10)/10],nn:me.st.nanite?me.st.nanite.hits:0}:null,
-    ev:events.filter(e=>!(e.g&&me&&e.t!=='death'&&e.t!=='spawn'&&e.t!=='loot'&&!vis(M.units.find(u=>u.id===e.g)||me))&&!(e.t==='loot'&&e.g!==uid))};
+    ev:events.filter(e=>!(e.g&&me&&e.t!=='death'&&e.t!=='spawn'&&e.t!=='loot'&&!vis(M.units.find(u=>u.id===e.g)||me))&&!(e.t==='loot'&&e.g!==uid)&&!(e.only&&e.only!==uid))};
 }

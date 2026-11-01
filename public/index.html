@@ -113,6 +113,15 @@ button:disabled{opacity:.45;cursor:default}
 .tip b{display:block;color:var(--gold);font-weight:600}
 #dead{position:fixed;top:42%;left:0;right:0;text-align:center;font-family:var(--display);font-size:26px;letter-spacing:.1em;text-transform:uppercase;color:var(--red);text-shadow:0 0 18px rgba(255,63,142,.6);pointer-events:none}
 #dead b{color:var(--ink)}
+#recap{position:fixed;top:calc(42% + 48px);left:50%;transform:translateX(-50%);width:min(420px,calc(100vw - 32px));box-sizing:border-box;pointer-events:none;
+  background:rgba(8,10,20,.82);border:1px solid var(--line);border-radius:3px;padding:12px 14px;display:grid;gap:6px;font-size:13px}
+#recap p{margin:0}#recap .lbl{margin:0}#recap small{color:var(--muted)}
+#recap b.t0{color:var(--blue)}#recap b.t1{color:var(--red)}
+#recap .rr{display:grid;grid-template-columns:minmax(0,1.3fr) 1fr 44px;gap:8px;align-items:center}
+#recap .rr>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}#recap .rr>b{text-align:right}
+#recap .rb{display:flex;height:6px;background:rgba(255,255,255,.08);border-radius:3px;overflow:hidden}
+#recap em{display:block;height:100%}#recap em.h{background:#ff5d6c}#recap em.u{background:var(--gold)}#recap em.d{background:#c08bff}
+#recap .rl{display:flex;flex-wrap:wrap;gap:12px;color:var(--muted);font-size:12px}#recap .rl span{display:flex;align-items:center;gap:5px}#recap .rl em{width:10px;height:6px;border-radius:2px}
 #pauseBtn{position:fixed;right:var(--gr);bottom:var(--gb);width:40px;height:40px;background:var(--panel);border:1px solid var(--line);border-radius:3px;font-weight:600}
 #board{position:fixed;inset:0;display:grid;place-items:center;pointer-events:none;padding:0 var(--gr) 0 var(--gl)}
 #board .inner{background:var(--panel);border:1px solid var(--line);padding:16px 20px;border-radius:3px;max-width:100%;overflow-x:auto}
@@ -566,6 +575,7 @@ body.touch #tut p{font-size:12.5px}
     <div id="slots"></div>
   </div>
   <div id="dead" hidden>Zničen · obnova za <b id="deadT">5</b> s</div>
+  <div id="recap" hidden role="status"></div>
   <div id="touch" hidden><div id="stick"><i></i></div><button id="tAtk" type="button">Útok</button></div>
   <button id="pauseBtn" type="button" aria-label="Menu zápasu">II</button>
   <div id="tut" hidden></div>

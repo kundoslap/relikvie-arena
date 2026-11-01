@@ -28,6 +28,17 @@ Proměnné prostředí:
 - **Aréna** — 3 proti 3, body za zničení a relikvii ve středu, vyhrává 20.
 - **Ovládnutí** — 3 proti 3 o body A, B, C. Držený bod přidává skóre, vyhrává 100.
 - **Únos relikvie** — 3 proti 3 ve vlastní aréně **Pevnost relikvií**: bludiště zdí se třemi propojenými cestami (sever, střed, jih) bez slepých uliček, zrcadlově souměrné pro oba týmy. Každý tým má relikvii v pevnosti, jejíž zeď míří do středu a brány jsou ze stran a zezadu. Dotykem soupeřovu relikvii sebereš (nositel je o 15 % pomalejší, nemůže se maskovat a je vidět na minimapě); bod dostaneš, když ji doneseš ke své relikvii, která musí být doma. Když nositel padne, relikvie leží a tým, kterému patří, ji dotykem vrátí, jinak se vrátí sama po 15 s. Vyhrávají 3 únosy. Boti kradou, nosí, honí nositele, vracejí relikvii a jeden brání.
+- **Mutace týdne** — 3 proti 3 podle pravidel Arény (body za zničení, relikvie ve středu, vyhrává 20) na mapách Neonové jádro, Rezavá kovárna, Ledový archiv a Hvězdná observatoř. Platí v ní dvě mutace, které se mění každé pondělí (podle čísla týdne, pro všechny stejně). Možné mutace:
+  - Rychlé čekání: −25 % čekání;
+  - Přebití: +50 % obnovy energie;
+  - Zrychlení: +20 % rychlosti;
+  - Ultimátní nával: ultimátky se nabíjejí dvakrát rychleji;
+  - Skleněná děla: −35 % HP;
+  - Upíří krev: přímé zásahy léčí útočníka o 12 % poškození;
+  - Rychlý návrat: poloviční oživení;
+  - Relikviová horečka: relikvie dvakrát častěji.
+
+  Mutace tohoto týdne jsou vidět na kartě režimu, v místnosti, v banneru po odpočtu a v HUD pod časem relikvie. Výhra se počítá i do cíle „Vyhraj zápas v Aréně“.
 - **Eliminace** — 3 proti 3 na kola bez oživení (mapy Neonové jádro, Rezavá kovárna, Ledový archiv). Kolo vyhrává tým, který zůstane stát, oba týmy padlé najednou znamenají remízu kola. Po 40 s se aréna začne zmenšovat (za 45 s až do středu) a mimo kruh hrdinové ztrácejí 8 % maximálního zdraví za sekundu, takže každé kolo skončí. Kruh ukazuje červená stěna v aréně a minimapa, nad skóre je číslo kola, kdo z obou týmů ještě stojí a odpočet do zmenšování. Mezi koly je 4 s pauza (přeživší jsou nezranitelní), pak se všichni vrátí na základny s plnými životy a ultimátka se přenáší. Vyřazený hráč sleduje kamerou spoluhráče, který ještě žije. Vyhrávají 4 kola. Boti se drží uvnitř kruhu. Kdo se připojí místo bota, který už v kole padl, nastoupí až v dalším kole. V testech botů kolo trvá průměrně 23 s, zápas kolem 3 min a strany vyhrávají vyrovnaně.
 - **Souboj** — 1 proti 1, vyhrává, kdo první pětkrát zničí soupeře.
 - **Lov bosse** — kooperace až 4 hráčů (zbytek doplní boti) proti jednomu z deseti bossů. Tým má společné životy.
@@ -39,6 +50,14 @@ Proměnné prostředí:
 **Povolání:** Lovec (nápor a přesnost), Strážce (výdrž a obrana), Technik (energie a obnova) a **Žhář** (oheň a kontrola prostoru). Žhář střílí žhavé projektily, které zapalují (hoření 6 HP/s), má Plamennou vlnu (kužel ohně do 6 m s hořením), Žhnoucí půdu (hořící oblast 3,5 m na 4 s), Fázový plamen (přesun o 7 m, za sebou nechá oheň) a ultimátku Inferno (tři výbuchy ohně kolem sebe do 7 m). Jeho relikvie zdvojnásobí hoření a zvětší ohnivé oblasti. Hoření odstraní Dekontaminace a Obnova. Strom má větve Výheň, Popel a Inferno, vzhledy Uhlíková maska, Modrý plamen, relikviový a neonový z průkazu. V soubojích botů 1 na 1 vychází Žhář zhruba na 50 % výher.
 
 **Sledování zápasů přátel:** když přítel hraje (kromě hodnocené hry), v seznamu přátel je tlačítko Sledovat. Divák vidí zápas živě pohledem sledovaného hráče (jeho zdraví, schopnosti, mlhu války i týmové pingy), klávesami Q/E nebo šipkami v liště přepíná mezi hrdiny a na konci uvidí výsledek. Divák nemůže hrát ani pingovat, nepočítá se mezi hráče a místnost jich unese nejvýš 8. Sledovat můžou jen přihlášení přátelé.
+
+**Rozbor smrti:** když tvůj hrdina padne, pod nápisem Zničen se ukáže, kdo tě za posledních 10 s jak zasáhl:
+- kdo tě dorazil a kolik životů mu zbylo;
+- až pět útočníků s povoláním (u bosse „boss“) a součtem poškození;
+- pruh rozdělený na přímé zásahy, ultimátku a poškození v čase;
+- poškození od prostředí (láva, kruh Eliminace, cizí základna).
+
+Rozbor dostane jen padlý hráč (případně divák, který ho sleduje), ostatním se neposílá. Zmizí po oživení, v Eliminaci po 9 s.
 
 **Pingy a rychlé zprávy:** klávesa G položí ping tam, kam míříš: „Sem“, a když míříš na soupeře, „Útok na…“ (značka ho sleduje); Alt+G je varování „Pozor“. Ping vidí jen tvůj tým, v aréně i na minimapě, se zvukem. Klávesa V otevře rychlé zprávy (1–7: Útok!, Ustupte!, Potřebuju pomoc!, Bráním!, Díky!, Dobrá hra!, Haha!), které se ukážou bublinou nad hlavou všem. Boti v týmu na pingy reagují: jdou na označené místo, útočí na označeného soupeře a z varování ustoupí. Na mobilu jsou tlačítka Ping a Zprávy, klávesy jdou přemapovat v Nastavení. Nejvýš 6 signálů za 8 s.
 

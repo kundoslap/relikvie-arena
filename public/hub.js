@@ -185,7 +185,7 @@ function tabPlay(){
     ${H.profile?.loginView?.can?loginPanel():''}
     <section class="panel"><h3>Povolání</h3>${classCards()}${classDetail(H.cls)}</section>
     <section class="panel"><h3>Režim</h3>
-      <div class="modes">${Object.entries(D.MODES).map(([k,m])=>`<button type="button" class="mc" data-mode="${k}" aria-pressed="${k===P.mode}"><span class="tag">${m.pvp?`PVP · ${m.team||3} PROTI ${m.team||3}`:'KOOPERACE · AŽ 4'}</span><b>${m.name}</b><small>${m.desc}</small></button>`).join('')}</div>
+      <div class="modes">${Object.entries(D.MODES).map(([k,m])=>`<button type="button" class="mc" data-mode="${k}" aria-pressed="${k===P.mode}"><span class="tag">${m.pvp?`PVP · ${m.team||3} PROTI ${m.team||3}`:'KOOPERACE · AŽ 4'}</span><b>${m.name}</b><small>${m.desc}${m.mutators?`<br><span style="color:var(--gold)">Tento týden: ${D.mutatorsOfWeek().map(x=>D.MUTATORS[x].name).join(' + ')}</span>`:''}</small></button>`).join('')}</div>
       <div><div class="lbl">Mapa</div><div class="chips">${M.maps.map(k=>`<button type="button" class="chip" data-map="${k}" aria-pressed="${k===P.map}">${D.MAPS[k].name}<small>${D.MAPS[k].desc}</small></button>`).join('')}</div></div>
       ${P.mode==='boss'?`<div><div class="lbl">Boss</div><div class="chips">${Object.entries(D.BOSSES).map(([k,b])=>`<button type="button" class="chip" data-boss="${k}" aria-pressed="${k===P.boss}">${b.name} · ${b.title}<small>${b.desc}</small></button>`).join('')}</div></div>`:''}
       <div><div class="lbl">Obtížnost</div><div class="seg" id="pDiff">${[['easy','Lehká'],['normal','Normální'],['hard','Těžká']].map(([k,n])=>`<button type="button" data-d="${k}" aria-pressed="${k===P.diff}">${n}</button>`).join('')}</div>
