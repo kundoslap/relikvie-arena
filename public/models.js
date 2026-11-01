@@ -50,6 +50,16 @@ export function buildHero(k,team,skinKey){
     box(body,.42,.42,.42,armor,0,2.08,0);box(body,.36,.07,.04,glow,0,2.1,.22);headY=2.08;
     box(armL,.1,1.05,.8,dark,-.14,-.45,.16);box(armL,.11,.06,.66,glow,-.15,-.06,.16);box(armL,.11,.06,.66,glow,-.15,-.86,.16);
     const em=mesh(armL,new THREE.OctahedronGeometry(.14),glow,-.2,-.45,.16);em.scale.set(.4,1,1);
+  }else if(k==='pyro'){
+    // Žhář: armored torso, two fuel tanks on the back, a burner on the right arm and a visor mask
+    box(body,.6,.66,.4,armor,0,1.38,0);box(body,.44,.05,.04,glow,0,1.5,.21);box(body,.3,.05,.04,glow,0,1.3,.21);
+    for(const s of [-1,1]){const tk=mesh(body,new THREE.CylinderGeometry(.13,.13,.62,12),dark,s*.17,1.42,-.32);
+      mesh(body,new THREE.CylinderGeometry(.135,.135,.06,12),glow,s*.17,1.62,-.32);mesh(body,new THREE.SphereGeometry(.13,10,8),armor,s*.17,1.74,-.32);tk.userData.tank=1}
+    box(body,.34,.36,.34,armor,0,1.95,0);box(body,.28,.1,.04,glow,0,1.97,.18);box(body,.12,.12,.06,dark,0,1.86,.19);
+    for(const s of [-1,1])box(body,.3,.12,.38,armor,s*.38,1.74,0).rotation.z=s*-.3;
+    mesh(armR,new THREE.CylinderGeometry(.07,.11,.5,10),dark,0,-.8,.28).rotation.x=Math.PI/2;
+    mesh(armR,new THREE.TorusGeometry(.09,.025,6,16),glow,0,-.8,.54);
+    box(armR,.22,.14,.28,armor,0,-.72,.05);
   }else{
     mesh(body,new THREE.CylinderGeometry(.34,.26,.72,8),armor,0,1.4,0);
     mesh(body,new THREE.CylinderGeometry(.36,.28,.36,8,1,true),dark,0,1.9,0);

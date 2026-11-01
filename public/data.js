@@ -25,8 +25,18 @@ export const CLASSES={
             {name:'Obnova',cost:30,cd:10,icon:'heal',desc:'Spojenci do 7,5 m léčí 22 HP/s po 3 s a zbaví se krvácení.'},
             {name:'EMP',cost:30,cd:9,icon:'emp',desc:'Výboj v místě: 110 % TECH, −40 energie, umlčení 1,6 s.'}],
     ult:{name:'Řetězový výboj',icon:'chain',desc:'Blesk přeskočí až na 5 cílů, každý zásah 160 % TECH.'},
-    relic:'Relikvie ozvěny: energie ×1,8 a čekání −30 % na 20 s.',bars:[.55,.45,1,.75]}
+    relic:'Relikvie ozvěny: energie ×1,8 a čekání −30 % na 20 s.',bars:[.55,.45,1,.75]},
+  pyro:{name:'Žhář',role:'Oheň a kontrola prostoru',color:0xff6a1a,css:'#ff6a1a',hp:275,speed:8.8,def:.12,atk:28,tech:36,pref:9,
+    talent:'Popel',talentDesc:'Základní útok zapálí cíl: hoření 6 HP/s na 3 s.',
+    basic:{type:'shot',name:'Žhavý projektil',dmg:19,rate:.4,speed:36,range:19,size:1.6},
+    skills:[{name:'Plamenná vlna',cost:30,cd:7,icon:'flame',desc:'Vlna ohně do 6 m před tebou: 110 % TECH a hoření 8 HP/s na 3 s.'},
+            {name:'Žhnoucí půda',cost:30,cd:10,icon:'firezone',desc:'Hořící oblast 3,5 m na 4 s: 45 % TECH za sekundu.'},
+            {name:'Fázový plamen',cost:25,cd:9,icon:'blink',desc:'Přesun až o 7 m. Na výchozím místě zůstane hořící oblast 2,5 m na 3 s.'}],
+    ult:{name:'Inferno',icon:'inferno',desc:'Tři výbuchy ohně kolem tebe do 7 m, každý 90 % TECH, a hoření 12 HP/s na 4 s.'},
+    relic:'Relikvie výhně: hoření dává dvojnásobné poškození a ohnivé oblasti jsou o polovinu větší na 20 s.',bars:[.6,.55,.85,.7]}
 };
+// burning (from the Žhář): damage over time, removed by Decontamination and Restore like bleeding
+export const BURN={talent:{dps:6,t:3},wave:{dps:10,t:3},ult:{dps:12,t:4}};
 export const CLASS_KEYS=Object.keys(CLASSES);
 
 // ---------- progression ----------
@@ -143,7 +153,13 @@ export const SKINS={
     {k:'violet',name:'Fialový obvod',armor:0x2b2045,glow:0xe27dff,acc:'antenna',req:{level:5}},
     {k:'frost',name:'Mrazivý archivář',armor:0x8fa8bf,glow:0x9ffcff,acc:'cape',req:{credits:900}},
     {k:'relic',name:'Relikviový technik',armor:0x2a2410,glow:0xffe08a,acc:'crown',req:{drop:true}},
-    {k:'pass',name:'Neonový obvod',armor:0x0c1222,glow:0x8f7dff,acc:'antenna',req:{pass:true}}]
+    {k:'pass',name:'Neonový obvod',armor:0x0c1222,glow:0x8f7dff,acc:'antenna',req:{pass:true}}],
+  pyro:[
+    {k:'default',name:'Základní',armor:0x3a2a24,glow:0xff6a1a,acc:null},
+    {k:'ember',name:'Uhlíková maska',armor:0x1c1416,glow:0xff3355,acc:'horns',req:{level:5}},
+    {k:'blue',name:'Modrý plamen',armor:0x1e2a40,glow:0x4fb4ff,acc:'hood',req:{credits:900}},
+    {k:'relic',name:'Relikviový žhář',armor:0x2a2410,glow:0xffe08a,acc:'crown',req:{drop:true}},
+    {k:'pass',name:'Neonová výheň',armor:0x0c1222,glow:0xffe14f,acc:'crest',req:{pass:true}}]
 };
 export const skinOf=(k,s)=>SKINS[k]?.find(x=>x.k===s)||SKINS[k]?.[0];
 export function skinOwned(p,k,s){const d=skinOf(k,s);if(!d||d.k!==s)return false;if(!d.req)return true;
@@ -211,6 +227,26 @@ export const TREES={
       {id:'a3',name:'Delší řetěz',max:3,fx:{chain:1},desc:'Řetězový výboj přeskočí na jeden cíl navíc.'},
       {id:'a4',name:'Přetaktování',max:3,fx:{ult:6},desc:'Ultimátka se nabíjí o 6 % rychleji.'},
       {id:'a5',name:'Přetížení',max:1,fx:{overload:1},desc:'EMP umlčí o 1 s déle a způsobí o 40 % víc.'}]}
+  ],
+  pyro:[
+    {k:'blaze',name:'Výheň',desc:'Hoření a plamenná vlna.',nodes:[
+      {id:'f1',name:'Žár',max:3,fx:{tech:3},desc:'+3 % TECH.'},
+      {id:'f2',name:'Spalování',max:3,fx:{burnDps:15},desc:'Hoření dává o 15 % víc poškození.'},
+      {id:'f3',name:'Dlouhý žár',max:3,fx:{burnT:.5},desc:'Hoření trvá o 0,5 s déle.'},
+      {id:'f4',name:'Široká vlna',max:3,fx:{waveR:.7},desc:'Plamenná vlna dosáhne o 0,7 m dál.'},
+      {id:'f5',name:'Spáleniště',max:1,fx:{waveZone:1},desc:'Plamenná vlna nechá na konci hořící oblast 2,5 m na 3 s.'}]},
+    {k:'ash',name:'Popel',desc:'Výdrž a pohyb.',nodes:[
+      {id:'h1',name:'Žáruvzdorná vrstva',max:3,fx:{hp:4},desc:'+4 % maximálního HP.'},
+      {id:'h2',name:'Tavená zbroj',max:3,fx:{def:1.5},desc:'+1,5 bodu obrany.'},
+      {id:'h3',name:'Pohlcení',max:3,fx:{leech:2},desc:'Vysaješ 2 % způsobeného poškození.'},
+      {id:'h4',name:'Plamenný štít',max:3,fx:{blinkSh:20},desc:'Fázový plamen ti dá štít 20 za úroveň.'},
+      {id:'h5',name:'Fénixův krok',max:1,fx:{blinkCd:1},desc:'Fázový plamen má čekání o 3 s kratší a doletí o 2 m dál.'}]},
+    {k:'inferno',name:'Inferno',desc:'Oblasti a ultimátka.',nodes:[
+      {id:'i1',name:'Rozžhavení',max:3,fx:{atk:3,tech:2},desc:'+3 % útok a +2 % TECH.'},
+      {id:'i2',name:'Velká výheň',max:3,fx:{fireR:.4},desc:'Ohnivé oblasti jsou o 0,4 m větší.'},
+      {id:'i3',name:'Palivo',max:3,fx:{fireDps:15},desc:'Ohnivé oblasti dávají o 15 % víc poškození.'},
+      {id:'i4',name:'Rozdmýchání',max:3,fx:{ult:7},desc:'Ultimátka se nabíjí o 7 % rychleji.'},
+      {id:'i5',name:'Ohnivá smršť',max:1,fx:{infernoPull:1},desc:'Inferno si první výbuch přitáhne soupeře o 2 m k sobě.'}]}
   ]
 };
 export function treeSpent(alloc){return Object.values(alloc||{}).reduce((a,b)=>a+(b|0),0)}
@@ -290,7 +326,8 @@ export const PASSIVES={
 export const ULT_MODS={
   striker:{name:'Bouřkové oko',desc:'Blesky Bouřového průrazu zpomalí zasažené o 40 % na 2 s.'},
   guardian:{name:'Otřesová vlna',desc:'Titánův val si před omráčením přitáhne soupeře o 2 m blíž a má dosah +1 m.'},
-  technician:{name:'Statický řetěz',desc:'Každý zásah Řetězového výboje umlčí cíl na 1 s.'}
+  technician:{name:'Statický řetěz',desc:'Každý zásah Řetězového výboje umlčí cíl na 1 s.'},
+  pyro:{name:'Spalující jádro',desc:'Inferno má o 2 m větší dosah a vybuchne čtyřikrát.'}
 };
 // Taktické akce: one universal action on T for every class, chosen in the profile
 export const TACTICS={
@@ -301,7 +338,7 @@ export const TACTICS={
   barrier:{name:'Polní bariéra',lvl:12,cd:26,icon:'bulwark',desc:'Štít ve výši 22 % tvého maximálního HP.'}
 };
 export const TACTIC_KEYS=Object.keys(TACTICS);
-export const BOT_TACTIC={striker:'dodge',guardian:'barrier',technician:'decon'};
+export const BOT_TACTIC={striker:'dodge',guardian:'barrier',technician:'decon',pyro:'dodge'};
 const classSkillIds=['c0','c1','c2'];
 // All skills a player may slot for a class at a given profession state.
 export function availableSkills(p,k){

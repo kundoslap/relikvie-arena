@@ -1,0 +1,20 @@
+{
+  "name": "Relikvie Aréna",
+  "short_name": "Relikvie",
+  "description": "Neonová aréna 3 proti 3, kooperace proti bossům, hodnocená hra, klany a sezónní průkaz.",
+  "lang": "cs",
+  "id": "/",
+  "start_url": "/?source=app",
+  "scope": "/",
+  "display": "fullscreen",
+  "display_override": ["fullscreen", "standalone"],
+  "orientation": "any",
+  "background_color": "#04060c",
+  "theme_color": "#04060c",
+  "categories": ["games"],
+  "icons": [
+    {"src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+    {"src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+    {"src": "icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}
+  ]
+}

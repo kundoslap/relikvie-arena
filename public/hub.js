@@ -25,7 +25,12 @@ const ICONS={
   pulse:'<circle cx="16" cy="16" r="4"/><circle cx="16" cy="16" r="9"/><circle cx="16" cy="16" r="14" stroke-dasharray="4 3"/>',
   bulwark:'<path d="M6 8h20v8c0 6-5 10-10 12-5-2-10-6-10-12Z M11 14h10M11 19h10"/>',patch:'<path d="M8 12l12 12M12 8l12 12M6 18l8 8M18 6l8 8"/>',
   intercept:'<path d="M4 24 14 14M14 14h-6M14 14v6"/><path d="M18 6h8v8l-4 6h-8v-8Z"/>',
-  striker:'<path d="M6 27 25 8M15 8h10v10M9 7l4 5M24 23l4 4"/>',guardian:'<path d="M7 6h18v12l-9 9-9-9Z M11 12h10M16 12v11"/>',technician:'<rect x="9" y="9" width="14" height="14" rx="2"/><path d="M13 4v5M19 4v5M13 23v5M19 23v5M4 13h5M4 19h5M23 13h5M23 19h5"/>'
+  striker:'<path d="M6 27 25 8M15 8h10v10M9 7l4 5M24 23l4 4"/>',guardian:'<path d="M7 6h18v12l-9 9-9-9Z M11 12h10M16 12v11"/>',technician:'<rect x="9" y="9" width="14" height="14" rx="2"/><path d="M13 4v5M19 4v5M13 23v5M19 23v5M4 13h5M4 19h5M23 13h5M23 19h5"/>',
+  pyro:'<path d="M16 3c2 5 8 8 8 15a8 8 0 0 1-16 0c0-4 2-6 4-8 0 3 1 5 3 5-1-4 0-9 1-12Z"/><path d="M13 22a3 3 0 0 0 6 0c0-2-1-3-3-5-2 2-3 3-3 5Z"/>',
+  flame:'<path d="M4 16c4-1 6-5 9-5M4 16c4 1 6 5 9 5M13 11c5 0 9 2 15 5-6 3-10 5-15 5"/><path d="M18 14l3 2-3 2"/>',
+  firezone:'<ellipse cx="16" cy="23" rx="12" ry="4"/><path d="M11 21c0-4 2-5 2-9 2 2 3 4 3 6 1-2 1-4 0-7 3 3 5 6 5 10"/>',
+  blink:'<path d="M4 24h7M6 19h5" stroke-dasharray="2 2"/><path d="M14 22 26 10M20 9h7v7"/><circle cx="12" cy="24" r="2"/>',
+  inferno:'<circle cx="16" cy="16" r="4"/><path d="M16 2c1 3 3 4 3 7M30 16c-3 1-4 3-7 3M16 30c-1-3-3-4-3-7M2 16c3-1 4-3 7-3M6 6c3 1 4 3 5 5M26 26c-3-1-4-3-5-5M26 6c-1 3-3 4-5 5M6 26c1-3 3-4 5-5"/>'
 };
 export const svg=k=>`<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[k]}</svg>`;
 const hex=c=>'#'+c.toString(16).padStart(6,'0');
@@ -109,7 +114,7 @@ export function renderHub(){
     <div class="btns"><div class="cred">${num(p.credits)} <small>KREDITŮ</small></div>${sndBtn()}<button class="ghost sm" id="logoutBtn" type="button">Odhlásit</button></div>`
     :`<div class="who"><div class="nick">${H.offline?'Offline trénink':'Host'}</div><small class="help">${H.offline?'Postup se neukládá.':'Bez účtu se postup neukládá.'}</small></div>
     <div class="btns">${sndBtn()}${H.offline?'':'<button class="ghost sm" id="loginBtn" type="button">Přihlásit nebo založit účet</button>'}</div>`;
-  $('#cfgBtn').onclick=()=>Cfg.open();
+  $('#cfgBtn').onclick=()=>Cfg.open();bindAppBtn();
   $('#sndBtn').onclick=()=>{const P=$('#sndPop');P.hidden=!P.hidden;if(!P.hidden){P.innerHTML=Snd.panelHTML();Snd.bindPanel(P)}};
   $('#logoutBtn')&&($('#logoutBtn').onclick=logout);
   $('#loginBtn')&&($('#loginBtn').onclick=()=>{H.guest=false;showAuth()});
@@ -119,7 +124,18 @@ export function renderHub(){
   if(H.tab!=='hero')H.cb.preview(null);
   ({play:tabPlay,campaign:tabCampaign,goals:tabGoals,hero:tabHero,prof:tabProf,inv:tabInv,tree:tabTree,market:tabMarket,shop:tabShop,forge:tabForge,mastery:tabMastery,friends:tabFriends,guild:tabGuild,ach:tabAch,pass:tabPass,mod:tabMod,stats:tabStats,top:tabTop})[H.tab]();
 }
-const sndBtn=()=>`<button class="ghost sm" id="sndBtn" type="button" aria-label="Nastavení zvuku">${Snd.settings().mute?'Zvuk ✕':'Zvuk'}</button><button class="ghost sm" id="cfgBtn" type="button">Nastavení</button>`;
+// ---------- installable app ----------
+// Chrome and Edge offer an install prompt; iPhone Safari needs Share → Add to Home Screen, so it gets a hint instead
+let installEvt=null;
+const standalone=()=>matchMedia('(display-mode: standalone), (display-mode: fullscreen)').matches||navigator.standalone===true;
+const isIOS=/iPhone|iPad|iPod/.test(navigator.userAgent)&&!window.MSStream;
+addEventListener('beforeinstallprompt',e=>{e.preventDefault();installEvt=e;if(!$('#hub').hidden)renderHub()});
+addEventListener('appinstalled',()=>{installEvt=null;toast('Relikvie je nainstalovaná. Najdeš ji mezi aplikacemi.');if(!$('#hub').hidden)renderHub()});
+const appBtn=()=>standalone()?'':installEvt||isIOS?'<button class="go sm" id="appBtn" type="button">Nainstalovat</button>':'';
+function bindAppBtn(){const b=$('#appBtn');if(!b)return;b.onclick=async()=>{
+  if(installEvt){installEvt.prompt();const r=await installEvt.userChoice.catch(()=>null);if(r?.outcome==='accepted')installEvt=null;renderHub()}
+  else toast('Na iPhonu: v Safari klepni na Sdílet a pak na „Přidat na plochu“.')}}
+const sndBtn=()=>`${appBtn()}<button class="ghost sm" id="sndBtn" type="button" aria-label="Nastavení zvuku">${Snd.settings().mute?'Zvuk ✕':'Zvuk'}</button><button class="ghost sm" id="cfgBtn" type="button">Nastavení</button>`;
 Snd.onChange(()=>{const b=$('#sndBtn');if(b)b.textContent=Snd.settings().mute?'Zvuk ✕':'Zvuk'});
 // the sound popover closes on a click elsewhere and whenever the hub is left
 document.addEventListener('pointerdown',e=>{const P=$('#sndPop');if(P&&!P.hidden&&!P.contains(e.target)&&e.target.id!=='sndBtn')P.hidden=true});

@@ -213,7 +213,7 @@ const nearMe=(e,r=12)=>{const p=myPos();return Math.hypot(e.x-p.x,e.z-p.z)<r};
 const sfx=(name,pos,o)=>{if(G.mode!=='menu')Snd.play(name,pos,o)};
 const ui=(name,o={})=>sfx(name,null,{...o,ui:true});
 // basic attacks and casts: pitch by class, melee swings, heavier shots for NPCs and bosses; your own are louder
-const CLS_F={striker:900,guardian:520,technician:1250,hunter:780,shade:1050};
+const CLS_F={striker:900,guardian:520,technician:1250,pyro:620};
 function atkSound(e,v){
   const mine=e.i===G.you,o={key:e.i,gap:.05,vol:mine?1:.55};
   if(e.s===3)return sfx('ult',v,{...o,f:(CLS_F[v.k]||700)/4,gap:.3,vol:mine?1:.8});
@@ -333,7 +333,7 @@ function newLocalMatch(o,humanClass){
   const M=S.createMatch(o),names=[...S.BOT_NAMES].sort(()=>Math.random()-.5),pvp=M.D.pvp;let you=0;
   for(const team of pvp?[0,1]:[0]){const used=[];
     if(team===0&&humanClass){you=S.addUnit(M,humanClass,0,'human',o.name||'Ty').id;used.push(humanClass)}
-    while(used.length<S.teamSize(M.mode)){const k=S.CLASS_KEYS.find(x=>!used.includes(x))||S.CLASS_KEYS[used.length%3];used.push(k);S.addUnit(M,k,team,'bot',names.pop())}}
+    while(used.length<S.teamSize(M.mode)){const free=S.CLASS_KEYS.filter(x=>!used.includes(x)),pool=free.length?free:S.CLASS_KEYS,k=pool[Math.floor(Math.random()*pool.length)];used.push(k);S.addUnit(M,k,team,'bot',names.pop())}}
   S.startMatch(M);
   G.M=M;G.acc=0;G.you=you;G.rosterVer=M.rosterVer;setInfo(S.matchInfo(M));onRoster(S.roster(M));
   return M;
@@ -627,7 +627,7 @@ function drawHUD(){
     $('#hpFill').style.width=(mv.h/mv.mh*100)+'%';$('#shFill').style.width=Math.min(100,mv.s/mv.mh*100)+'%';
     setTxt('hpText',`${Math.max(0,Math.ceil(mv.h))} / ${mv.mh}${mv.s>1?` · štít ${Math.round(mv.s)}`:''}`);
     $('#enFill').style.width=me.e+'%';setTxt('enText',`energie ${me.e}`);
-    const f=mv.fl,tags=[];if(me.rt>0)tags.push(`relikvie ${me.rt} s`);if(me.dr)tags.push(`průnik ×${me.dr}`);if(f&32)tags.push('maskování');if(me.am)tags.push('přepad');if(f&1)tags.push('omráčen');if(f&2)tags.push('umlčen');if(f&8)tags.push('zpomalen');if(f&4)tags.push('krvácíš');if(f&1024)tags.push('BŘEMENO · uteč od týmu');if(f&2048)tags.push(`mor nanitů · ${me.nn} zásahů${me.tc?.[0]==='decon'?' · T: Dekontaminace':''}`);if(f&4096)tags.push('dekontaminace');if(f&8192)tags.push('označen');
+    const f=mv.fl,tags=[];if(me.rt>0)tags.push(`relikvie ${me.rt} s`);if(me.dr)tags.push(`průnik ×${me.dr}`);if(f&32)tags.push('maskování');if(me.am)tags.push('přepad');if(f&1)tags.push('omráčen');if(f&2)tags.push('umlčen');if(f&8)tags.push('zpomalen');if(f&4)tags.push('krvácíš');if(f&16384)tags.push('hoříš');if(f&1024)tags.push('BŘEMENO · uteč od týmu');if(f&2048)tags.push(`mor nanitů · ${me.nn} zásahů${me.tc?.[0]==='decon'?' · T: Dekontaminace':''}`);if(f&4096)tags.push('dekontaminace');if(f&8192)tags.push('označen');
     setTxt('meStatus',tags.join(' · ')||C.talent);
     document.querySelectorAll('#slots .slot').forEach((el,i)=>{
       if(i===4){const [tk,tc]=me.tc||['dodge',0],cd=S.TACTICS[tk]?.cd||1;el.style.setProperty('--cd',Math.min(1,tc/cd).toFixed(3));el.querySelector('.t').textContent=tc>0?Math.ceil(tc):''}
@@ -680,13 +680,14 @@ function unitVisual(v,st,dt,t){
   M.bubble.visible=st.s>1||!!(st.fl&256);M.bubble.material.opacity=st.fl&256?.45:Math.min(.38,.06+st.s/250);M.bubble.rotation.y=t*.8;
   M.halo.visible=!!(st.fl&16);M.stun.visible=!!(st.fl&1);M.stun.rotation.z=t*6;M.meRing.visible=v.id===G.you;
   if(st.fl&2048&&Math.random()<dt*8)burst({x:v.x,z:v.z},0x7dff9a,2,1.5,2,.6,1.4);
+  if(st.fl&16384&&Math.random()<dt*10)burst({x:v.x,z:v.z},Math.random()<.5?0xff6a1a:0xffc66d,2,1,3.5,.5,1.2);
   if(st.fl&8192&&Math.random()<dt*5)burst({x:v.x,z:v.z},0xff5d6c,1,.6,3,.5,2.6);
   if(st.fl&128)burst(v,v.kind==='h'?CLASSES[v.k].color:0xff5d6c,3,1,1,.35,.8);
   if(G.mode==='menu'||v.kind==='b'){b.el.style.display='none';return}
   const s=toScreen(v,M.height+.8);if(s.off){b.el.style.display='none';return}
   b.el.style.display='';b.el.style.transform=`translate(${s.x-38}px,${s.y-30}px)`;
   b.h.style.width=Math.max(0,st.h/v.mh*100)+'%';b.s.style.width=Math.min(100,st.s/v.mh*100)+'%';
-  const f=st.fl;b.em.textContent=f&1024?'BŘEMENO':f&2048?'NAKAŽEN':f&8192?'OZNAČEN':f&1?'OMRÁČEN':f&2?'UMLČEN':f&4?'KRVÁCÍ':f&8?'ZPOMALEN':f&16?'RELIKVIE':'';
+  const f=st.fl;b.em.textContent=f&1024?'BŘEMENO':f&2048?'NAKAŽEN':f&8192?'OZNAČEN':f&1?'OMRÁČEN':f&2?'UMLČEN':f&4?'KRVÁCÍ':f&16384?'HOŘÍ':f&8?'ZPOMALEN':f&16?'RELIKVIE':'';
 }
 
 // ---------- hero preview for the hub ----------
@@ -768,4 +769,6 @@ Social.setup({join:code=>Hub.joinRoom(code),sendRoom:(text,team)=>wsSend({type:'
 Social.onChange(()=>{if(!$('#lobby').hidden&&G.lobby)Social.lobbyFriends($('#lobbyFriends'),G.lobby)});
 applyTouch();startAttract();frame();
 Hub.init(hubCallbacks);
+// installable app: the service worker keeps a copy of the game for offline training
+if('serviceWorker' in navigator&&(location.protocol==='https:'||location.hostname==='localhost'))navigator.serviceWorker.register('/sw.js').catch(e=>console.warn('Service worker:',e.message));
 window.__arena=G;

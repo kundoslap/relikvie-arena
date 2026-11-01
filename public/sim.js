@@ -1,6 +1,6 @@
 // Relikvie Aréna — authoritative simulation. Runs on the server and, for offline matches, in the browser.
 // Pure logic: no rendering. Visual effects leave the simulation as events in M.events.
-import {CLASSES,CLASS_KEYS,MAPS,MODES,NPCS,BOSSES,BOSS_KEYS,ENDLESS_MODS,ECHO_MODS,TACTICS,BOT_TACTIC,rollItem,skillDef,MASTERY,masteryKey} from './data.js';
+import {CLASSES,CLASS_KEYS,MAPS,MODES,NPCS,BOSSES,BOSS_KEYS,ENDLESS_MODS,ECHO_MODS,TACTICS,BOT_TACTIC,rollItem,skillDef,MASTERY,masteryKey,BURN} from './data.js';
 export * from './data.js';
 
 export const MATCH_TIME=360, RELIC_EVERY=40, TICK=1/30, TEAM_SIZE=3;
@@ -149,7 +149,7 @@ function damage(M,t,amt,src,o={}){
 function heal(M,t,amt,src,quiet){if(t.dead)return;amt*=(1+(src?m(src,'heal'):0)/100)*(M.emod.has('noheal')&&t.team===0?.5:1);const h=Math.min(amt,t.maxHp-t.hp);if(h<=0)return;t.hp+=h;if(src)src.healDone+=h;if(!quiet)fx(M,{t:'heal',x:r2(t.x),z:r2(t.z),a:Math.round(h),g:t.id})}
 function kill(M,t,src){
   if(t.dead)return;
-  t.dead=true;t.hp=0;t.shield=0;t.deaths++;t.st.bleed=null;t.st.nanite=null;t.bomb=null;t.st.hot=null;t.dash=null;
+  t.dead=true;t.hp=0;t.shield=0;t.deaths++;t.st.bleed=null;t.st.burn=null;t.st.nanite=null;t.bomb=null;t.st.hot=null;t.dash=null;
   const k=src||(t.lastHit&&M.time-t.lastHitT<6?t.lastHit:null);
   fx(M,{t:'death',x:r2(t.x),z:r2(t.z),g:t.id});
   if(t.kind==='hero'){
@@ -222,7 +222,7 @@ function updProjs(M,dt){
 }
 function updZones(M,dt){
   for(let i=M.zones.length-1;i>=0;i--){const z=M.zones[i];z.t-=dt;z.acc+=dt;
-    while(z.acc>=.5){z.acc-=.5;for(const e of near(M.units.filter(x=>x.team!==z.team&&!x.dead),z,z.r)){damage(M,e,z.dps*.5,z.src&&!z.src.dead?z.src:null,{dot:true,color:z.color});if(z.slow)e.st.slow=Math.max(e.st.slow,.6)}}
+    while(z.acc>=.5){z.acc-=.5;for(const e of near(M.units.filter(x=>x.team!==z.team&&!x.dead),z,z.r)){damage(M,e,z.dps*.5,z.src&&!z.src.dead?z.src:null,{dot:true,color:z.color});if(z.slow)e.st.slow=Math.max(e.st.slow,.6);if(z.burn&&z.src)burn(e,z.src,BURN.talent)}}
     if(z.t<=0)M.zones.splice(i,1)}
 }
 function updRings(M,dt){
@@ -263,6 +263,7 @@ function basic(M,u,pt){
       razor(e);
       if(s.clsKey==='striker'){const c=.35+m(s,'comboCdr');s.cds=s.cds.map(x=>Math.max(0,x-c))}
       else if(s.clsKey==='technician')s.energy=Math.min(100,s.energy+5);
+      else if(s.clsKey==='pyro')burn(e,s,BURN.talent);
     }});
   }
 }
@@ -300,7 +301,7 @@ const SK={
         M.zones.push({id:M.nextId++,x:p.x,z:p.z,r:R,t:5+(long?3:0),acc:0,dps:T*.5*(1+m(u,'zoneDps')/100),src:u,team:u.team,color:0x7dff9a,slow:!!long});
         fx(M,{t:'ring',x:r2(p.x),z:r2(p.z),c:0x7dff9a,a:.5,b:R,d:.4})}})},
     (M,u)=>{const hps=22+m(u,'restore'),sh=m(u,'restoreSh');fx(M,{t:'ring',x:r2(u.x),z:r2(u.z),c:0x6affd8,a:.5,b:7.5,d:.6});
-      for(const a of near(friends(M,u).filter(x=>x.kind==='hero'),u,7.5)){a.st.hot={hps,t:3,acc:0,src:u};a.st.bleed=null;a.st.slow=0;if(sh)addShield(a,sh,u);fx(M,{t:'burst',x:r2(a.x),z:r2(a.z),y:1.2,c:0x6affd8,n:14,s:1.5,u:4,l:.8})}},
+      for(const a of near(friends(M,u).filter(x=>x.kind==='hero'),u,7.5)){a.st.hot={hps,t:3,acc:0,src:u};a.st.bleed=null;a.st.burn=null;a.st.slow=0;if(sh)addShield(a,sh,u);fx(M,{t:'burst',x:r2(a.x),z:r2(a.z),y:1.2,c:0x6affd8,n:14,s:1.5,u:4,l:.8})}},
     (M,u,pt)=>{const tp=clampReach(M,u,pt,13),R=4.5+m(u,'empR'),ov=m(u,'overload');aimDir(u,tp);fx(M,{t:'beam',a:[r2(u.x),1.3,r2(u.z)],b:[r2(tp.x),.4,r2(tp.z)],c:0x6acbff,w:.06,d:.25});
       later(M,.2,()=>{fx(M,{t:'emp',x:r2(tp.x),z:r2(tp.z),r:R});
         for(const e of near(foes(M,u),tp,R)){damage(M,e,tech(M,u)*1.1*(ov?1.4:1),u,{color:0x6acbff});e.energy=Math.max(0,(e.energy||0)-40);e.st.silence=Math.max(e.st.silence,1.6+(ov?1:0))}})},
@@ -313,6 +314,38 @@ const SK={
       fx(M,{t:'ban',ti:'Řetězový výboj',col:'var(--cyan)',d:1.2,i:u.id})}
   ]
 };
+// ---------- Žhář: burning and fire zones ----------
+function burn(e,src,B){if(!e||e.dead||e.st.decon>0)return;const dps=B.dps*(1+m(src,'burnDps')/100)*(src.dmgScale||1),t=B.t+m(src,'burnT');
+  if(!e.st.burn||e.st.burn.dps<=dps)e.st.burn={dps,t,acc:e.st.burn?.acc||0,src};else e.st.burn.t=Math.max(e.st.burn.t,t)}
+function fireZone(M,u,p,r,t,dpsMul){
+  const R=(r+m(u,'fireR'))*(u.st.relic>0?1.5:1);
+  M.zones.push({id:M.nextId++,x:p.x,z:p.z,r:R,t,acc:0,dps:tech(M,u)*dpsMul*(1+m(u,'fireDps')/100),src:u,team:u.team,color:0xff6a1a,burn:true});
+  fx(M,{t:'ring',x:r2(p.x),z:r2(p.z),c:0xff6a1a,a:.5,b:R,d:.4});fx(M,{t:'burst',x:r2(p.x),z:r2(p.z),y:.4,c:0xffa64d,n:24,s:3,u:4,l:.7});
+}
+SK.pyro=[
+  // Plamenná vlna: a cone of fire
+  (M,u,pt)=>{const dir=aimDir(u,pt),R=6+m(u,'waveR');fx(M,{t:'arc',x:r2(u.x),z:r2(u.z),f:r2(u.face),c:0xff6a1a,r:R});
+    for(let k=1;k<=3;k++)fx(M,{t:'burst',x:r2(u.x+dir.x*R*k/3),z:r2(u.z+dir.z*R*k/3),y:1,c:k%2?0xff6a1a:0xffd27a,n:14,s:4,u:3,l:.5});
+    const lag=u.ctrl==='human'?u.lag:0;
+    for(const e of foes(M,u)){const q=posAt(M,e,lag),dx=q.x-u.x,dz=q.z-u.z,d=Math.hypot(dx,dz);
+      if(d<R+e.radius&&(dx*dir.x+dz*dir.z)/(d||1)>.5&&!blocked(M.map,u,q)){damage(M,e,tech(M,u)*1.1,u,{color:0xff6a1a});burn(e,u,BURN.wave)}}
+    if(m(u,'waveZone'))fireZone(M,u,inArena(M,ahead(u,dir,R-1)),2.5,3,.35)},
+  // Žhnoucí půda: a burning area at the aimed point
+  (M,u,pt)=>{const tp=clampReach(M,u,pt,14),dir=aimDir(u,tp),dist=Math.max(1,d2(u,tp));
+    shoot(M,u,dir,{dmg:0,speed:24,range:dist,color:0xff6a1a,size:2,noHit:true,onEnd:p=>fireZone(M,u,p,3.5,4,.45)})},
+  // Fázový plamen: a short blink that leaves fire behind
+  (M,u,pt)=>{const from={x:u.x,z:u.z},dir=aimDir(u,pt),dist=clamp(d2(u,pt),2,7+(m(u,'blinkCd')?2:0));
+    fireZone(M,u,from,2.5,3,.35);u.st.inv=Math.max(u.st.inv,.2);
+    u.dash={dx:dir.x,dz:dir.z,spd:42,t:dist/42,end:()=>{fx(M,{t:'burst',x:r2(u.x),z:r2(u.z),y:1,c:0xffa64d,n:26,s:5,u:3,l:.5});const sh=m(u,'blinkSh');if(sh)addShield(u,sh,u)}}},
+  // Inferno: pulses of fire around the caster
+  (M,u)=>{const um=u.prof.ultMod,R=7+(um?2:0),n=3+(um?1:0);
+    for(let k=0;k<n;k++)later(M,.45*k,()=>{if(u.dead)return;fx(M,{t:'blast',x:r2(u.x),z:r2(u.z),r:R,c:0xff6a1a});
+      for(const e of near(foes(M,u),u,R)){
+        if(k===0&&m(u,'infernoPull')&&e.kind!=='boss'){const kx=u.x-e.x,kz=u.z-e.z,l=Math.hypot(kx,kz)||1,s=Math.min(2,Math.max(0,l-u.radius-e.radius));e.x+=kx/l*s;e.z+=kz/l*s;collide(e,M.map)}
+        damage(M,e,tech(M,u)*.9,u,{color:0xff6a1a,ult:true});burn(e,u,BURN.ult)}});
+    fx(M,{t:'ban',ti:'Inferno',col:'#ff6a1a',d:1.2,i:u.id})}
+];
+
 // ---------- profession skills ----------
 // B: +15 % when the skill is the chosen branch; md / pb: protocol A or B of the skill is active
 const SKP={
@@ -387,7 +420,7 @@ function tactical(M,u,pt){
   switch(u.tactic){
     case 'dodge':{if(u.dash)return false;let dx=u.vx,dz=u.vz,l=Math.hypot(dx,dz);if(l<.5){dx=Math.sin(u.face);dz=Math.cos(u.face);l=1}
       s.inv=Math.max(s.inv,.4);u.dash={dx:dx/l,dz:dz/l,spd:32,t:6/32};fx(M,{t:'burst',x:r2(u.x),z:r2(u.z),y:1,c:0x9fd8ff,n:18,s:4,u:1,l:.4});break}
-    case 'decon':s.nanite=null;s.bleed=null;s.slow=0;s.silence=0;s.stun=0;s.decon=4;fx(M,{t:'dome',x:r2(u.x),z:r2(u.z),c:0x7dff9a,r:1.8,d:.6});fx(M,{t:'txt',x:r2(u.x),z:r2(u.z),s:'Dekontaminace',c:'info'});break;
+    case 'decon':s.nanite=null;s.bleed=null;s.burn=null;s.slow=0;s.silence=0;s.stun=0;s.decon=4;fx(M,{t:'dome',x:r2(u.x),z:r2(u.z),c:0x7dff9a,r:1.8,d:.6});fx(M,{t:'txt',x:r2(u.x),z:r2(u.z),s:'Dekontaminace',c:'info'});break;
     case 'overload':u.energy=Math.min(100,u.energy+45);fx(M,{t:'ring',x:r2(u.x),z:r2(u.z),c:0x6acbff,a:.4,b:3,d:.4});fx(M,{t:'txt',x:r2(u.x),z:r2(u.z),s:'+45 energie',c:'info'});break;
     case 'beacon':{const p=clampReach(M,u,pt,16);fx(M,{t:'emp',x:r2(p.x),z:r2(p.z),r:6});let n=0;
       for(const e of M.units)if(e.team!==u.team&&!e.dead&&d2(e,p)<6+e.radius){e.vuln=Math.max(e.vuln||0,M.time+4);e.st.marked=4;e.st.cloak=0;n++}
@@ -427,6 +460,7 @@ export function cast(M,u,i,pt){
   else{u.energy-=s.cost*costMul;
     let cd=s.cd*(1-Math.min(45,m(u,'cdr'))/100)*(u.st.relic>0&&u.clsKey==='technician'?.7:1)*(u.prof.branch===id?.85:1);
     if(id==='c1'&&u.clsKey==='technician'&&m(u,'restoreCd'))cd=Math.max(2,cd-4);
+    if(id==='c2'&&u.clsKey==='pyro'&&m(u,'blinkCd'))cd=Math.max(2,cd-3);
     if(id==='feint'&&pa)cd=Math.max(2,cd-4);
     if(id==='rend'&&pb)cd=Math.max(2,cd-2);
     if(u.uniq.has('mirror')&&Math.random()<.25){cd=0;fx(M,{t:'txt',x:r2(u.x),z:r2(u.z),s:'Zrcadlení',c:'info'})}
@@ -484,13 +518,16 @@ function steer(M,u,wx,wz){
 function updStatus(M,u,dt){
   const s=u.st;
   for(const k of ['stun','slow','silence','cloak','inv','relic','haste','bulwark','decon','marked'])if(s[k]>0)s[k]=Math.max(0,s[k]-dt);
-  if(s.decon>0){s.bleed=null;s.nanite=null}
+  if(s.decon>0){s.bleed=null;s.nanite=null;s.burn=null}
   if(s.marked>0)s.cloak=0;
   if(s.nanite)updNanite(M,u,s.nanite,dt);
   if(u.ambush>0){u.ambush-=dt;if(s.cloak<=0&&u.ambush>1.5)u.ambush=1.5}
   if(s.bleed){s.bleed.acc+=dt;s.bleed.t-=dt;
     while(s.bleed&&s.bleed.acc>=.5&&!u.dead){s.bleed.acc-=.5;damage(M,u,s.bleed.dps*.5,s.bleed.src,{dot:true,color:0xff3355})}
     if(s.bleed&&s.bleed.t<=0)s.bleed=null}
+  if(s.burn){s.burn.acc+=dt;s.burn.t-=dt;
+    while(s.burn&&s.burn.acc>=.5&&!u.dead){s.burn.acc-=.5;const b=s.burn;damage(M,u,b.dps*.5*(b.src&&b.src.st.relic>0&&b.src.clsKey==='pyro'?2:1),b.src&&!b.src.dead?b.src:null,{dot:true,color:0xff6a1a})}
+    if(s.burn&&s.burn.t<=0)s.burn=null}
   if(u.dead)return;
   if(s.hot){s.hot.acc+=dt;s.hot.t-=dt;while(s.hot&&s.hot.acc>=.5){s.hot.acc-=.5;heal(M,u,s.hot.hps*.5,s.hot.src)}if(s.hot&&s.hot.t<=0)s.hot=null}
   if(u.shield>0)u.shield=Math.max(0,u.shield-dt*(u.kind==='boss'?0:3));
@@ -527,6 +564,16 @@ function botSkills(M,u,t,d,aim,seen){
     if(t&&d>3.5&&d<9&&seen&&cast(M,u,1,t))return;
     if((hurt.length&&hurt.some(a=>a!==u))||u.hp<u.maxHp*.45){if(cast(M,u,2,u))return}
     if(t&&d<5.5&&u.hp<u.maxHp*.85)cast(M,u,0,u);
+  }else if(k==='pyro'){
+    if(!t)return;
+    const n=near(foes(M,u),u,7).length;
+    if(u.ult>=100&&(n>=2||d<6)){cast(M,u,3,u);return}
+    if(d<6.5&&seen&&cast(M,u,0,aim))return;
+    // the blink closes in on a target out of wave range; when low on health it escapes instead
+    const l=d||1;
+    if(u.hp<u.maxHp*.3&&d<6){if(cast(M,u,2,{x:u.x-(t.x-u.x)/l*7,z:u.z-(t.z-u.z)/l*7}))return}
+    else if(d>8&&d<15&&seen&&u.energy>=55){if(cast(M,u,2,{x:t.x-(t.x-u.x)/l*3,z:t.z-(t.z-u.z)/l*3}))return}
+    if(d<14&&cast(M,u,1,aim))return;
   }else{
     if(hurt.length&&cast(M,u,1,u))return;
     if(u.st.bleed&&cast(M,u,1,u))return;
@@ -862,7 +909,7 @@ export function step(M,dt=TICK){
 export function roster(M){return M.units.map(u=>({i:u.id,n:u.name,k:u.key,kind:u.kind[0],t:u.team,mh:u.maxHp,b:u.ctrl==='human'?0:1,sk:u.skin,lv:u.level}))}
 export function stats(M){return M.units.filter(u=>u.kind==='hero').map(u=>({i:u.id,n:u.name,k:u.clsKey,t:u.team,b:u.ctrl==='bot'?1:0,ki:u.kills,de:u.deaths,dm:Math.round(u.dmgDealt),he:Math.round(u.healDone),re:u.relics,nk:u.npcKills,tk:Math.round(u.dmgTaken||0),cp:u.caps||0,nd:Math.round(u.naniteDmg||0)}))}
 export function matchInfo(M){return{mode:M.mode,map:M.mapKey,boss:M.bossKey,diff:M.diffKey,mission:M.mission,mods:[...M.emod],last:M.last}}
-function flags(u){const s=u.st;return (s.stun>0?1:0)|(s.silence>0?2:0)|(s.bleed?4:0)|(s.slow>0?8:0)|(s.relic>0?16:0)|(s.cloak>0?32:0)|(s.inv>0?64:0)|(u.dash?128:0)|(u.invuln?256:0)|(u.air?512:0)|(u.bomb?1024:0)|(s.nanite?2048:0)|(s.decon>0?4096:0)|(s.marked>0?8192:0)}
+function flags(u){const s=u.st;return (s.stun>0?1:0)|(s.silence>0?2:0)|(s.bleed?4:0)|(s.slow>0?8:0)|(s.relic>0?16:0)|(s.cloak>0?32:0)|(s.inv>0?64:0)|(u.dash?128:0)|(u.invuln?256:0)|(u.air?512:0)|(u.bomb?1024:0)|(s.nanite?2048:0)|(s.decon>0?4096:0)|(s.marked>0?8192:0)|(s.burn?16384:0)}
 // Per-viewer snapshot: hides cloaked enemies far from the viewer and loot that belongs to someone else.
 export function snapshotFor(M,uid,events){
   const me=M.units.find(u=>u.id===uid);

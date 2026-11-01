@@ -92,9 +92,19 @@ Kdo smí řešit nahlášení a trestat hráče, určuje proměnná `ADMIN_NICKS
 - **Aktualizace:** když na GitHub nahraješ změněné soubory (v repozitáři **Add file → Upload files**, přetáhnout a **Commit changes**), Render novou verzi nasadí sám během pár minut.
 - **Ping:** `render.yaml` zakládá službu v datacentru ve Frankfurtu, nejblíž hráčům z Česka. Region se později změnit nedá. Kdybys chtěl jiný, uprav ho v `render.yaml` dřív, než Blueprint spustíš.
 
-## Android aplikace
+## Instalace jako aplikace (telefon i počítač)
 
-Aplikace Relikvie je WebView, které načte adresu uloženou jako `GAME_URL`. Když v ní tuto adresu nahradíš adresou z Renderu a aplikaci znovu sestavíš, aréna poběží i v ní.
+Hra je instalovatelná webová aplikace (PWA), žádný APK není potřeba:
+
+- **Android (Chrome):** otevři adresu hry, v hubu klepni na **Nainstalovat** (nebo v menu Chrome **Přidat na plochu / Nainstalovat aplikaci**). Ikona Relikvie se objeví mezi aplikacemi a hra běží přes celou obrazovku.
+- **Počítač (Chrome, Edge):** tlačítko **Nainstalovat** v hubu, nebo ikona instalace v adresním řádku.
+- **iPhone (Safari):** Sdílet → **Přidat na plochu**.
+
+Nainstalovaná hra si po každém nasazení na Render sama stáhne nový kód, když je online. Bez internetu se spustí z uložené kopie a nabídne trénink proti botům.
+
+## Android aplikace (starší WebView)
+
+Aplikace Relikvie je WebView, které načte adresu uloženou jako `GAME_URL`. Když v ní tuto adresu nahradíš adresou z Renderu a aplikaci znovu sestavíš, aréna poběží i v ní. Instalace přes PWA výše je ale jednodušší.
 
 ## Jiný hosting
 

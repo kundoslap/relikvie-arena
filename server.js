@@ -11,7 +11,7 @@ import {createMeta,HttpError} from './meta.js';
 
 const PORT=Number(process.env.PORT)||8080;
 const PUB=path.join(path.dirname(fileURLToPath(import.meta.url)),'public');
-const TYPES={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.png':'image/png','.svg':'image/svg+xml','.ico':'image/x-icon','.json':'application/json','.webp':'image/webp'};
+const TYPES={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.png':'image/png','.svg':'image/svg+xml','.ico':'image/x-icon','.json':'application/json','.webp':'image/webp','.webmanifest':'application/manifest+json; charset=utf-8'};
 const END_LINGER=12000;
 const MATCH_SECONDS=Number(process.env.MATCH_SECONDS)||0; // optional override of the 6-minute match, handy for testing
 
@@ -247,7 +247,8 @@ function startMatch(room){
     const hs=humans(room).filter(c=>c.team===team),size=S.teamSize(room.mode);
     for(const c of hs){const u=S.addUnit(M,c.cls,team,'human',c.name,loadOf(c));u.joinedAt=0;c.unitId=u.id}
     const used=hs.map(c=>c.cls);
-    for(let i=hs.length;i<size;i++){const k=S.CLASS_KEYS.find(x=>!used.includes(x))||S.CLASS_KEYS[i%3];used.push(k);S.addUnit(M,k,team,'bot',names.pop())}
+    // bots take random classes the team does not have yet
+    for(let i=hs.length;i<size;i++){const free=S.CLASS_KEYS.filter(x=>!used.includes(x)),pool=free.length?free:S.CLASS_KEYS,k=pool[Math.floor(Math.random()*pool.length)];used.push(k);S.addUnit(M,k,team,'bot',names.pop())}
   }
   S.startMatch(M);
   room.match=M;room.state='match';room.endSent=false;room.tick=0;
