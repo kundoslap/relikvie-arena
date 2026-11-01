@@ -10,6 +10,7 @@ import {buildHero,buildNpc,buildBoss,buildArena,HDR,DISC_GEO} from './models.js'
 import * as Hub from './hub.js';
 import {svg,esc} from './hub.js';
 import * as Social from './social.js';
+import * as Snd from './audio.js';
 
 const {TICK,TEAM_COL,TEAM_NAME,CLASSES,MAPS,MODES,BOSSES,RARITIES}=S;
 const V3=THREE.Vector3,$=s=>document.querySelector(s);
@@ -199,44 +200,61 @@ function sample(id,rt){
 
 // ---------- events ----------
 const nearMe=(e,r=12)=>{const p=myPos();return Math.hypot(e.x-p.x,e.z-p.z)<r};
+// sound for a game event; the attract match behind the menu stays silent
+const sfx=(name,pos,o)=>{if(G.mode!=='menu')Snd.play(name,pos,o)};
+const ui=(name,o={})=>sfx(name,null,{...o,ui:true});
+// basic attacks and casts: pitch by class, melee swings, heavier shots for NPCs and bosses; your own are louder
+const CLS_F={striker:900,guardian:520,technician:1250,hunter:780,shade:1050};
+function atkSound(e,v){
+  const mine=e.i===G.you,o={key:e.i,gap:.05,vol:mine?1:.55};
+  if(e.s===3)return sfx('ult',v,{...o,f:(CLS_F[v.k]||700)/4,gap:.3,vol:mine?1:.8});
+  if(e.s===4)return sfx('tactic',v,o);
+  if(e.s>=0)return sfx('cast',v,{...o,f:300+e.s*140+(CLS_F[v.k]||700)/6});
+  const B=v.kind==='h'?CLASSES[v.k]?.basic:v.kind==='n'?S.NPCS[v.k]?.basic:null;
+  if(v.kind==='b'||B?.type!=='melee'&&v.kind==='n'&&(S.NPCS[v.k]?.radius||0)>1)return sfx('heavyShot',v,{...o,f:v.kind==='b'?260:380});
+  sfx(B?.type==='melee'?'swing':'shot',v,{...o,f:(CLS_F[v.k]||700)*(v.kind==='n'?1.25:1)});
+}
 const EV={
   dmg:e=>{floatText(e,e.a,e.o?'dot':e.s&&e.s===G.you?'out':e.g===G.you?'in':'dmg');burst(e,e.c,e.o?2:6,4,2,.35);
-    const v=views.get(e.g);if(v&&!e.o)v.flash=.14;if(e.g===G.you&&!e.o){G.shake=Math.max(G.shake,Math.min(.6,e.a/80));if(e.a>=40)screenFlash(.5)}},
-  heal:e=>floatText(e,'+'+e.a,'heal'),
+    const v=views.get(e.g);if(v&&!e.o)v.flash=.14;if(e.g===G.you&&!e.o){G.shake=Math.max(G.shake,Math.min(.6,e.a/80));if(e.a>=40)screenFlash(.5)}
+    if(!e.o){if(e.g===G.you)ui('hitIn',{gap:.09,vol:Math.min(1,.5+e.a/60)});else if(e.s===G.you)ui('hitOut',{gap:.04,big:e.a>=60,vol:.8});else sfx('hit',e,{gap:.05,vol:.5})}},
+  heal:e=>{floatText(e,'+'+e.a,'heal');if(e.g===G.you&&e.a>=8)ui('heal',{gap:.5,vol:.7})},
   txt:e=>floatText(e,e.s,e.c),
   death:e=>{const v=views.get(e.g);if(!v)return;const c=v.kind==='h'?CLASSES[v.k].color:v.kind==='b'?BOSSES[v.k].color:S.NPCS[v.k].color;
     burst(e,c,v.kind==='b'?120:40,v.kind==='b'?14:10,6,1);burst(e,TEAM_COL[v.t],30,8,5,.9);ringFx(e,TEAM_COL[v.t],.5,v.kind==='b'?12:5,.6);
-    if(v.kind==='b'){columnFx(e,BOSSES[v.k].color);G.shake=1}if(e.g===G.you){G.shake=Math.max(G.shake,.8);screenFlash(1)}},
-  spawn:e=>{const v=views.get(e.g);if(!v)return;burst(e,TEAM_COL[v.t]??0xffffff,30,4,6,.8,.4);ringFx(e,TEAM_COL[v.t]??0xffffff,.4,3,.5)},
+    if(v.kind==='b'){columnFx(e,BOSSES[v.k].color);G.shake=1}if(e.g===G.you){G.shake=Math.max(G.shake,.8);screenFlash(1)}
+    if(v.kind==='b')ui('boom',{s:2.2,gap:.2});if(e.g===G.you)ui('died',{dur:1.4});else sfx('death',e,{f:v.kind==='n'?700:460,gap:.04,vol:v.kind==='n'?.55:.85})},
+  spawn:e=>{const v=views.get(e.g);if(!v)return;burst(e,TEAM_COL[v.t]??0xffffff,30,4,6,.8,.4);ringFx(e,TEAM_COL[v.t]??0xffffff,.4,3,.5);if(e.g===G.you)ui('spawn',{vol:.7})},
   feed:e=>{
     if(e.k==='kill'){feed(`${tag(e.a)} zničil ${tag(e.b)}`);if(e.b===G.you)banner('Zničen',`Dostal tě ${nameOf(e.a)}`,2,'var(--red)');
-      else if(e.a===G.you){const v=views.get(e.b);if(v)floatText(v,'Zničen','info')}}
+      else if(e.a===G.you){const v=views.get(e.b);if(v)floatText(v,'Zničen','info');ui('kill')}}
     else if(e.k==='field'){feed(`${tag(e.b)} padl`);if(e.b===G.you)banner('Zničen','',2,'var(--red)')}
     else if(e.k==='relic'){const r=G.roster.get(e.a),mine=G.roster.get(G.you);feed(`${tag(e.a)} získal <span class="g">relikvii</span>`);
       const v=views.get(e.a);if(v){burst(v,0xffc66d,50,9,7,1);ringFx(v,0xffc66d,.5,6,.7)}
-      if(r)banner(e.a===G.you?'Relikvie je tvoje':`${r.n} drží relikvii`,CLASSES[r.k]?.relic||'',2.4,!mine||r.t===mine.t?'var(--gold)':'var(--red)')}
-    else if(e.k==='boss'){feed(`<span class="g">${esc(e.n)} poražen</span>`);banner(`${e.n} poražen`,e.a?`Rozhodující zásah: ${nameOf(e.a)}`:'',3,'var(--gold)')}
+      if(r)banner(e.a===G.you?'Relikvie je tvoje':`${r.n} drží relikvii`,CLASSES[r.k]?.relic||'',2.4,!mine||r.t===mine.t?'var(--gold)':'var(--red)');
+      ui(!mine||!r||r.t===mine.t?'relicMine':'relicFoe',{dur:1.2})}
+    else if(e.k==='boss'){feed(`<span class="g">${esc(e.n)} poražen</span>`);banner(`${e.n} poražen`,e.a?`Rozhodující zásah: ${nameOf(e.a)}`:'',3,'var(--gold)');ui('relicMine',{dur:1.2})}
   },
-  relicUp:()=>{ringFx({x:0,z:0},0xffc66d,.5,6,.8);columnFx({x:0,z:0},0xffc66d);banner('Relikvie se objevila','Střed arény · +1 bod a dočasná síla',2.4)},
-  atk:e=>{const v=views.get(e.i);if(v)v.attackAnim=1},
+  relicUp:()=>{ringFx({x:0,z:0},0xffc66d,.5,6,.8);columnFx({x:0,z:0},0xffc66d);banner('Relikvie se objevila','Střed arény · +1 bod a dočasná síla',2.4);ui('relicUp',{dur:1})},
+  atk:e=>{const v=views.get(e.i);if(v){v.attackAnim=1;atkSound(e,v)}},
   arc:e=>arcFx(e,e.f,e.c,e.r),
   slash:e=>slashFx(e,e.f,e.c,e.tl),
   ring:e=>ringFx(e,e.c,e.a,e.b,e.d),
   dome:e=>domeFx(e,e.c,e.r,e.d),
   beam:e=>beamFx(new V3(...e.a),new V3(...e.b),e.c,e.w,e.d),
-  bolt:e=>{const a=new V3(...e.a),b=new V3(...e.b);boltFx(a,b,e.c);burst({x:b.x,z:b.z},e.c,14,5,3,.4)},
+  bolt:e=>{const a=new V3(...e.a),b=new V3(...e.b);boltFx(a,b,e.c);burst({x:b.x,z:b.z},e.c,14,5,3,.4);sfx('bolt',{x:b.x,z:b.z},{gap:.08})},
   burst:e=>burst(e,e.c,e.n,e.s,e.u,e.l,e.y),
-  storm:e=>{columnFx(e,0xffd27a);ringFx(e,0xffb347,.5,3.4,.5);burst(e,0xffe0a0,26,9,6,.6,0);if(nearMe(e,8))G.shake=Math.max(G.shake,.35)},
-  slam:e=>{const r=e.r||8;ringFx(e,0x5dffa8,.5,r,.7);ringFx(e,0xffffff,.5,r*.75,.5);discFx(e,0x5dffa8,r,.4);burst(e,0x8dffc0,60,14,5,.8,0);if(nearMe(e,r+4))G.shake=Math.max(G.shake,.6)},
-  blast:e=>{const r=e.r||4;ringFx(e,e.c,.4,r,.6);ringFx(e,0xffffff,.3,r*.7,.4);discFx(e,e.c,r,.45);burst(e,e.c,Math.min(120,20+r*8),r*1.6,5,.8,0);if(nearMe(e,r+3))G.shake=Math.max(G.shake,Math.min(1,.3+r/20))},
-  emp:e=>{const r=e.r||4.5;ringFx(e,0x6acbff,.4,r,.45);ringFx(e,0xc9a0ff,.4,r*.66,.35);burst(e,0x9fd8ff,30,8,3,.5,0)},
-  tele:e=>teleFx(e),
-  rupture:e=>{ringFx(e,0xff9c5b,1,60,1.2);ringFx(e,0xff3355,1,40,.9);columnFx(e,0xff9c5b);burst(e,0xffb38a,150,22,8,1.2,1);G.shake=1;screenFlash(.9)},
-  ban:e=>banner(e.ti,e.sub||G.roster.get(e.i)?.n||'',e.d,e.col),
-  wave:e=>banner(e.b?`Vlna ${e.w} · boss`:`Vlna ${e.w}`,e.b?'Přichází boss s doprovodem':'Nepřátelé přicházejí z okraje arény',2.2,e.b?'var(--red)':'var(--gold)'),
-  waveClear:e=>banner(`Vlna ${e.w} zvládnuta`,e.w%5===0?'Bonusový život pro tým':'Krátká pauza, doplň síly na základně',2,'var(--green)'),
-  point:e=>{const L='ABC'[e.i];feed(e.o<0?`Bod ${L} je neutrální`:`<span class="t${e.o}">${TEAM_NAME[e.o]}</span> obsadili bod ${L}`)},
-  loot:e=>{const R=RARITIES[e.r];floatText({x:e.x,y:2.2,z:e.z},e.n,'loot',R.color);feed(`Kořist: <span style="color:${R.color}">${esc(e.n)}</span>`);burst(e,R.hex,30,4,6,.8,1)}
+  storm:e=>{columnFx(e,0xffd27a);ringFx(e,0xffb347,.5,3.4,.5);burst(e,0xffe0a0,26,9,6,.6,0);if(nearMe(e,8))G.shake=Math.max(G.shake,.35);sfx('zap',e,{gap:.06});sfx('boom',e,{s:.5,gap:.08,vol:.7})},
+  slam:e=>{const r=e.r||8;ringFx(e,0x5dffa8,.5,r,.7);ringFx(e,0xffffff,.5,r*.75,.5);discFx(e,0x5dffa8,r,.4);burst(e,0x8dffc0,60,14,5,.8,0);if(nearMe(e,r+4))G.shake=Math.max(G.shake,.6);sfx('boom',e,{s:r/6,gap:.08,range:60})},
+  blast:e=>{const r=e.r||4;ringFx(e,e.c,.4,r,.6);ringFx(e,0xffffff,.3,r*.7,.4);discFx(e,e.c,r,.45);burst(e,e.c,Math.min(120,20+r*8),r*1.6,5,.8,0);if(nearMe(e,r+3))G.shake=Math.max(G.shake,Math.min(1,.3+r/20));sfx('boom',e,{s:r/5,gap:.06,range:50})},
+  emp:e=>{const r=e.r||4.5;ringFx(e,0x6acbff,.4,r,.45);ringFx(e,0xc9a0ff,.4,r*.66,.35);burst(e,0x9fd8ff,30,8,3,.5,0);sfx('zap',e,{gap:.06})},
+  tele:e=>{teleFx(e);sfx('warn',e,{gap:.4,range:60})},
+  rupture:e=>{ringFx(e,0xff9c5b,1,60,1.2);ringFx(e,0xff3355,1,40,.9);columnFx(e,0xff9c5b);burst(e,0xffb38a,150,22,8,1.2,1);G.shake=1;screenFlash(.9);ui('boom',{s:3})},
+  ban:e=>{banner(e.ti,e.sub||G.roster.get(e.i)?.n||'',e.d,e.col);ui('warn',{gap:.5,vol:.8})},
+  wave:e=>{banner(e.b?`Vlna ${e.w} · boss`:`Vlna ${e.w}`,e.b?'Přichází boss s doprovodem':'Nepřátelé přicházejí z okraje arény',2.2,e.b?'var(--red)':'var(--gold)');ui('wave',{b:e.b,dur:1.2})},
+  waveClear:e=>{banner(`Vlna ${e.w} zvládnuta`,e.w%5===0?'Bonusový život pro tým':'Krátká pauza, doplň síly na základně',2,'var(--green)');ui('clear',{dur:1})},
+  point:e=>{const L='ABC'[e.i];feed(e.o<0?`Bod ${L} je neutrální`:`<span class="t${e.o}">${TEAM_NAME[e.o]}</span> obsadili bod ${L}`);if(e.o>=0)ui('point',{mine:e.o===(G.roster.get(G.you)?.t??0)})},
+  loot:e=>{const R=RARITIES[e.r];floatText({x:e.x,y:2.2,z:e.z},e.n,'loot',R.color);feed(`Kořist: <span style="color:${R.color}">${esc(e.n)}</span>`);burst(e,R.hex,30,4,6,.8,1);sfx('loot',e,{r:e.r,gap:.1})}
 };
 function playEvents(rt){
   while(G.evq.length&&G.evq[0].at<=rt){const {e}=G.evq.shift();const h=EV[e.t];if(h)try{h(e)}catch(err){console.warn(err)}}
@@ -360,7 +378,7 @@ function onNet(m){
     case 's':if(G.mode==='on')ingest(m);break;
     case 'stats':G.stats=m.stats;break;
     case 'end':showEnd(m);Hub.showRewards(null);break;
-    case 'rewards':Hub.showRewards(m);if(m.profile)Hub.setProfile(m.profile);break;
+    case 'rewards':Hub.showRewards(m);if(m.profile)Hub.setProfile(m.profile);if(m.levelUps?.length||m.achNew?.length)setTimeout(()=>Snd.play('levelUp',null,{ui:true}),1400);break;
     case 'chat':Social.roomMsg(m);break;
     case 'chatHist':Social.roomHist(m.list||[]);break;
     case 'pong':G.ping=Math.round(performance.now()-m.t);$('#netInfo').textContent=`online · ping ${G.ping} ms`;break;
@@ -406,7 +424,7 @@ function renderLobby(){
   $('#lobbyTeams').innerHTML=teams.map(t=>{
     const ps=L.players.filter(p=>pvp?p.team===t:true);
     const rk=p=>p.rt!=null?` <small style="color:${S.DIVISIONS[S.divisionOf(p.rt)].color}">· ${S.DIVISIONS[S.divisionOf(p.rt)].name} ${p.rt}</small>`:'';
-    const rows=ps.map(p=>`<div class="pl${p.cid===L.you?' mine':''}"><span>${esc(p.name)}${p.lv?` <small>· úr. ${p.lv}</small>`:''}${rk(p)}${p.cid===L.host&&!L.ranked?' <small>· hostitel</small>':''}</span><small>${CLASSES[p.cls].name}</small></div>`).join('');
+    const rows=ps.map(p=>`<div class="pl${p.cid===L.you?' mine':''}"><span>${p.tag?`<span class="cg">[${esc(p.tag)}]</span> `:''}${esc(p.name)}${p.lv?` <small>· úr. ${p.lv}</small>`:''}${rk(p)}${p.cid===L.host&&!L.ranked?' <small>· hostitel</small>':''}</span><small>${CLASSES[p.cls].name}</small></div>`).join('');
     const empty=L.ranked?`<span>Volné místo</span><small>${size===1?'čeká se na soupeře':'hráč nebo bot'}</small>`:'<span>Bot</span><small>doplní se</small>';
     const bots=Array.from({length:Math.max(0,size-ps.length)},()=>`<div class="pl bot">${empty}</div>`).join('');
     const canMove=pvp&&!L.ranked&&me&&me.team!==t&&ps.length<size;
@@ -434,6 +452,7 @@ function setPause(p){
   $('#pauseNote').innerHTML=(G.mode==='on'?'Online zápas běží dál, tvoje postava mezitím stojí. ':'')+
     `<button class="ghost sm" id="qBtn" type="button">Grafika: ${hiQ?'vysoká':'nízká'}</button> <small>Změna se projeví po obnovení stránky.</small>`;
   $('#qBtn').onclick=()=>{store.set('q',hiQ?'low':'high');$('#qBtn').textContent='Uloženo · obnov stránku'};
+  $('#pauseSnd').innerHTML=Snd.panelHTML();Snd.bindPanel($('#pauseSnd'));
 }
 function currentStats(){return G.mode==='off'&&G.M?S.stats(G.M):G.stats}
 function boardHTML(stats){
@@ -471,6 +490,7 @@ function showEnd(m){
   else{h.textContent=w<0||w==null?'Remíza':w===myTeam?'Vítězství':'Porážka';h.className=w===myTeam?'win':w<0?'':'lose'}
   const ms=G.info.mission==='echo'?{name:'Ozvěna jádra'}:G.info.mission?S.missionById(G.info.mission):null;
   $('#endSub').textContent=pve?`${ms?'Kampaň · '+ms.name:MODES[m.mode||G.info.mode].name}${m.mode==='waves'?` · vlna ${m.wave}`:endless?' · tým padl':''} · ${MAPS[G.info.map].name}`:`${TEAM_NAME[0]} ${m.score[0]} : ${m.score[1]} ${TEAM_NAME[1]} · ${MAPS[G.info.map].name}`;
+  Snd.play(endless?(m.wave>=S.ENDLESS_WIN?'win':'lose'):w===myTeam?'win':'lose',null,{ui:true,dur:2.5});
   $('#endTable').innerHTML=boardHTML(m.stats);
   $('#endDebrief').innerHTML=debriefHTML(m,pve);
   const room=G.mode==='on'&&!G.solo;
@@ -602,6 +622,20 @@ function drawPreview(dt,t){if(!PV)return;if(!PV.cv.isConnected){setPreview(null)
   const w=PV.cv.clientWidth;if(w&&PV.cv.width!==Math.round(w*Math.min(devicePixelRatio,2)))PV.r.setSize(w,w,false);
   PV.m.root.rotation.y+=dt*.6;PV.m.anim?.(dt,t,0,0);if(PV.m.drone)PV.m.drone.position.set(Math.sin(t*2)*.85,2.3,Math.cos(t*2)*.85);PV.r.render(PV.sc,PV.cam)}
 
+// ---------- sound per frame: listener, music mood, low-health heartbeat ----------
+let heartT=0,lastMood='';
+function soundFrame(dt){
+  const playing=(G.mode==='on'||G.mode==='off')&&!G.ended,p=playing?myPos():null;
+  Snd.listener(p?.x||0,p?.z||0,playing);
+  const md=playing?(G.last?.bs||G.info.mode==='boss'?'boss':'match'):!$('#end').hidden?'off':'calm';
+  if(md!==lastMood){lastMood=md;Snd.mood(md)}
+  const v=playing&&views.get(G.you);heartT-=dt;
+  if(v&&!v.dead&&v.mh&&v.h/v.mh<.25&&heartT<=0){heartT=.95;Snd.play('heart',null,{ui:true,vol:.8})}
+}
+addEventListener('keydown',e=>{if(e.code==='KeyM'&&!e.repeat&&!['INPUT','SELECT','TEXTAREA'].includes(e.target.tagName)){Snd.toggleMute();Hub.toast(Snd.settings().mute?'Zvuk vypnutý (M)':'Zvuk zapnutý (M)')}});
+// a quiet tick for menu buttons (not the skill slots, those have their own sounds)
+document.addEventListener('click',e=>{const b=e.target.closest?.('button');if(b&&!b.closest('#slots')&&!b.disabled)Snd.play('click',null,{ui:true,vol:.6})},true);
+
 // ---------- main loop ----------
 const camPos=new V3(),clock=new THREE.Clock();let menuAngle=0;
 function frame(){
@@ -613,6 +647,7 @@ function frame(){
   if(G.pred&&G.show){const dx=G.pred.x-G.show.x,dz=G.pred.z-G.show.z;if(dx*dx+dz*dz>16){G.show.x=G.pred.x;G.show.z=G.pred.z}else{const k=Math.min(1,dt*18);G.show.x+=dx*k;G.show.z+=dz*k}}
   else G.show=null;
   const rt=renderTime();
+  soundFrame(dt);
   playEvents(rt);
   if(bannerT>0){bannerT-=dt;if(bannerT<=0)$('#banner').classList.remove('on')}
   if(flashT>0){flashT=Math.max(0,flashT-dt*2.5);$('#flash').style.opacity=flashT.toFixed(2)}

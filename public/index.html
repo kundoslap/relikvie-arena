@@ -338,7 +338,7 @@ h2.sec{margin:0;font-family:var(--display);font-size:26px;font-weight:800;letter
 .cn{background:none;border:0;padding:0;font:inherit;font-weight:600;color:var(--cyan)}
 button.cn:hover{text-decoration:underline}
 .cn.cme{color:var(--gold)}
-.cm .t0,#mchatLog .t0{color:var(--blue)} .cm .t1,#mchatLog .t1{color:var(--red)} .ct{color:var(--green)} .cw{color:#d9b8ff}
+.cm .t0,#mchatLog .t0{color:var(--blue)} .cm .t1,#mchatLog .t1{color:var(--red)} .ct{color:var(--green)} .cw{color:#d9b8ff} .cg{color:var(--gold);font-weight:600}
 #chatPick{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:6px 10px;border-top:1px solid var(--line);background:rgba(255,198,109,.06)}
 #chatPick b{margin-right:auto;font-size:13px}
 #chatForm,#mchatForm{display:flex;gap:6px;padding:8px}
@@ -367,6 +367,27 @@ body.touch #mchatBtn{display:block;position:fixed;right:calc(var(--gr) + 48px);t
 .dot{flex:none;width:9px;height:9px;border-radius:50%;background:#3a425c}
 .dot.online{background:var(--green);box-shadow:0 0 8px var(--green)} .dot.lobby{background:var(--gold);box-shadow:0 0 8px var(--gold)} .dot.match{background:var(--blue);box-shadow:0 0 8px var(--blue)}
 .nav button b{display:inline-grid;place-items:center;min-width:16px;height:16px;padding:0 4px;margin-left:5px;border-radius:8px;background:var(--red);color:#fff;font-size:10px;box-sizing:border-box}
+/* achievements */
+.achs{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:8px}
+.ach{display:grid;gap:6px;align-content:start;padding:10px 12px;border:1px solid var(--line);border-radius:3px;background:rgba(10,14,28,.7)}
+.ach.done{border-color:rgba(255,198,109,.45);background:rgba(255,198,109,.05)}
+.ach .go{justify-self:start}
+.achh{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.achh b{font-size:14px}
+.pips{display:flex;gap:4px}
+.pips i{width:12px;height:12px;transform:rotate(45deg);border:1px solid var(--c);opacity:.35}
+.pips i.on{background:var(--c);opacity:1;box-shadow:0 0 8px var(--c)}
+.achnew{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.achnew span{padding:4px 10px;border:1px solid var(--c);color:var(--c);border-radius:3px;font-size:13px;font-weight:600;background:color-mix(in srgb,var(--c) 10%,transparent)}
+/* sound settings */
+.sndp{display:grid;gap:8px;min-width:min(260px,calc(100vw - 64px))}
+.vol{display:grid;grid-template-columns:64px 1fr 30px;align-items:center;gap:10px;font-size:12px;color:var(--muted);letter-spacing:.06em}
+.vol input{accent-color:var(--gold);min-width:0}
+.vol b{font-weight:500;color:var(--ink);text-align:right;font-variant-numeric:tabular-nums}
+.vol .seg{grid-column:2/4;justify-self:start}.vol .seg button{padding:6px 10px;font-size:12px}
+.chk{display:flex;gap:8px;align-items:center;font-size:12px;color:var(--muted);cursor:pointer}.chk input{accent-color:var(--gold)}
+.sndp [data-mute][aria-pressed="true"]{border-color:var(--red);color:var(--red)}
+#sndPop{position:fixed;top:calc(var(--gt) + 58px);right:var(--gr);z-index:17;padding:14px 16px;background:rgba(8,12,24,.97);border:1px solid var(--line);border-radius:3px;box-shadow:0 10px 30px rgba(0,0,0,.5)}
 #lobby .center{padding-bottom:calc(var(--gb) + 64px)}
 .hubbody{padding-bottom:calc(var(--gb) + 64px)}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
@@ -446,6 +467,7 @@ body.touch #mchatBtn{display:block;position:fixed;right:calc(var(--gr) + 48px);t
   <div class="center"><div class="card">
     <h2 id="pauseTitle">Pauza</h2>
     <p class="help" id="pauseNote"></p>
+    <div id="pauseSnd"></div>
     <div class="btns"><button class="go" id="resumeBtn" type="button">Pokračovat</button><button class="ghost" id="quitBtn" type="button">Opustit zápas</button></div>
   </div></div>
 </div>
@@ -462,6 +484,7 @@ body.touch #mchatBtn{display:block;position:fixed;right:calc(var(--gr) + 48px);t
   </div></div>
 </div>
 <div id="invites" hidden></div>
+<div id="sndPop" hidden></div>
 <div id="chatDock" hidden>
   <div id="chatPanel" hidden>
     <div class="chead"><b>Chat</b><button class="ghost sm" id="chatFilter" type="button" title="Skrývat sprostá slova">Filtr</button><button class="ghost sm" id="chatClose" type="button" aria-label="Zavřít chat">×</button></div>

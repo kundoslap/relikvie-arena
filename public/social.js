@@ -1,6 +1,7 @@
 // Friends and chat. A signed-in hub keeps a "social" WebSocket open for the friend list with live status, world chat,
 // private messages and invites; room chat (lobby and match) travels over the game connection and is routed here.
 import * as D from './data.js';
+import * as Snd from './audio.js';
 
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -9,13 +10,16 @@ const KEEP=100;
 
 const X={ws:null,want:null,retry:0,retryT:0,me:null,
   fr:{friends:[],inReq:[],outReq:[],blocked:[]},
-  world:[],dms:{},room:[],roomCode:null,unread:{world:0,room:0},dmUnread:{},
+  world:[],dms:{},room:[],roomCode:null,guild:null,gtag:null,glog:[],unread:{world:0,room:0,guild:0},dmUnread:{},
   tab:'world',open:false,screen:'auth',filter:store.get('chatFilter',true),invites:[],pick:null,
   host:null,listeners:new Set()};
 
 // host: {join(code), sendRoom(text,team), inRoom(), roomCode(), pvp(), myTeam()}
 export function setup(host){X.host=host;bindDock();bindMatchChat()}
 export const onChange=f=>X.listeners.add(f);
+const guildListeners=new Set();
+export const onGuild=f=>guildListeners.add(f);
+export const guildTag=()=>X.gtag;
 const changed=()=>{for(const f of X.listeners)try{f()}catch(e){console.warn(e)}};
 export const friends=()=>X.fr;
 export const pending=()=>X.fr.inReq.length;
@@ -31,6 +35,7 @@ export function disconnect(){
   X.want=null;clearTimeout(X.retryT);X.me=null;
   if(X.ws){const w=X.ws;X.ws=null;try{w.close()}catch{}}
   X.fr={friends:[],inReq:[],outReq:[],blocked:[]};X.world=[];X.dms={};X.dmUnread={};X.unread.world=0;X.invites=[];
+  X.guild=null;X.gtag=null;X.glog=[];X.unread.guild=0;
   renderDock();renderInvites();changed();
 }
 function open(){
@@ -52,16 +57,25 @@ function onMsg(m){
       if(X.tab.startsWith('dm:')&&!isFriend(X.tab.slice(3)))X.tab='world';
       renderDock();changed();break}
     case 'chat':{
+      if(m.pid!==X.me&&(m.ch==='dm'||m.ch==='guild'))Snd.play('msg',null,{ui:true,gap:.6,vol:m.ch==='dm'?.9:.5});
       if(m.ch==='world'){push(X.world,m);if(!(X.open&&X.tab==='world'))X.unread.world++}
+      else if(m.ch==='guild'){push(X.glog,m);
+        if(X.screen==='hud'&&m.pid!==X.me)matchLine(`<span class="cg">[${esc(X.gtag)}] ${esc(m.from)}:</span> ${txt(m.text)}`);
+        else if(!(X.open&&X.tab==='guild')&&m.pid!==X.me)X.unread.guild++}
       else if(m.ch==='dm'){push(X.dms[m.with]??=[],m);const mine=m.pid===X.me;
         if(!mine&&!(X.open&&X.tab==='dm:'+m.with)){X.dmUnread[m.with]=(X.dmUnread[m.with]|0)+1;
           if(X.screen==='hud')matchLine(`<span class="cw">Šepot od ${esc(m.from)}:</span> ${txt(m.text)}`);else toast(`Zpráva od ${m.from}: ${shorten(m.text)}`)}}
       renderDock();break}
     case 'invite':{
+      Snd.play('relicUp',null,{ui:true,vol:.6});
       X.invites=X.invites.filter(i=>i.pid!==m.pid);X.invites.push({...m,at:Date.now()});
       if(X.screen==='hud')matchLine(`<span class="cw">${esc(m.from)} tě zve do místnosti ${esc(m.code)}.</span> Pozvánku najdeš po zápase.`);
       renderInvites();break}
     case 'note':toast(m.msg,m.bad);break;
+    case 'guildHist':
+      if(m.gid!==X.guild){X.unread.guild=0;if(!m.gid&&X.tab==='guild')X.tab='world'}
+      X.guild=m.gid;X.gtag=m.tag;X.glog=m.list||[];renderDock();changed();break;
+    case 'guildUpd':for(const f of guildListeners)try{f()}catch(e){console.warn(e)}break;
   }
 }
 const push=(a,m)=>{a.push(m);if(a.length>KEEP)a.shift()};
@@ -76,6 +90,7 @@ function toast(msg,bad){const t=$('#toast');if(!t)return;t.textContent=msg;t.cla
 // ---------- friend actions (used by the Přátelé tab and the chat) ----------
 export const fr=(op,arg)=>sendS({type:'fr',op,arg});
 export const invite=id=>sendS({type:'invite',to:id});
+export function openGuildChat(){if(!X.guild)return;X.tab='guild';X.open=true;renderDock();setTimeout(()=>$('#chatIn')?.focus(),0)}
 export function openDM(id){if(!isFriend(id))return;X.tab='dm:'+id;X.open=true;X.dmUnread[id]=0;renderDock();setTimeout(()=>$('#chatIn')?.focus(),0)}
 export function statusText(f){
   const where=f.mission?(f.mission==='echo'?'Ozvěna jádra':D.missionById(f.mission)?.name||'Kampaň'):D.MODES[f.mode]?.name||'';
@@ -84,8 +99,8 @@ export function statusText(f){
 
 // ---------- room chat (game connection) ----------
 export function roomMsg(m){
-  push(X.room,m);
-  if(X.screen==='hud'){const cls=m.team?'ct':`t${m.tm}`;matchLine(`<span class="${cls}">${m.team?'[Tým] ':''}${esc(m.from)}:</span> ${txt(m.text)}`)}
+  push(X.room,m);if(m.pid!==X.me||!m.pid)Snd.play('msg',null,{ui:true,gap:.6,vol:.6});
+  if(X.screen==='hud'){const cls=m.team?'ct':`t${m.tm}`;matchLine(`<span class="${cls}">${m.team?'[Tým] ':''}${m.tag?`[${esc(m.tag)}] `:''}${esc(m.from)}:</span> ${txt(m.text)}`)}
   else if(!(X.open&&X.tab==='room'))X.unread.room++;
   renderDock();
 }
@@ -109,17 +124,18 @@ export function screen(id){
 function tabs(){
   const t=[];
   if(X.roomCode)t.push(['room',`Místnost ${X.roomCode}`,X.unread.room]);
+  if(X.guild)t.push(['guild',`Klan [${X.gtag}]`,X.unread.guild]);
   if(X.want)t.push(['world','Svět',X.unread.world]);
   for(const id of Object.keys(X.dms)){const f=friendById(id);if(f&&(X.dms[id].length||X.tab==='dm:'+id))t.push(['dm:'+id,f.nick,X.dmUnread[id]|0])}
   if(X.tab.startsWith('dm:')&&!t.some(x=>x[0]===X.tab)){const f=friendById(X.tab.slice(3));if(f)t.push([X.tab,f.nick,0])}
   return t;
 }
-function curLog(){return X.tab==='room'?X.room:X.tab==='world'?X.world:X.dms[X.tab.slice(3)]||[]}
+function curLog(){return X.tab==='room'?X.room:X.tab==='world'?X.world:X.tab==='guild'?X.glog:X.dms[X.tab.slice(3)]||[]}
 function renderDock(){
   const dock=$('#chatDock');if(!dock)return;
   const T=tabs();if(!T.some(x=>x[0]===X.tab)&&T.length)X.tab=T[0][0];
-  if(X.open){if(X.tab==='world')X.unread.world=0;else if(X.tab==='room')X.unread.room=0;else X.dmUnread[X.tab.slice(3)]=0}
-  const badge=X.unread.room+Object.values(X.dmUnread).reduce((a,b)=>a+b,0);
+  if(X.open){if(X.tab==='world'||X.tab==='room'||X.tab==='guild')X.unread[X.tab]=0;else X.dmUnread[X.tab.slice(3)]=0}
+  const badge=X.unread.room+X.unread.guild+Object.values(X.dmUnread).reduce((a,b)=>a+b,0);
   $('#chatToggle').innerHTML=`Chat${badge?` <b>${badge}</b>`:X.unread.world&&!X.open?' <i></i>':''}`;
   $('#chatToggle').setAttribute('aria-expanded',X.open);
   $('#chatPanel').hidden=!X.open;
@@ -130,8 +146,8 @@ function renderDock(){
   const L=curLog(),dm=X.tab.startsWith('dm:');
   log.innerHTML=L.map(m=>{const me=m.pid&&m.pid===X.me,cls=m.ch==='room'?(m.team?'ct':`t${m.tm}`):me?'cme':'';
     const name=!dm&&m.pid&&!me?`<button type="button" class="cn ${cls}" data-pid="${esc(m.pid)}" data-nick="${esc(m.from)}">${esc(m.from)}</button>`:`<span class="cn ${cls}">${esc(m.from)}</span>`;
-    return`<div class="cm"><small>${hm(m.t)}</small> ${m.team?'<span class="ct">[Tým]</span> ':''}${name}${m.lv?` <small>${m.lv}</small>`:''}: ${txt(m.text)}</div>`}).join('')
-    ||`<p class="help">${X.tab==='world'?(connected()?'Zatím tu nikdo nic nenapsal. Svět vidí všichni přihlášení hráči.':'Připojuji k chatu…'):X.tab==='room'?'Zprávy uvidí všichni v místnosti.':'Soukromá konverzace. Historie vydrží, dokud server neběží znovu.'}</p>`;
+    return`<div class="cm"><small>${hm(m.t)}</small> ${m.team?'<span class="ct">[Tým]</span> ':''}${m.tag&&X.tab!=='guild'?`<span class="cg">[${esc(m.tag)}]</span> `:''}${name}${m.lv?` <small>úr. ${m.lv}</small>`:''}:${txt(m.text)}</div>`}).join('')
+    ||`<p class="help">${X.tab==='world'?(connected()?'Zatím tu nikdo nic nenapsal. Svět vidí všichni přihlášení hráči.':'Připojuji k chatu…'):X.tab==='room'?'Zprávy uvidí všichni v místnosti.':X.tab==='guild'?'Klanový chat vidí jen členové klanu.':'Soukromá konverzace. Historie vydrží, dokud server neběží znovu.'}</p>`;
   if(stick)log.scrollTop=log.scrollHeight;
   log.querySelectorAll('button.cn').forEach(b=>b.onclick=()=>{X.pick={pid:b.dataset.pid,nick:b.dataset.nick};renderDock()});
   const P=X.pick,pb=$('#chatPick');
@@ -143,7 +159,7 @@ function renderDock(){
       X.pick=null;renderDock()});
   }else pb.hidden=true;
   const can=X.tab==='room'?!!X.roomCode:connected();
-  $('#chatIn').disabled=!can;$('#chatIn').placeholder=X.tab==='room'?'Napiš do místnosti…':X.tab==='world'?'Napiš všem…':`Zpráva pro ${friendById(X.tab.slice(3))?.nick||''}…`;
+  $('#chatIn').disabled=!can;$('#chatIn').placeholder=X.tab==='room'?'Napiš do místnosti…':X.tab==='world'?'Napiš všem…':X.tab==='guild'?'Napiš klanu…':`Zpráva pro ${friendById(X.tab.slice(3))?.nick||''}…`;
   $('#chatFilter').setAttribute('aria-pressed',X.filter);
 }
 function bindDock(){
@@ -151,7 +167,7 @@ function bindDock(){
   $('#chatClose').onclick=()=>{X.open=false;renderDock()};
   $('#chatFilter').onclick=()=>{X.filter=!X.filter;store.set('chatFilter',X.filter);renderDock();toast(X.filter?'Sprostá slova se skrývají.':'Filtr sprostých slov je vypnutý.')};
   $('#chatForm').onsubmit=e=>{e.preventDefault();const t=D.cleanChat($('#chatIn').value);if(!t)return;
-    if(X.tab==='room')X.host?.sendRoom(t,false);else if(X.tab==='world')sendS({type:'say',ch:'world',text:t});else sendS({type:'say',ch:'dm',to:X.tab.slice(3),text:t});
+    if(X.tab==='room')X.host?.sendRoom(t,false);else if(X.tab==='world'||X.tab==='guild')sendS({type:'say',ch:X.tab,text:t});else sendS({type:'say',ch:'dm',to:X.tab.slice(3),text:t});
     $('#chatIn').value=''};
 }
 
@@ -176,7 +192,7 @@ export function lobbyFriends(el,L){
   if(!X.want||L.solo||L.ranked){el.hidden=true;return}
   const on=X.fr.friends.filter(f=>f.st!=='offline'),inRoom=new Set(L.players.map(p=>p.name));
   el.hidden=false;
-  el.innerHTML=`<div class="lbl">Pozvat přátele</div>${on.length?`<div class="flist">${on.map(f=>`<div class="fr"><i class="dot ${f.st}"></i><span>${esc(f.nick)}<small>${esc(statusText(f))}</small></span>
+  el.innerHTML=`<div class="lbl">Pozvat přátele</div>${on.length?`<div class="flist">${on.map(f=>`<div class="fr"><i class="dot ${f.st}"></i><span>${f.tag?`<span class="cg">[${esc(f.tag)}]</span> `:''}${esc(f.nick)}<small>${esc(statusText(f))}</small></span>
     ${inRoom.has(f.nick)?'<small class="help">v místnosti</small>':`<button type="button" class="ghost sm" data-inv="${esc(f.id)}">Pozvat</button>`}</div>`).join('')}</div>`
     :`<p class="help">${X.fr.friends.length?'Žádný přítel teď není online.':'Zatím nemáš přátele. Přidáš si je v hubu na kartě Přátelé.'} Pozvat můžeš i odkazem přes tlačítko Kopírovat pozvánku.</p>`}`;
   el.querySelectorAll('[data-inv]').forEach(b=>b.onclick=()=>{invite(b.dataset.inv);b.disabled=true;b.textContent='Pozváno';setTimeout(()=>{if(b.isConnected){b.disabled=false;b.textContent='Pozvat'}},5000)});

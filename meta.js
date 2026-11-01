@@ -12,7 +12,7 @@ export class HttpError extends Error{constructor(status,msg){super(msg);this.sta
 const fail=(msg,status=400)=>{throw new HttpError(status,msg)};
 
 export function createMeta(db){
-  const doc=db.doc;
+  const doc=db.doc;doc.guilds??={};
   const tokenIndex=new Map();
   for(const u of Object.values(doc.users))for(const t of u.tokens||[])tokenIndex.set(t,u.id);
 
@@ -29,9 +29,15 @@ export function createMeta(db){
     p.merchant??={day:null,offers:[],rerolled:false};p.tactic??='dodge';p.builds??=[];p.history??=[];
     p.ranked??={season:null,rating:D.RATING_START,games:0,wins:0,losses:0,peak:D.RATING_START};p.rankedPrev??=null;
     p.social??={friends:[],inReq:[],outReq:[],blocked:[]};
+    p.guild??=null;p.guildInv??=[];p.guildWeek??=null;
+    // a disbanded guild, or a membership that was removed while the save was elsewhere
+    if(p.guild&&!isMember(guildById(p.guild),p.id))p.guild=null;
     // repairs saves damaged by the old "constructor" lookups (NaN credits, empty items, unknown class)
     if(!Number.isFinite(p.credits))p.credits=0;if(p.inv.some(i=>!i||!i.id))p.inv=p.inv.filter(i=>i&&i.id);if(!D.CLASSES[p.cls])p.cls='striker';
     const st=p.stats;st.bestEndless??=0;st.byCls??={};st.byMode??={};st.byBoss??={};st.dmg??=0;st.heal??=0;st.time??=0;st.mvp??=0;
+    // achievement counters; the ranked ones start from the current season so existing players keep their progress
+    st.relics??=0;st.legendary??=0;st.sold??=0;st.rankedGames??=p.ranked.games|0;st.rankedWins??=p.ranked.wins|0;
+    st.bestDiv??=p.ranked.games>0?D.divisionOf(p.ranked.peak):0;p.ach??={};
     return p;
   }
   function rollGoals(p){
@@ -103,7 +109,7 @@ export function createMeta(db){
     return{...p,xpNext:p.level>=D.MAX_LEVEL?0:D.xpFor(p.level),echo:D.echoOfWeek(D.weekKey()),
       campaignView:D.MISSIONS.map(m=>({id:m.id,open:missionOpen(p,m),cleared:p.campaign.cleared.includes(m.id)})),echoOpen:echoOpen(p),
       skinState:Object.fromEntries(D.CLASS_KEYS.map(k=>[k,D.SKINS[k].map(s=>({k:s.k,owned:D.skinOwned(p,k,s.k)}))])),
-      listings:Object.values(doc.market).filter(l=>l.seller===p.id).length};
+      listings:Object.values(doc.market).filter(l=>l.seller===p.id).length,achView:achView(p)};
   }
   const item=(p,id)=>p.inv.find(i=>i.id===id)||fail('Předmět nenalezen.',404);
   // own keys only: an id like "constructor" must not resolve to Object.prototype.constructor
@@ -215,10 +221,150 @@ export function createMeta(db){
       const l=listing(id);if(!l)fail('Nabídka už neexistuje.',404);if(l.seller===p.id)fail('Vlastní nabídku nekoupíš, můžeš ji zrušit.');
       if(p.credits<l.price)fail('Nemáš dost kreditů.');if(p.inv.length>=D.INV_MAX)fail('Inventář je plný.');
       delete doc.market[id];p.credits-=l.price;p.inv.push(l.item);
-      const s=doc.profiles[l.seller];if(s)s.credits+=Math.floor(l.price*(1-D.MARKET_FEE));
+      const s=doc.profiles[l.seller];if(s){s.credits+=Math.floor(l.price*(1-D.MARKET_FEE));s.stats.sold=(s.stats.sold|0)+1}
       return{item:l.item};
+    },
+
+    // ---------- guild actions; `notify` lists the players whose guild screen should refresh ----------
+    guildCreate(p,{name,tag,desc,open}){
+      if(p.guild)fail('Už jsi v klanu.');
+      if(p.level<D.GUILD.minLevel)fail(`Klan můžeš založit od úrovně ${D.GUILD.minLevel}.`);
+      name=String(name||'').trim().replace(/\s+/g,' ');tag=String(tag||'').trim().toUpperCase();
+      if(!D.GUILD_NAME_RE.test(name))fail('Název klanu má 3–24 znaků: písmena, číslice, mezera, tečka, pomlčka nebo podtržítko.');
+      if(!D.GUILD_TAG_RE.test(tag))fail('Zkratka klanu má 2–4 velká písmena nebo číslice.');
+      const g0=Object.values(doc.guilds);
+      if(g0.some(g=>g.name.toLowerCase()===name.toLowerCase()))fail('Klan s tímto názvem už existuje.',409);
+      if(g0.some(g=>g.tag===tag))fail('Tuto zkratku už má jiný klan.',409);
+      if(p.credits<D.GUILD.cost)fail(`Založení klanu stojí ${D.GUILD.cost} kreditů.`);
+      p.credits-=D.GUILD.cost;
+      const g={id:D.newId(),name,tag,desc:D.cleanChat(desc).slice(0,160),open:!!open,leader:p.id,members:{},apps:[],level:1,xp:0,created:Date.now(),log:[],week:{key:D.weekKey(),wins:0}};
+      doc.guilds[g.id]=g;addMember(g,p,'leader');glog(g,`${p.nick} založil klan.`);
+      return{guildId:g.id,notify:[p.id]};
+    },
+    guildApply(p,{id}){
+      const g=guildById(id)||fail('Klan nenalezen.',404);if(p.guild)fail('Už jsi v klanu.');
+      if(p.guildInv.includes(g.id)||g.open){joinGuild(g,p);return{joined:true,notify:memberIds(g)}}
+      if(g.apps.includes(p.id))fail('Žádost už čeká na vyřízení.');
+      if(g.apps.length>=D.GUILD.maxApps)fail('Klan má moc nevyřízených žádostí.');
+      g.apps.push(p.id);return{notify:officerIds(g)};
+    },
+    guildCancelApp(p,{id}){const g=guildById(id);if(g)without(g.apps,p.id);return{notify:g?officerIds(g):[]}},
+    guildInvite(p,{nick}){
+      const g=myGuild(p),o=profByNick(nick);needRole(g,p,'officer');
+      if(!o)fail('Hráč s touto přezdívkou neexistuje.',404);if(o.id===p.id)fail('Sám sebe pozvat nejde.');
+      if(o.guild)fail(`${o.nick} už je v klanu.`);
+      if(g.apps.includes(o.id)){joinGuild(g,o);return{notify:memberIds(g)}}
+      if(o.guildInv.includes(g.id))fail('Pozvánka už čeká.');
+      if(!blocks(o,p)){o.guildInv.push(g.id);if(o.guildInv.length>D.GUILD.maxInv)o.guildInv.shift()}
+      glog(g,`${p.nick} pozval hráče ${o.nick}.`);return{notify:[...officerIds(g),o.id],noteTo:{pid:o.id,msg:`Klan [${g.tag}] ${g.name} tě zve mezi sebe. Pozvánku najdeš na kartě Klan.`}};
+    },
+    guildAccept(p,{id}){
+      if(!p.guildInv.includes(id))fail('Pozvánka už neplatí.');
+      const g=guildById(id);if(!g){without(p.guildInv,id);fail('Klan už neexistuje.',404)}
+      if(p.guild)fail('Už jsi v klanu.');joinGuild(g,p);return{notify:memberIds(g)};
+    },
+    guildDecline(p,{id}){without(p.guildInv,id)},
+    guildApp(p,{id,ok}){
+      const g=myGuild(p);needRole(g,p,'officer');
+      if(!g.apps.includes(id))fail('Žádost už neplatí.');
+      const o=profById(id);
+      if(ok&&o&&!o.guild)joinGuild(g,o);
+      without(g.apps,id);
+      return{notify:[...memberIds(g),id]};
+    },
+    guildLeave(p){
+      const g=myGuild(p),n=memberIds(g).length;
+      if(g.leader===p.id&&n>1)fail('Nejdřív předej vedení jinému členovi, nebo klan rozpusť.');
+      if(n<=1)return actions.guildDisband(p);
+      removeMember(g,p.id);glog(g,`${p.nick} opustil klan.`);return{notify:[...memberIds(g),p.id]};
+    },
+    guildKick(p,{id}){
+      const g=myGuild(p);needRole(g,p,'officer');
+      if(!isMember(g,id)||id===p.id)fail('Tohoto hráče vyhodit nejde.');
+      if(p.id!==g.leader&&g.members[id].role!=='member')fail('Důstojník může vyhodit jen člena.');
+      const o=profById(id);removeMember(g,id);glog(g,`${p.nick} vyhodil hráče ${o?.nick||'?'}.`);return{notify:[...memberIds(g),id]};
+    },
+    guildRole(p,{id,role}){
+      const g=myGuild(p);needRole(g,p,'leader');
+      if(!isMember(g,id)||id===p.id||!['officer','member'].includes(role))fail('Tuto změnu udělat nejde.');
+      g.members[id].role=role;glog(g,`${profById(id)?.nick||'?'} je teď ${D.GUILD_ROLES[role].toLowerCase()}.`);return{notify:memberIds(g)};
+    },
+    guildLead(p,{id}){
+      const g=myGuild(p);needRole(g,p,'leader');
+      if(!isMember(g,id)||id===p.id)fail('Vedení jde předat jen jinému členovi klanu.');
+      g.members[id].role='leader';g.members[p.id].role='officer';g.leader=id;glog(g,`${p.nick} předal vedení hráči ${profById(id)?.nick||'?'}.`);return{notify:memberIds(g)};
+    },
+    guildEdit(p,{desc,open}){
+      const g=myGuild(p);needRole(g,p,'leader');
+      if(desc!==undefined)g.desc=D.cleanChat(desc).slice(0,160);if(open!==undefined)g.open=!!open;return{notify:memberIds(g)};
+    },
+    guildDisband(p){
+      const g=myGuild(p);needRole(g,p,'leader');const ids=memberIds(g);
+      for(const id of ids){const o=profById(id);if(o)o.guild=null}
+      for(const o of Object.values(doc.profiles))if(o.guildInv?.includes(g.id))without(o.guildInv,g.id);
+      delete doc.guilds[g.id];return{notify:ids,disbanded:true};
+    },
+    achClaim(p,{id}){if(id!==undefined&&!D.achById(id))fail('Neznámý úspěch.',404);return achClaim(p,id===undefined?null:[id])},
+    guildClaim(p){
+      const g=myGuild(p);rollGuildWeek(g);const m=g.members[p.id],wk=g.week;
+      if(wk.wins<D.guildWeekTarget(memberIds(g).length))fail('Týdenní cíl klanu ještě není splněný.');
+      if(m.wk<D.GUILD.weekMin)fail(`Odměnu dostane, kdo tento týden odehrál za klan aspoň ${D.GUILD.weekMin} zápasy.`);
+      if(p.guildWeek===wk.key)fail('Odměnu za tento týden už máš.');
+      const R=D.guildWeekReward(g.level),it=D.rollItem(p.level,{minR:R.minR});
+      if(p.inv.length>=D.INV_MAX)fail('Inventář je plný. Uvolni místo pro implantát.');
+      p.guildWeek=wk.key;p.credits+=R.credits;p.inv.push(it);return{credits:R.credits,item:it};
     }
   };
+
+  // ---------- guilds ----------
+  function guildById(id){return typeof id==='string'&&Object.hasOwn(doc.guilds,id)?doc.guilds[id]:null}
+  function isMember(g,id){return!!(g&&typeof id==='string'&&Object.hasOwn(g.members,id))}
+  const memberIds=g=>Object.keys(g.members);
+  const officerIds=g=>memberIds(g).filter(id=>g.members[id].role!=='member');
+  const ROLE_RANK={member:0,officer:1,leader:2};
+  function myGuild(p){const g=guildById(p.guild);if(!g||!isMember(g,p.id))fail('Nejsi v žádném klanu.');rollGuildWeek(g);return g}
+  function needRole(g,p,role){if(ROLE_RANK[g.members[p.id].role]<ROLE_RANK[role])fail(role==='leader'?'Tohle smí jen vůdce klanu.':'Tohle smí jen vůdce nebo důstojník.',403)}
+  function glog(g,msg){g.log.unshift({t:Date.now(),msg});g.log.length=Math.min(g.log.length,30)}
+  function addMember(g,p,role){g.members[p.id]={role,joined:Date.now(),wk:0,ww:0,xp:0};p.guild=g.id;without(p.guildInv,g.id)}
+  function joinGuild(g,p){
+    if(memberIds(g).length>=D.guildMaxMembers(g.level))fail('Klan je plný.');
+    addMember(g,p,'member');
+    for(const x of Object.values(doc.guilds))without(x.apps,p.id);
+    glog(g,`${p.nick} vstoupil do klanu.`);
+  }
+  function removeMember(g,id){delete g.members[id];const o=profById(id);if(o&&o.guild===g.id)o.guild=null}
+  function rollGuildWeek(g){const k=D.weekKey();if(g.week.key===k)return;g.week={key:k,wins:0};for(const m of Object.values(g.members)){m.wk=0;m.ww=0}}
+  // a member's match: guild XP, the weekly goal and the member bonus; returns what the reward screen shows
+  function guildMatch(p,xp,cr,won){
+    const g=guildById(p.guild);if(!isMember(g,p.id))return null;rollGuildWeek(g);
+    const b=D.guildBonus(g.level)/100,bx=Math.round(xp*b),bc=Math.round(cr*b),gx=Math.max(1,Math.round(xp/3)),m=g.members[p.id];
+    g.xp+=gx;m.xp+=gx;m.wk++;if(won){m.ww++;g.week.wins++}
+    let up=0;while(g.level<D.GUILD.maxLevel&&g.xp>=D.guildXpFor(g.level)){g.xp-=D.guildXpFor(g.level);g.level++;up=g.level;glog(g,`Klan dosáhl úrovně ${g.level}.`)}
+    if(g.level>=D.GUILD.maxLevel)g.xp=0;
+    return{tag:g.tag,gx,bx,bc,up};
+  }
+  const tagOf=pid=>{const p=profById(pid),g=p&&guildById(p.guild);return g?g.tag:null};
+  function guildCard(g){return{id:g.id,name:g.name,tag:g.tag,level:g.level,n:memberIds(g).length,max:D.guildMaxMembers(g.level),open:g.open,desc:g.desc}}
+  function guildList(q){
+    q=String(q||'').trim().toLowerCase().slice(0,24);
+    return Object.values(doc.guilds).filter(g=>!q||g.name.toLowerCase().includes(q)||g.tag.toLowerCase().includes(q))
+      .sort((a,b)=>b.level-a.level||b.xp-a.xp||memberIds(b).length-memberIds(a).length).slice(0,40).map(guildCard);
+  }
+  // status(id) comes from the server (online, lobby, match)
+  function guildView(p,status){
+    migrate(p);
+    const g=guildById(p.guild);
+    if(!g)return{guild:null,invites:p.guildInv.map(guildById).filter(Boolean).map(guildCard),
+      applied:Object.values(doc.guilds).filter(x=>x.apps.includes(p.id)).map(guildCard),cost:D.GUILD.cost,minLevel:D.GUILD.minLevel};
+    rollGuildWeek(g);
+    const me=g.members[p.id],officer=me.role!=='member',n=memberIds(g).length,target=D.guildWeekTarget(n);
+    const card=id=>{const o=profById(id);return o?{id,nick:o.nick,lv:o.level,cls:o.cls}:null};
+    const members=memberIds(g).map(id=>{const c=card(id);return c&&{...c,...g.members[id],...status(id)}}).filter(Boolean)
+      .sort((a,b)=>ROLE_RANK[b.role]-ROLE_RANK[a.role]||(a.st==='offline')-(b.st==='offline')||b.wk-a.wk||a.nick.localeCompare(b.nick,'cs'));
+    return{guild:{...guildCard(g),xp:g.xp,xpNext:g.level>=D.GUILD.maxLevel?0:D.guildXpFor(g.level),bonus:D.guildBonus(g.level),created:g.created,log:g.log,
+      week:{key:g.week.key,wins:g.week.wins,target,reward:D.guildWeekReward(g.level),claimed:p.guildWeek===g.week.key,mine:me.wk,can:g.week.wins>=target&&me.wk>=D.GUILD.weekMin&&p.guildWeek!==g.week.key},
+      role:me.role,members,apps:officer?g.apps.map(card).filter(Boolean):[]}};
+  }
   function act(p,name,body){
     // own keys only: names like "constructor" or "__defineGetter__" would otherwise reach Object.prototype
     const fn=Object.hasOwn(actions,name)?actions[name]:null;if(!fn)fail('Neznámá akce.',404);
@@ -240,9 +386,10 @@ export function createMeta(db){
   function top(){
     const season=D.seasonKey();
     return{players:Object.values(doc.profiles).sort((a,b)=>b.level-a.level||b.xp-a.xp).slice(0,20)
-      .map(p=>({nick:p.nick,level:p.level,cls:p.cls,wins:p.stats.wins,bossKills:p.stats.bossKills,bestWave:p.stats.bestWave,bestEndless:p.stats.bestEndless|0})),
+      .map(p=>({nick:p.nick,level:p.level,cls:p.cls,ach:achView(migrate(p)).pts,wins:p.stats.wins,bossKills:p.stats.bossKills,bestWave:p.stats.bestWave,bestEndless:p.stats.bestEndless|0})),
       season,ranked:Object.values(doc.profiles).filter(p=>p.ranked?.season===season&&p.ranked.games>0).sort((a,b)=>b.ranked.rating-a.ranked.rating).slice(0,30)
-        .map(p=>({nick:p.nick,cls:p.cls,rating:p.ranked.rating,div:D.divisionOf(p.ranked.rating),games:p.ranked.games,wins:p.ranked.wins,placed:p.ranked.games>=D.PLACEMENT}))};
+        .map(p=>({nick:p.nick,cls:p.cls,rating:p.ranked.rating,div:D.divisionOf(p.ranked.rating),games:p.ranked.games,wins:p.ranked.wins,placed:p.ranked.games>=D.PLACEMENT})),
+      guilds:guildList('').slice(0,20)};
   }
 
   // ---------- friends ----------
@@ -283,7 +430,7 @@ export function createMeta(db){
   }
   // status(id) comes from the server: {st:'offline'|'online'|'lobby'|'match', ...where}
   function friendsView(p,status){
-    migrate(p);const S=p.social,card=id=>{const o=profById(id);return o?{id,nick:o.nick,lv:o.level,cls:o.cls,title:o.title||null}:null};
+    migrate(p);const S=p.social,card=id=>{const o=profById(id);return o?{id,nick:o.nick,lv:o.level,cls:o.cls,title:o.title||null,tag:tagOf(id)}:null};
     const list=ids=>ids.map(card).filter(Boolean);
     const order={match:0,lobby:1,online:2,offline:3};
     return{friends:list(S.friends).map(f=>({...f,...status(f.id)})).sort((a,b)=>order[a.st]-order[b.st]||a.nick.localeCompare(b.nick,'cs')),
@@ -304,6 +451,7 @@ export function createMeta(db){
       const R=e.p.ranked,score=!e.present?0:M.winner===e.team?1:M.winner===1-e.team?0:.5;
       const delta=D.eloDelta(R.rating,av[1-e.team],score,R.games),prevDiv=D.divisionOf(R.rating);
       R.rating=Math.max(0,R.rating+delta);R.games++;if(score===1)R.wins++;else if(score===0)R.losses++;R.peak=Math.max(R.peak,R.rating);
+      const ps=e.p.stats;ps.rankedGames++;if(score===1)ps.rankedWins++;ps.bestDiv=Math.max(ps.bestDiv,D.divisionOf(R.rating));
       out[e.pid]={delta,rating:R.rating,div:D.divisionOf(R.rating),prevDiv,games:R.games,left:!e.present};
     }
     db.touch();return out;
@@ -311,6 +459,7 @@ export function createMeta(db){
 
   // ---------- rewards ----------
   function rewardsFor(M,u,p,loot,mvp=false,rk=null){
+    migrate(p);const achBefore=achReachedAll(p);
     const mult=D.DIFF_REWARD[M.diffKey]||1,part=Math.max(.25,Math.min(1,(M.time-(u.joinedAt||0))/Math.max(1,M.time)));
     let xp=0,cr=0,res='loss',record=0;const items=[...u.bag,...loot];
     const pveWin=!M.D.pvp&&(M.winner===0||M.D.endless&&M.wave>=D.ENDLESS_WIN);
@@ -356,6 +505,8 @@ export function createMeta(db){
     const bump=(g,def)=>{if(!g||!def||g.claimed)return;const before=g.prog;g.prog=def.max?Math.max(g.prog,delta[def.stat]||0):Math.min(def.target,g.prog+(delta[def.stat]||0));
       if(before<def.target&&g.prog>=def.target)done.push(def.name)};
     for(const g of p.goals.list)bump(g,D.GOALS[g.id]);bump(p.goals.weekly,D.WEEKLY_GOALS[p.goals.weekly?.id]);
+    // guild: XP for the guild, the weekly goal and the member bonus
+    const guild=guildMatch(p,xp,cr,res==='win');if(guild){xp+=guild.bx;cr+=guild.bc}
     // apply
     p.credits+=cr;const levelUps=grantXp(p,xp);
     let sold=0;for(const it of items)if(!giveItem(p,it))sold++;
@@ -365,13 +516,38 @@ export function createMeta(db){
     bump2(st.byCls,u.clsKey);bump2(st.byMode,M.mission?'campaign':M.mode);
     if(res==='win')for(const b of M.bossKeys||[])st.byBoss[b]=(st.byBoss[b]|0)+1;
     st.dmg+=Math.round(u.dmgDealt);st.heal+=Math.round(u.healDone);st.time+=Math.round(M.time-(u.joinedAt||0));if(mvp)st.mvp++;
+    st.relics+=u.relics|0;st.legendary+=items.filter(it=>it.r===4).length;
     p.history.unshift({at:Date.now(),mode:M.mode,map:M.mapKey,boss:M.mode==='boss'?M.bossKey:null,mission:M.mission,res,cls:u.clsKey,
       ki:u.kills,de:u.deaths,nk:u.npcKills,dm:Math.round(u.dmgDealt),he:Math.round(u.healDone),wave:M.D.waves?M.wave:0,
       score:M.D.pvp?[M.score[u.team],M.score[1-u.team]]:null,dur:Math.round(M.time),xp,cr,mvp,rk});
     p.history.length=Math.min(p.history.length,D.HISTORY_MAX);
     db.touch();
-    return{xp,credits:cr,items,res,levelUps,sold,skin,camp,goalsDone:done,record,mvp};
+    return{xp,credits:cr,items,res,levelUps,sold,skin,camp,goalsDone:done,record,mvp,guild,achNew:achDiff(p,achBefore)};
   }
 
-  return{register,login,logout,auth,view,act,market,top,rewardsFor,rankedResult,canStartMission,friendOp,friendsView,isFriend,blocks,profById,loadoutFor:(p,k)=>D.computeLoadout(p,k)};
+  // ---------- achievements ----------
+  const achCtx=p=>{const g=guildById(p.guild);return{...p,guildLevel:isMember(g,p.id)?g.level:0}};
+  function achReachedAll(p){const c=achCtx(p),o={};for(const a of D.ACH)o[a.id]=D.achReached(a,a.v(c));return o}
+  // tiers reached since `before`, for the end screen
+  function achDiff(p,before){const now=achReachedAll(p),out=[];for(const a of D.ACH)for(let t=before[a.id];t<now[a.id];t++)out.push({id:a.id,name:a.name,tier:t});return out}
+  function achView(p){
+    const c=achCtx(p);let pts=0,ready=0;
+    const list=D.ACH.map(a=>{const val=a.v(c),reached=D.achReached(a,val),claimed=Math.min(p.ach[a.id]|0,reached);
+      for(let t=0;t<reached;t++)pts+=D.ACH_TIERS[t].pts;ready+=reached-claimed;return{id:a.id,val,reached,claimed}});
+    return{list,pts,ready};
+  }
+  // claims every reached tier that has not been paid yet; one achievement or all of them
+  function achClaim(p,ids){
+    const c=achCtx(p);let credits=0;const titles=[],tiers=[];
+    for(const a of D.ACH){if(ids&&!ids.includes(a.id))continue;
+      const reached=D.achReached(a,a.v(c));
+      for(let t=p.ach[a.id]|0;t<reached;t++){credits+=D.ACH_TIERS[t].credits;tiers.push({id:a.id,tier:t});
+        if(t===2&&a.title&&!p.titles.includes(a.title)){p.titles.push(a.title);titles.push(a.title)}}
+      if(reached>(p.ach[a.id]|0))p.ach[a.id]=reached}
+    if(!tiers.length)fail('Není co vyzvednout.');
+    p.credits+=credits;return{credits,titles,tiers:tiers.length};
+  }
+
+  return{register,login,logout,auth,view,act,market,top,rewardsFor,rankedResult,canStartMission,friendOp,friendsView,isFriend,blocks,profById,
+    guildView,guildList,tagOf,guildMembers:gid=>{const g=guildById(gid);return g?memberIds(g):[]},loadoutFor:(p,k)=>D.computeLoadout(p,k)};
 }

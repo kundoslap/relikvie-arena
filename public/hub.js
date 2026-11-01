@@ -1,6 +1,7 @@
 // Relikvie Aréna — hub: sign-in, character, inventory, skill tree, market, shop, leaderboard and match rewards.
 import * as D from './data.js';
 import * as Social from './social.js';
+import * as Snd from './audio.js';
 
 const $=s=>document.querySelector(s);
 export const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -95,7 +96,7 @@ export function showAuth(){
 async function logout(){Social.disconnect();try{await api('/api/logout',{})}catch{}H.token=null;store.set('token',null);H.profile=null;H.guest=false;showAuth()}
 
 // ---------- hub frame ----------
-const TABS=[['play','Hrát'],['campaign','Kampaň'],['goals','Cíle'],['hero','Postava'],['prof','Profese'],['tree','Dovednosti'],['inv','Inventář'],['market','Tržiště'],['shop','Obchod'],['friends','Přátelé'],['stats','Statistiky'],['top','Žebříček']];
+const TABS=[['play','Hrát'],['campaign','Kampaň'],['goals','Cíle'],['ach','Úspěchy'],['hero','Postava'],['prof','Profese'],['tree','Dovednosti'],['inv','Inventář'],['market','Tržiště'],['shop','Obchod'],['friends','Přátelé'],['guild','Klan'],['stats','Statistiky'],['top','Žebříček']];
 export function showHub(tab){if(tab)H.tab=tab;if(H.profile&&!H.offline)Social.connect(H.token);H.cb.showOnly('hub');renderHub()}
 export function joinRoom(code){H.cb.join(code,{cls:H.cls,name:H.profile?H.profile.nick:H.guestName||'Host'})}
 export function renderHub(){
@@ -103,16 +104,21 @@ export function renderHub(){
   if(!p&&H.tab!=='play'&&H.tab!=='top')H.tab='play';
   $('#hubTop').innerHTML=p?`<div class="who"><div class="lvl">${p.level}</div><div><div class="nick">${esc(p.nick)}${p.title?` <small class="help" style="color:var(--gold)">◇ ${esc(p.title)}</small>`:''}</div>
       <div class="xpbar" title="${p.xpNext?`${num(p.xp)} / ${num(p.xpNext)} zkušeností`:'Maximální úroveň'}"><i style="width:${p.xpNext?Math.min(100,p.xp/p.xpNext*100):100}%"></i></div></div></div>
-    <div class="btns"><div class="cred">${num(p.credits)} <small>KREDITŮ</small></div><button class="ghost sm" id="logoutBtn" type="button">Odhlásit</button></div>`
+    <div class="btns"><div class="cred">${num(p.credits)} <small>KREDITŮ</small></div>${sndBtn()}<button class="ghost sm" id="logoutBtn" type="button">Odhlásit</button></div>`
     :`<div class="who"><div class="nick">${H.offline?'Offline trénink':'Host'}</div><small class="help">${H.offline?'Postup se neukládá.':'Bez účtu se postup neukládá.'}</small></div>
-    ${H.offline?'':'<button class="ghost sm" id="loginBtn" type="button">Přihlásit nebo založit účet</button>'}`;
+    <div class="btns">${sndBtn()}${H.offline?'':'<button class="ghost sm" id="loginBtn" type="button">Přihlásit nebo založit účet</button>'}</div>`;
+  $('#sndBtn').onclick=()=>{const P=$('#sndPop');P.hidden=!P.hidden;if(!P.hidden){P.innerHTML=Snd.panelHTML();Snd.bindPanel(P)}};
   $('#logoutBtn')&&($('#logoutBtn').onclick=logout);
   $('#loginBtn')&&($('#loginBtn').onclick=()=>{H.guest=false;showAuth()});
-  $('#hubNav').innerHTML=TABS.map(([k,n])=>{const off=!p&&k!=='play'&&!(k==='top'&&!H.offline);return`<button type="button" data-t="${k}" ${H.tab===k?'aria-current="page"':''} ${off?'disabled title="Jen s účtem"':''}>${n}${k==='friends'?navBadge():''}</button>`}).join('');
+  $('#hubNav').innerHTML=TABS.map(([k,n])=>{const off=!p&&k!=='play'&&!(k==='top'&&!H.offline);return`<button type="button" data-t="${k}" ${H.tab===k?'aria-current="page"':''} ${off?'disabled title="Jen s účtem"':''}>${n}${k==='friends'?navBadge():k==='ach'&&p?.achView?.ready?` <b>${p.achView.ready}</b>`:''}</button>`}).join('');
   $('#hubNav').querySelectorAll('button').forEach(b=>b.onclick=()=>{H.tab=b.dataset.t;renderHub()});
   if(H.tab!=='hero')H.cb.preview(null);
-  ({play:tabPlay,campaign:tabCampaign,goals:tabGoals,hero:tabHero,prof:tabProf,inv:tabInv,tree:tabTree,market:tabMarket,shop:tabShop,friends:tabFriends,stats:tabStats,top:tabTop})[H.tab]();
+  ({play:tabPlay,campaign:tabCampaign,goals:tabGoals,hero:tabHero,prof:tabProf,inv:tabInv,tree:tabTree,market:tabMarket,shop:tabShop,friends:tabFriends,guild:tabGuild,ach:tabAch,stats:tabStats,top:tabTop})[H.tab]();
 }
+const sndBtn=()=>`<button class="ghost sm" id="sndBtn" type="button" aria-label="Nastavení zvuku">${Snd.settings().mute?'Zvuk ✕':'Zvuk'}</button>`;
+Snd.onChange(()=>{const b=$('#sndBtn');if(b)b.textContent=Snd.settings().mute?'Zvuk ✕':'Zvuk'});
+// the sound popover closes on a click elsewhere and whenever the hub is left
+document.addEventListener('pointerdown',e=>{const P=$('#sndPop');if(P&&!P.hidden&&!P.contains(e.target)&&e.target.id!=='sndBtn')P.hidden=true});
 const navBadge=()=>{const n=Social.pending();return n?` <b>${n}</b>`:''};
 // friend list updates arrive every few seconds; only the list part is redrawn so a half-typed nick stays
 Social.onChange(()=>{
@@ -246,6 +252,113 @@ function friendList(){
     // removing and blocking ask for a second click
     if((k==='remove'||k==='block')&&!x.dataset.sure){x.dataset.sure='1';x.textContent='Opravdu?';setTimeout(()=>{if(x.isConnected){delete x.dataset.sure;x.textContent=k==='remove'?'Odebrat':'Blokovat'}},3000);return}
     Social.fr(k,id)});
+}
+
+// ---------- Úspěchy ----------
+const fmtN=n=>n>=1e6?(n/1e6).toLocaleString('cs-CZ',{maximumFractionDigits:1})+' mil.':num(n);
+function tabAch(){
+  const p=H.profile,V=p.achView,by=Object.fromEntries(V.list.map(x=>[x.id,x])),T=D.ACH_TIERS;
+  const total=D.ACH.length*3,got=V.list.reduce((a,x)=>a+x.reached,0);
+  const card=a=>{const s=by[a.id],next=a.t[s.reached],prev=s.reached?a.t[s.reached-1]:0,ready=s.reached-s.claimed;
+    const pr=next?Math.max(0,Math.min(1,(s.val-prev)/(next-prev))):1;
+    return`<div class="ach${s.reached===3?' done':''}"><div class="achh"><b>${esc(a.name)}</b><span class="pips">${T.map((t,i)=>`<i style="--c:${t.color}" class="${i<s.reached?'on':''}" title="${t.name}: ${fmtN(a.t[i])}"></i>`).join('')}</span></div>
+      <small class="help">${esc(a.desc)} ${next?`<b style="color:var(--ink)">${fmtN(Math.min(s.val,next))} / ${fmtN(next)}</b> · další stupeň ${T[s.reached].name.toLowerCase()} za ${num(T[s.reached].credits)} kreditů${s.reached===2&&a.title?` a titul „${esc(a.title)}“`:''}`:`<b style="color:var(--gold)">Hotovo · ${fmtN(s.val)}</b>`}</small>
+      ${next?`<div class="xpbar" style="width:100%"><i style="width:${pr*100}%"></i></div>`:''}
+      ${ready?`<button class="go sm" type="button" data-ach="${a.id}">Vyzvednout ${ready>1?ready+' stupně':T[s.claimed].name.toLowerCase()}</button>`:''}</div>`};
+  $('#hubBody').innerHTML=`<section class="panel"><div class="row"><div><h3>Úspěchy</h3><p class="help">${got} / ${total} stupňů · bronz ${num(T[0].credits)}, stříbro ${num(T[1].credits)}, zlato ${num(T[2].credits)} kreditů a titul.</p></div>
+      <div class="rank"><span class="rkb" style="--c:var(--gold)">${num(V.pts)} bodů</span>${V.ready?`<button class="go" type="button" id="achAll">Vyzvednout vše (${V.ready})</button>`:''}</div></div>
+      <div class="xpbar" style="width:100%"><i style="width:${got/total*100}%"></i></div></section>
+    ${Object.entries(D.ACH_CATS).map(([k,n])=>`<section class="panel"><h3>${n}</h3><div class="achs">${D.ACH.filter(a=>a.cat===k).map(card).join('')}</div></section>`).join('')}`;
+  const msg=j=>`+${num(j.credits)} kreditů${j.titles.length?` · nový titul ${j.titles.join(', ')}`:''}.`;
+  document.querySelectorAll('[data-ach]').forEach(b=>b.onclick=()=>act('achClaim',{id:b.dataset.ach},msg));
+  $('#achAll')&&($('#achAll').onclick=()=>act('achClaim',{},msg));
+}
+
+// ---------- Klan ----------
+Social.onGuild(()=>{if(H.tab==='guild'&&!$('#hub').hidden)tabGuild()});
+const sure=(x,label)=>{if(x.dataset.sure)return true;x.dataset.sure='1';x.textContent='Opravdu?';setTimeout(()=>{if(x.isConnected){delete x.dataset.sure;x.textContent=label}},3000);return false};
+const gtag=t=>`<span class="cg">[${esc(t)}]</span>`;
+async function tabGuild(){
+  if(!$('#gBody'))$('#hubBody').innerHTML='<div id="gBody" style="display:grid;gap:22px"><section class="panel"><h3>Klan</h3><p class="help">Načítám…</p></section></div>';
+  let v;try{v=await api('/api/guild')}catch(e){if($('#gBody'))$('#gBody').innerHTML=`<section class="panel"><p class="err">${esc(e.message)}</p></section>`;return}
+  if(H.tab!=='guild'||!$('#gBody'))return;
+  if(v.guild)guildMine(v.guild);else guildNone(v);
+}
+const gact=(name,body,msg)=>act(name,body,msg);
+function guildNone(v){
+  const p=H.profile,canCreate=p.level>=v.minLevel,G=H.gnew??={name:'',tag:'',desc:'',open:true,q:''};
+  const card=(g,btns)=>`<div class="fr"><span>${gtag(g.tag)} <b>${esc(g.name)}</b><small>úroveň ${g.level} · ${g.n} / ${g.max} členů · ${g.open?'otevřený vstup':'vstup na žádost'}${g.desc?` · ${esc(g.desc)}`:''}</small></span><div class="btns">${btns}</div></div>`;
+  $('#gBody').innerHTML=`
+    ${v.invites.length?`<section class="panel"><h3>Pozvánky do klanů</h3><div class="flist">${v.invites.map(g=>card(g,`<button class="go sm" type="button" data-g="accept" data-id="${g.id}">Přijmout</button><button class="ghost sm" type="button" data-g="decline" data-id="${g.id}">Odmítnout</button>`)).join('')}</div></section>`:''}
+    ${v.applied.length?`<section class="panel"><h3>Tvoje žádosti o vstup</h3><div class="flist">${v.applied.map(g=>card(g,`<button class="ghost sm" type="button" data-g="cancel" data-id="${g.id}">Zrušit žádost</button>`)).join('')}</div></section>`:''}
+    <div class="grid2" style="align-items:start">
+    <section class="panel"><h3>Najít klan</h3>
+      <form class="inline" id="gFind" autocomplete="off"><label class="field">Název nebo zkratka<input id="gQ" maxlength="24" value="${esc(G.q)}"></label><button class="ghost" type="submit">Hledat</button></form>
+      <div class="flist" id="gList"><p class="help">Načítám…</p></div></section>
+    <section class="panel"><h3>Založit klan</h3>
+      <p class="help">Klan roste s každým zápasem svých členů a každá úroveň dává všem členům +1 % zkušeností a kreditů a přidá dvě místa. Členové spolu plní týdenní cíl výher s odměnou pro každého, kdo za klan hrál. Klan má vlastní chat a jeho zkratka se ukazuje u jmen.</p>
+      <form id="gNew" style="display:grid;gap:10px" autocomplete="off">
+        <div class="inline"><label class="field" style="flex:3 1 160px">Název<input id="gName" maxlength="24" value="${esc(G.name)}" placeholder="Např. Neonoví vlci"></label>
+          <label class="field" style="flex:1 1 80px">Zkratka<input id="gTag" class="code" maxlength="4" value="${esc(G.tag)}" placeholder="NV"></label></div>
+        <label class="field">Popis (nepovinný)<input id="gDesc" maxlength="160" value="${esc(G.desc)}" placeholder="Koho hledáte, kdy hrajete…"></label>
+        <div class="btns"><button type="button" class="chip" id="gOpen" aria-pressed="${G.open}">${G.open?'Otevřený vstup':'Vstup na žádost'}<small>${G.open?'Kdokoli se rovnou přidá':'Žádosti schvaluje vůdce nebo důstojník'}</small></button>
+          <button class="go" type="submit" ${canCreate&&p.credits>=v.cost?'':'disabled'}>Založit za ${num(v.cost)} kreditů</button></div>
+        ${canCreate?(p.credits<v.cost?`<p class="help">Chybí ti ${num(v.cost-p.credits)} kreditů.</p>`:''):`<p class="help">Klan můžeš založit od úrovně ${v.minLevel}. Do cizího klanu můžeš vstoupit hned.</p>`}
+      </form></section></div>`;
+  const keep=()=>{G.name=$('#gName').value;G.tag=$('#gTag').value;G.desc=$('#gDesc').value};
+  $('#gOpen').onclick=()=>{keep();G.open=!G.open;guildNone(v)};
+  $('#gNew').onsubmit=async e=>{e.preventDefault();keep();const j=await gact('guildCreate',{name:G.name,tag:G.tag,desc:G.desc,open:G.open},'Klan založen.');if(j)H.gnew=null};
+  const bind=()=>document.querySelectorAll('#gBody [data-g]').forEach(b=>b.onclick=()=>{const id=b.dataset.id;
+    ({accept:()=>gact('guildAccept',{id},'Vítej v klanu!'),decline:()=>gact('guildDecline',{id}),cancel:()=>gact('guildCancelApp',{id},'Žádost zrušena.'),
+      apply:()=>gact('guildApply',{id},j=>j.joined?'Vítej v klanu!':'Žádost odeslána. Rozhodne vůdce nebo důstojník klanu.')})[b.dataset.g]()});
+  const load=async()=>{try{const j=await api('/api/guilds?q='+encodeURIComponent(G.q));if(!$('#gList'))return;const ap=new Set(v.applied.map(g=>g.id));
+    $('#gList').innerHTML=j.guilds.map(g=>card(g,ap.has(g.id)?'<small class="help">žádost čeká</small>':g.n>=g.max?'<small class="help">plný</small>':`<button class="${g.open?'go':'ghost'} sm" type="button" data-g="apply" data-id="${g.id}">${g.open?'Vstoupit':'Požádat'}</button>`)).join('')
+      ||`<p class="help">${G.q?'Žádný klan neodpovídá hledání.':'Zatím neexistuje žádný klan. Založ první!'}</p>`;bind()}
+    catch(e){if($('#gList'))$('#gList').innerHTML=`<p class="err">${esc(e.message)}</p>`}};
+  $('#gFind').onsubmit=e=>{e.preventDefault();G.q=$('#gQ').value.trim();load()};
+  bind();load();
+}
+function guildMine(g){
+  const lead=g.role==='leader',off=g.role!=='member',W=g.week,R=W.reward;
+  const mrow=m=>{const self=m.id===H.profile.id,acts=[];
+    if(!self&&lead){acts.push(m.role==='member'?`<button class="ghost sm" type="button" data-gm="up" data-id="${m.id}">Povýšit</button>`:`<button class="ghost sm" type="button" data-gm="down" data-id="${m.id}">Degradovat</button>`);
+      acts.push(`<button class="ghost sm" type="button" data-gm="lead" data-id="${m.id}">Předat vedení</button>`)}
+    if(!self&&off&&(lead||m.role==='member'))acts.push(`<button class="ghost sm" type="button" data-gm="kick" data-id="${m.id}">Vyhodit</button>`);
+    return`<div class="fr"><i class="dot ${m.st}"></i><span><small style="display:inline;color:${m.role==='leader'?'var(--gold)':m.role==='officer'?'var(--cyan)':'var(--muted)'}">${D.GUILD_ROLES[m.role]}</small> <b>${esc(m.nick)}</b>
+      <small>úr. ${m.lv} · ${D.CLASSES[m.cls]?.name||''} · tento týden ${m.wk} ${m.wk===1?'zápas':m.wk>=2&&m.wk<=4?'zápasy':'zápasů'}, ${m.ww} ${m.ww===1?'výhra':m.ww>=2&&m.ww<=4?'výhry':'výher'} · ${esc(Social.statusText(m))}</small></span><div class="btns">${acts.join('')}</div></div>`};
+  const pr=Math.min(1,W.wins/W.target);
+  $('#gBody').innerHTML=`<section class="panel"><div class="row"><div><div class="brand">KLAN · ${D.GUILD_ROLES[g.role].toUpperCase()}</div><h2 class="sec">${gtag(g.tag)} ${esc(g.name)}</h2></div>
+      <div class="btns"><button class="go sm" type="button" id="gChat">Klanový chat</button></div></div>
+      <div class="rank"><span class="rkb" style="--c:var(--gold)">Úroveň ${g.level}</span><div><b style="font-size:20px">Bonus +${g.bonus} % zkušeností a kreditů</b>
+        <small class="help">${g.n} / ${g.max} členů · ${g.open?'otevřený vstup':'vstup na žádost'}${g.xpNext?` · ${num(g.xp)} / ${num(g.xpNext)} zkušeností klanu do další úrovně`:' · nejvyšší úroveň'}</small>
+        ${g.xpNext?`<div class="xpbar" style="width:min(320px,70vw)"><i style="width:${g.xp/g.xpNext*100}%"></i></div>`:''}</div></div>
+      ${g.desc?`<p class="help">${esc(g.desc)}</p>`:''}
+      <p class="help">Každý tvůj zápas dá klanu třetinu zkušeností, které získáš. Každá úroveň klanu přidá všem členům +1 % zkušeností a kreditů (nejvýš +10 %) a dvě místa.</p></section>
+    <section class="panel"><div class="row"><h3>Týdenní cíl klanu</h3><small class="help">nový cíl každé pondělí</small></div>
+      <div class="lrow ${W.claimed?'r0':W.wins>=W.target?'r4':'r2'}"><div><b>Vyhrajte společně ${W.target} zápasů</b><small>${W.wins} / ${W.target} výher · odměna ${num(R.credits)} kreditů a implantát ${D.RARITIES[R.minR].name.toLowerCase()} nebo lepší · tvoje zápasy tento týden: ${W.mine} (potřeba ${D.GUILD.weekMin})</small>
+        <div class="xpbar" style="width:100%"><i style="width:${pr*100}%"></i></div></div>
+        <div class="price">${W.wins}/${W.target}</div>${W.claimed?'<small class="help">Vyzvednuto</small>':`<button class="go sm" type="button" id="gClaim" ${W.can?'':'disabled'}>Vyzvednout</button>`}</div></section>
+    <div class="grid2" style="align-items:start">
+      <section class="panel"><h3>Členové · ${g.members.filter(m=>m.st!=='offline').length} online</h3><div class="flist">${g.members.map(mrow).join('')}</div></section>
+      <div style="display:grid;gap:22px">
+        ${off?`<section class="panel"><h3>Pozvat do klanu</h3><form class="inline" id="gInv" autocomplete="off"><label class="field">Přezdívka hráče<input id="gInvNick" maxlength="16"></label><button class="go sm" type="submit">Pozvat</button></form>
+          ${g.apps.length?`<div class="lbl">Žádosti o vstup</div><div class="flist">${g.apps.map(a=>`<div class="fr"><span><b>${esc(a.nick)}</b><small>úr. ${a.lv} · ${D.CLASSES[a.cls]?.name||''}</small></span><div class="btns"><button class="go sm" type="button" data-ga="1" data-id="${a.id}">Přijmout</button><button class="ghost sm" type="button" data-ga="0" data-id="${a.id}">Odmítnout</button></div></div>`).join('')}</div>`:'<p class="help">Žádné nevyřízené žádosti o vstup.</p>'}</section>`:''}
+        ${lead?`<section class="panel"><h3>Nastavení klanu</h3><label class="field">Popis<input id="gEdDesc" maxlength="160" value="${esc(g.desc)}"></label>
+          <div class="btns"><button type="button" class="chip" id="gEdOpen" aria-pressed="${g.open}">${g.open?'Otevřený vstup':'Vstup na žádost'}<small>klikni pro změnu</small></button><button class="ghost sm" type="button" id="gEdSave">Uložit popis</button></div></section>`:''}
+        <section class="panel"><h3>Dění v klanu</h3><div class="tl">${g.log.map(e=>`<div><small>${new Date(e.t).toLocaleDateString('cs-CZ',{day:'numeric',month:'numeric'})}</small><span>${esc(e.msg)}</span></div>`).join('')||'<small class="help">Zatím nic.</small>'}</div></section>
+        <section class="panel"><div class="btns">${lead&&g.n>1?'<p class="help">Než klan opustíš, předej vedení jinému členovi.</p>':`<button class="ghost" type="button" id="gLeave">${g.n<=1?'Rozpustit klan':'Opustit klan'}</button>`}${lead&&g.n>1?'<button class="ghost" type="button" id="gDisband">Rozpustit klan</button>':''}</div></section>
+      </div></div>`;
+  $('#gChat').onclick=()=>Social.openGuildChat();
+  $('#gClaim')&&($('#gClaim').onclick=()=>gact('guildClaim',{},j=>`Odměna klanu: +${num(j.credits)} kreditů a ${j.item.name}.`));
+  document.querySelectorAll('#gBody [data-gm]').forEach(b=>b.onclick=()=>{const id=b.dataset.id,k=b.dataset.gm;
+    if((k==='kick'||k==='lead')&&!sure(b,k==='kick'?'Vyhodit':'Předat vedení'))return;
+    ({up:()=>gact('guildRole',{id,role:'officer'}),down:()=>gact('guildRole',{id,role:'member'}),kick:()=>gact('guildKick',{id}),lead:()=>gact('guildLead',{id},'Vedení předáno.')})[k]()});
+  document.querySelectorAll('#gBody [data-ga]').forEach(b=>b.onclick=()=>gact('guildApp',{id:b.dataset.id,ok:b.dataset.ga==='1'}));
+  $('#gInv')&&($('#gInv').onsubmit=e=>{e.preventDefault();const n=$('#gInvNick').value.trim();if(n)gact('guildInvite',{nick:n},'Pozvánka odeslána.')});
+  $('#gEdOpen')&&($('#gEdOpen').onclick=()=>gact('guildEdit',{open:!g.open}));
+  $('#gEdSave')&&($('#gEdSave').onclick=()=>gact('guildEdit',{desc:$('#gEdDesc').value},'Popis uložen.'));
+  $('#gLeave')&&($('#gLeave').onclick=e=>{if(sure(e.currentTarget,g.n<=1?'Rozpustit klan':'Opustit klan'))gact('guildLeave',{},g.n<=1?'Klan rozpuštěn.':'Opustil jsi klan.')});
+  $('#gDisband')&&($('#gDisband').onclick=e=>{if(sure(e.currentTarget,'Rozpustit klan'))gact('guildDisband',{},'Klan rozpuštěn.')});
 }
 
 // ---------- Kampaň ----------
@@ -502,8 +615,10 @@ async function tabTop(){
     $('#hubBody').innerHTML=`<section class="panel"><h3>Hodnocená hra · sezóna ${D.seasonName(j.season)}</h3>${j.ranked?.length?`<div class="tbl" style="overflow-x:auto"><table class="st"><thead><tr><th>Hráč</th><th>Divize</th><th>Hodnocení</th><th>Zápasy</th><th>Výhry</th><th>Úspěšnost</th></tr></thead><tbody>
       ${j.ranked.map((x,i)=>`<tr class="${me(x)}"><td>${i+1}. ${esc(x.nick)} <small class="help">${D.CLASSES[x.cls]?.name||''}</small></td><td>${divBadge(x.rating,true)}</td><td>${x.placed?x.rating:`${x.rating} <small class="help">umisťuje se</small>`}</td><td>${x.games}</td><td>${x.wins}</td><td>${pct(x.wins,x.games)}</td></tr>`).join('')}</tbody></table></div>`
       :'<p class="help">V této sezóně zatím nikdo neodehrál hodnocený zápas.</p>'}</section>
-    <section class="panel"><h3>Žebříček · nejvyšší úrovně</h3><div class="tbl" style="overflow-x:auto"><table class="st"><thead><tr><th>Hráč</th><th>Povolání</th><th>Úroveň</th><th>Výhry</th><th>Bossové</th><th>Nejlepší vlna</th><th>Nekonečno</th></tr></thead><tbody>
-      ${j.players.map((x,i)=>`<tr class="${H.profile&&x.nick===H.profile.nick?'mine':''}"><td>${i+1}. ${esc(x.nick)}</td><td>${D.CLASSES[x.cls]?.name||''}</td><td>${x.level}</td><td>${x.wins}</td><td>${x.bossKills}</td><td>${x.bestWave}</td><td>${x.bestEndless|0}</td></tr>`).join('')}</tbody></table></div></section>`}
+    ${j.guilds?.length?`<section class="panel"><h3>Klany</h3><div class="tbl" style="overflow-x:auto"><table class="st"><thead><tr><th>Klan</th><th>Zkratka</th><th>Úroveň</th><th>Členové</th><th>Vstup</th></tr></thead><tbody>
+      ${j.guilds.map((g,i)=>`<tr class="${H.profile?.guild===g.id?'mine':''}"><td>${i+1}. ${esc(g.name)}</td><td class="cg">[${esc(g.tag)}]</td><td>${g.level}</td><td>${g.n} / ${g.max}</td><td>${g.open?'otevřený':'na žádost'}</td></tr>`).join('')}</tbody></table></div></section>`:''}
+    <section class="panel"><h3>Žebříček · nejvyšší úrovně</h3><div class="tbl" style="overflow-x:auto"><table class="st"><thead><tr><th>Hráč</th><th>Povolání</th><th>Úroveň</th><th>Úspěchy</th><th>Výhry</th><th>Bossové</th><th>Nejlepší vlna</th><th>Nekonečno</th></tr></thead><tbody>
+      ${j.players.map((x,i)=>`<tr class="${H.profile&&x.nick===H.profile.nick?'mine':''}"><td>${i+1}. ${esc(x.nick)}</td><td>${D.CLASSES[x.cls]?.name||''}</td><td>${x.level}</td><td>${num(x.ach|0)}</td><td>${x.wins}</td><td>${x.bossKills}</td><td>${x.bestWave}</td><td>${x.bestEndless|0}</td></tr>`).join('')}</tbody></table></div></section>`}
   catch(e){$('#hubBody').innerHTML=`<section class="panel"><p class="err">${esc(e.message)}</p></section>`}
 }
 
@@ -525,6 +640,8 @@ export function showRewards(m){
     ${m.camp?.echo?'<div class="lvup">Ozvěna jádra pokořena · bonus týdne</div>':''}
     ${m.record?`<div class="lvup">Nový rekord v Nekonečnu · vlna ${m.record}</div>`:''}
     ${m.mvp?'<div class="lvup">MVP zápasu · +15 % zkušeností a kreditů</div>':''}
+    ${m.achNew?.length?`<div class="achnew">${m.achNew.map(a=>`<span style="--c:${D.ACH_TIERS[a.tier].color}">Úspěch · ${esc(a.name)} · ${D.ACH_TIERS[a.tier].name}</span>`).join('')}<small class="help">Odměnu vyzvedneš v Úspěších.</small></div>`:''}
+    ${m.guild?`<p class="help">Klan <b class="cg">[${esc(m.guild.tag)}]</b>: +${num(m.guild.gx)} zkušeností klanu${m.guild.bx||m.guild.bc?` · klanový bonus už v odměně: +${num(m.guild.bx)} zkušeností, +${num(m.guild.bc)} kreditů`:''}</p>${m.guild.up?`<div class="lvup">Klan dosáhl úrovně ${m.guild.up}!</div>`:''}`:''}
     ${m.goalsDone?.length?`<p class="help">Splněné cíle: <b style="color:var(--green)">${m.goalsDone.map(esc).join(', ')}</b>. Odměnu vyzvedneš v Cílech.</p>`:''}
     ${m.items.length?`<div class="lbl">Kořist</div><div class="items">${m.items.map(i=>itemCard(i)).join('')}</div>`:'<p class="help">Tentokrát bez kořisti.</p>'}
     ${m.sold?`<p class="help">Inventář byl plný, ${m.sold} ${m.sold===1?'předmět byl prodán':'předměty byly prodány'} automaticky.</p>`:''}</div>`;

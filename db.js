@@ -4,7 +4,7 @@ import {readFile,writeFile,rename,mkdir} from 'node:fs/promises';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 
-const EMPTY=()=>({users:{},profiles:{},market:{},version:1});
+const EMPTY=()=>({users:{},profiles:{},market:{},guilds:{},version:1});
 
 export async function openDB(){
   const store=process.env.DATABASE_URL?await pgStore(process.env.DATABASE_URL):fileStore();

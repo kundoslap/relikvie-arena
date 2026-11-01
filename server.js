@@ -48,10 +48,14 @@ async function api(req,res,p,url){
   if(p==='/api/logout'){meta.logout(token);return json(res,200,{ok:true})}
   if(p==='/api/me')return json(res,200,{profile:meta.view(prof)});
   if(p==='/api/market')return json(res,200,meta.market(prof,Object.fromEntries(url.searchParams)));
+  if(p==='/api/guild'){const idx=presenceIndex();return json(res,200,meta.guildView(prof,id=>statusOf(idx,id)))}
+  if(p==='/api/guilds')return json(res,200,{guilds:meta.guildList(url.searchParams.get('q'))});
   const m=p.match(/^\/api\/act\/(\w+)$/);
   if(m&&req.method==='POST'){
     if(inMatch(prof.id)&&['equip','tree','cls','skin','prof','buildLoad','tactic'].includes(m[1]))throw new HttpError(409,'Během zápasu sestavu měnit nejde.');
-    return json(res,200,meta.act(prof,m[1],body));
+    const gid=prof.guild,{notify,noteTo,...out}=meta.act(prof,m[1],body);
+    if(notify)guildChanged([...notify,prof.id],gid,noteTo);
+    return json(res,200,out);
   }
   throw new HttpError(404,'Neznámá adresa.');
 }
@@ -93,7 +97,7 @@ function lobbyMsg(room,c){
   return{type:'lobby',code:room.code,you:c.cid,host:room.host,state:room.state,diff:room.diff,mode:room.mode,map:room.map,boss:room.boss,solo:!!room.solo,mission:room.mission||null,
     pub:!!room.pub,ranked:!!room.ranked,
     autoIn:room.quick&&room.state==='lobby'&&!(room.ranked&&room.clients.size<2)?Math.max(0,Math.ceil((room.autoAt-Date.now())/1000)):0,
-    players:humans(room).map(x=>({cid:x.cid,name:x.name,cls:x.cls,team:x.team,lv:x.profile?.level||0,rt:room.ranked?x.profile?.ranked?.rating??null:null}))};
+    players:humans(room).map(x=>({cid:x.cid,name:x.name,cls:x.cls,team:x.team,lv:x.profile?.level||0,tag:x.profile?meta.tagOf(x.profile.id):null,rt:room.ranked?x.profile?.ranked?.rating??null:null}))};
 }
 function broadcastLobby(room){for(const c of room.clients.values())send(c,lobbyMsg(room,c))}
 function broadcast(room,m){const s=JSON.stringify(m);for(const c of room.clients.values())send(c,s)}
@@ -131,6 +135,14 @@ function chatOk(c,text){
   c.chatT.push(now);c.lastText=text;c.lastTextAt=now;return true;
 }
 const pushLog=(arr,m,keep)=>{arr.push(m);if(arr.length>keep)arr.shift()};
+// guild chat lives in memory per guild; a guild change tells the affected players to refresh their Klan screen and chat tab
+const guildLog=new Map(),GUILD_KEEP=60;
+function guildInfo(pid){const p=meta.profById(pid),gid=p?.guild||null;return{type:'guildHist',gid,tag:gid?meta.tagOf(pid):null,list:gid?(guildLog.get(gid)||[]).filter(x=>!meta.blocks(p,{id:x.pid})):[]}}
+function guildChanged(pids,oldGid,noteTo){
+  if(oldGid&&!meta.guildMembers(oldGid).length)guildLog.delete(oldGid);
+  for(const pid of new Set(pids)){const set=socials.get(pid);if(!set)continue;const info=guildInfo(pid);
+    for(const x of set){send(x,{type:'guildUpd'});send(x,info);if(noteTo?.pid===pid)note(x,noteTo.msg)}}
+}
 function onSocial(c,m){
   const p=c.profile;
   switch(m.type){
@@ -148,8 +160,13 @@ function onSocial(c,m){
       if(m.ch==='dm'&&(!o||!meta.isFriend(p,o)))return note(c,'Soukromé zprávy jdou posílat jen přátelům.',true);
       if(!chatOk(c,text))return;
       if(m.ch==='world'){
-        const msg={type:'chat',ch:'world',from:p.nick,pid:p.id,lv:p.level,text,t:Date.now()};pushLog(worldLog,msg,WORLD_KEEP);
+        const msg={type:'chat',ch:'world',from:p.nick,pid:p.id,lv:p.level,tag:meta.tagOf(p.id),text,t:Date.now()};pushLog(worldLog,msg,WORLD_KEEP);
         const s=JSON.stringify(msg);for(const set of socials.values())for(const x of set)if(!meta.blocks(x.profile,p))send(x,s);
+      }else if(m.ch==='guild'){
+        const gid=p.guild,ids=meta.guildMembers(gid);if(!ids.includes(p.id))return note(c,'Nejsi v žádném klanu.',true);
+        const msg={type:'chat',ch:'guild',from:p.nick,pid:p.id,lv:p.level,text,t:Date.now()};
+        if(!guildLog.has(gid))guildLog.set(gid,[]);pushLog(guildLog.get(gid),msg,GUILD_KEEP);
+        const s=JSON.stringify(msg);for(const id of ids)for(const x of socials.get(id)||[])if(!meta.blocks(x.profile,p))send(x,s);
       }else if(m.ch==='dm'){
         const msg={type:'chat',ch:'dm',from:p.nick,pid:p.id,text,t:Date.now()},k=dmKey(p.id,o.id);
         if(!dmLog.has(k))dmLog.set(k,[]);pushLog(dmLog.get(k),msg,DM_KEEP);
@@ -174,7 +191,7 @@ function roomSay(c,m){
   const room=c.room;if(!room||room.solo)return;
   const text=S.cleanChat(m.text);if(!text||!chatOk(c,text))return;
   const team=!!m.team&&S.MODES[room.mode].pvp;
-  const msg={type:'chat',ch:'room',from:c.name,pid:c.profile?.id||null,cid:c.cid,tm:c.team,team,text,t:Date.now()};
+  const msg={type:'chat',ch:'room',from:c.name,pid:c.profile?.id||null,tag:c.profile?meta.tagOf(c.profile.id):null,cid:c.cid,tm:c.team,team,text,t:Date.now()};
   if(!team)pushLog(room.chat??=[],msg,ROOM_KEEP);
   const s=JSON.stringify(msg);
   for(const x of room.clients.values())if((!team||x.team===c.team)&&!meta.blocks(x.profile,c.profile))send(x,s);
@@ -273,7 +290,7 @@ function onMessage(c,m){
         if(!socials.has(p.id))socials.set(p.id,new Set());socials.get(p.id).add(c);
         const dms={};for(const [k,list] of dmLog){const [a,b]=k.split('|'),o=a===p.id?b:b===p.id?a:null;if(o&&p.social.friends.includes(o))dms[o]=list}
         send(c,{type:'social',ok:true,me:p.id,world:worldLog.filter(x=>!meta.blocks(p,{id:x.pid})),dms});
-        pushFriends(p.id);break}
+        send(c,guildInfo(p.id));pushFriends(p.id);break}
       case 'say':if(m.ch==='room')roomSay(c,m);break;
       case 'hello':{
         if(room)leave(c);

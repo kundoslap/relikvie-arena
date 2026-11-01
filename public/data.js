@@ -433,6 +433,56 @@ export function eloDelta(my,opp,score,games){const K=games<PLACEMENT?48:28;retur
 // a new season keeps half of the distance from the starting rating
 export const softReset=r=>Math.round(RATING_START+(r-RATING_START)/2);
 
+// ---------- guilds ----------
+// A guild levels up from its members' matches (a third of their match XP). Each level adds two member slots and
+// 1 % XP and credits for every member. Every week the guild has a shared goal of wins with a reward for each member who played.
+export const GUILD={cost:1000,minLevel:5,maxLevel:10,baseMembers:20,perLevel:2,maxApps:30,maxInv:10,weekMin:3};
+export const GUILD_ROLES={leader:'Vůdce',officer:'Důstojník',member:'Člen'};
+export const GUILD_NAME_RE=/^[\p{L}\p{N} _.\-]{3,24}$/u,GUILD_TAG_RE=/^[A-Z0-9]{2,4}$/;
+export const guildXpFor=l=>2500*l;
+export const guildMaxMembers=l=>GUILD.baseMembers+GUILD.perLevel*(l-1);
+export const guildBonus=l=>Math.min(10,l-1);
+export const guildWeekTarget=n=>Math.max(15,n*4);
+export const guildWeekReward=l=>({credits:250+30*l,minR:l>=6?3:2});
+
+// ---------- achievements ----------
+// Three tiers each (bronze, silver, gold). Progress is read from the profile, so nothing is tracked twice.
+// Every tier pays credits and achievement points; gold also grants a title.
+export const ACH_TIERS=[{name:'Bronz',color:'#d08a5a',credits:150,pts:10},{name:'Stříbro',color:'#c8d4e0',credits:500,pts:25},{name:'Zlato',color:'#ffc66d',credits:1500,pts:50}];
+export const ACH_CATS={fight:'Boj',coop:'Kooperace',prog:'Postup',ranked:'Hodnocená hra',social:'Společnost'};
+const st=p=>p.stats||{};
+export const ACH=[
+  {id:'matches',cat:'fight',name:'Veterán arény',desc:'Odehraj zápasy.',t:[10,100,500],v:p=>st(p).matches|0,title:'Veterán arény'},
+  {id:'wins',cat:'fight',name:'Vítěz',desc:'Vyhraj zápasy.',t:[10,100,500],v:p=>st(p).wins|0,title:'Neporazitelný'},
+  {id:'kills',cat:'fight',name:'Lovec hlav',desc:'Znič soupeřovy hrdiny v PvP.',t:[25,250,1500],v:p=>st(p).kills|0,title:'Lovec hlav'},
+  {id:'mvp',cat:'fight',name:'Nejlepší hráč',desc:'Staň se MVP zápasu.',t:[5,25,100],v:p=>st(p).mvp|0,title:'Hvězda arény'},
+  {id:'relics',cat:'fight',name:'Strážce relikvie',desc:'Seber relikvii v Aréně.',t:[10,50,200],v:p=>st(p).relics|0,title:'Nositel relikvie'},
+  {id:'dmg',cat:'fight',name:'Ničitel',desc:'Způsob celkové poškození.',t:[50000,500000,3000000],v:p=>st(p).dmg|0,title:'Ničitel'},
+  {id:'heal',cat:'fight',name:'Záchranář',desc:'Vyleč spojence i sebe.',t:[10000,100000,500000],v:p=>st(p).heal|0,title:'Anděl strážný'},
+  {id:'classes',cat:'fight',name:'Všestranný',desc:'Získej 10 výher s různými povoláními.',t:[1,2,3],v:p=>Object.values(st(p).byCls||{}).filter(x=>x.w>=10).length,title:'Mistr všech zbraní'},
+  {id:'modes',cat:'fight',name:'Všude doma',desc:'Vyhraj v různých režimech.',t:[2,4,6],v:p=>Object.entries(st(p).byMode||{}).filter(([k,x])=>k!=='campaign'&&x.w>0).length,title:'Všudybyl'},
+  {id:'npc',cat:'coop',name:'Vyhlazovač',desc:'Znič nepřátelská NPC.',t:[200,2000,10000],v:p=>st(p).npcKills|0,title:'Vyhlazovač'},
+  {id:'bosses',cat:'coop',name:'Přemožitel',desc:'Poraz bosse.',t:[5,50,250],v:p=>st(p).bossKills|0,title:'Přemožitel bossů'},
+  {id:'trophies',cat:'coop',name:'Sběratel trofejí',desc:'Poraz různé bosse.',t:[3,6,10],v:p=>Object.keys(st(p).byBoss||{}).length,title:'Sběratel trofejí'},
+  {id:'waves',cat:'coop',name:'Obránce',desc:'Dosáhni vlny v režimu Vlny.',t:[5,10,15],v:p=>st(p).bestWave|0,title:'Neprolomený'},
+  {id:'endless',cat:'coop',name:'Bez konce',desc:'Dosáhni vlny v Nekonečnu.',t:[10,20,30],v:p=>st(p).bestEndless|0,title:'Nekonečný'},
+  {id:'campaign',cat:'coop',name:'Kampaň relikvií',desc:'Dokonči mise kampaně.',t:[4,8,12],v:p=>p.campaign?.cleared?.length|0,title:'Zachránce jádra'},
+  {id:'level',cat:'prog',name:'Vzestup',desc:'Dosáhni úrovně.',t:[10,25,50],v:p=>p.level|0,title:'Legenda signálu'},
+  {id:'time',cat:'prog',name:'Oddanost',desc:'Stráv hodiny v aréně.',t:[1,10,50],v:p=>Math.floor((st(p).time|0)/3600),title:'Oddaný'},
+  {id:'legendary',cat:'prog',name:'Legendární nález',desc:'Získej legendární implantáty ze zápasů.',t:[1,5,20],v:p=>st(p).legendary|0,title:'Vyvolený'},
+  {id:'skins',cat:'prog',name:'Módní ikona',desc:'Získej vzhledy.',t:[1,5,10],v:p=>p.skins?.length|0,title:'Módní ikona'},
+  {id:'titles',cat:'prog',name:'Sběratel titulů',desc:'Získej tituly.',t:[1,4,8],v:p=>p.titles?.length|0,title:'Titulovaný'},
+  {id:'sold',cat:'prog',name:'Obchodník',desc:'Prodej implantáty na tržišti.',t:[1,10,50],v:p=>st(p).sold|0,title:'Magnát'},
+  {id:'rgames',cat:'ranked',name:'Soutěživý',desc:'Odehraj hodnocené zápasy (napříč sezónami).',t:[10,50,200],v:p=>st(p).rankedGames|0,title:'Soutěživý'},
+  {id:'rwins',cat:'ranked',name:'Šplhání žebříčkem',desc:'Vyhraj hodnocené zápasy.',t:[5,30,120],v:p=>st(p).rankedWins|0,title:'Šplhač'},
+  {id:'rdiv',cat:'ranked',name:'Elita',desc:'Dosáhni divize Zlato, Diamant a Neon.',t:[2,4,5],v:p=>st(p).bestDiv|0,title:'Elita'},
+  {id:'friends',cat:'social',name:'Parta',desc:'Měj přátele.',t:[1,5,20],v:p=>p.social?.friends?.length|0,title:'Duše party'},
+  {id:'guild',cat:'social',name:'Klanová krev',desc:'Buď v klanu a pomoz mu na úroveň 5 a 10.',t:[1,5,10],v:p=>p.guildLevel|0,title:'Klanový veterán'}
+];
+export const achById=id=>ACH.find(a=>a.id===id);
+// tiers reached by a progress value
+export const achReached=(a,val)=>a.t.filter(x=>val>=x).length;
+
 // ---------- friends and chat ----------
 export const FRIENDS_MAX=100,CHAT_LEN=200;
 // chat text: no control characters, collapsed whitespace, limited length

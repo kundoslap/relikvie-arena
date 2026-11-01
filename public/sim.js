@@ -389,7 +389,7 @@ function tactical(M,u,pt){
       if(!n)fx(M,{t:'txt',x:r2(p.x),z:r2(p.z),s:'Nikdo',c:'info'});break}
     case 'barrier':addShield(u,u.maxHp*.22,null);fx(M,{t:'dome',x:r2(u.x),z:r2(u.z),c:0x9fd8ff,r:1.7,d:.8});break;
   }
-  u.tcd=T.cd;fx(M,{t:'atk',i:u.id});return true;
+  u.tcd=T.cd;fx(M,{t:'atk',i:u.id,s:4});return true;
 }
 export function cast(M,u,i,pt){
   if(i===4)return tactical(M,u,pt||{x:u.aimX,z:u.aimZ});
@@ -411,7 +411,7 @@ export function cast(M,u,i,pt){
     if(u.uniq.has('mirror')&&Math.random()<.25){cd=0;fx(M,{t:'txt',x:r2(u.x),z:r2(u.z),s:'Zrcadlení',c:'info'})}
     u.cds[i]=cd}
   if(u.pass.has('shadowstep')&&!(u.st.haste>0&&u.st.hasteK>1.2)){u.st.haste=2;u.st.hasteK=1.2}
-  fx(M,{t:'atk',i:u.id});return true;
+  fx(M,{t:'atk',i:u.id,s:i});return true;
 }
 
 // ---------- movement (also used by the client for prediction) ----------
