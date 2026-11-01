@@ -223,7 +223,7 @@ function tabPlay(){
     const loadRooms=async()=>{try{const j=await api('/api/rooms');if(H.tab!=='play'||!$('#roomList'))return;
       $('#onlineN').textContent=`· právě hraje ${j.online}`;
       $('#roomList').innerHTML=j.rooms.map(r=>`<div class="lrow"><div><b>${r.ranked?'Hodnocená · ':''}${D.MODES[r.mode]?.name||r.mode} · ${D.MAPS[r.map]?.name||''}${r.mode==='boss'?' · '+(D.BOSSES[r.boss]?.name||''):''}</b>
-          <small>${r.code} · hostitel ${esc(r.host)} · ${r.state==='lobby'?(r.quick?'rychlá hra, brzy začne':'čeká v místnosti'):'zápas běží, nahradíš bota'}</small></div>
+          <small>${r.code} · hostitel ${esc(r.host)}${r.custom?' · vlastní pravidla':''} · ${r.state==='lobby'?(r.quick?'rychlá hra, brzy začne':'čeká v místnosti'):'zápas běží, nahradíš bota'}</small></div>
         <div class="price">${r.players}/${r.max}</div><button class="ghost sm" type="button" data-room="${r.code}" ${r.players>=r.max||r.ranked&&(r.state!=='lobby'||!H.profile)?'disabled':''}>Připojit</button></div>`).join('')||'<p class="help">Žádná veřejná místnost. Zkus Rychlou hru, nebo založ veřejnou místnost.</p>';
       document.querySelectorAll('[data-room]').forEach(b=>b.onclick=()=>nameOk()&&H.cb.join(b.dataset.room,opts()))}
       catch(e){if($('#roomList'))$('#roomList').innerHTML=`<p class="err">${esc(e.message)}</p>`}};

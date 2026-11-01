@@ -20,12 +20,20 @@ const fx=(M,e)=>{M.events.push(e);if(LOGGED[e.t]&&!(e.t==='ban'&&e.i)&&M.state==
 const m=(u,k)=>u.mods[k]||0;
 
 // ---------- match ----------
+// Custom rules of a created room: the score to win and the match length relative to the mode (PvP only),
+// and whether bots fill the empty seats. A PvP match with another target or length is "custom" (rewards scale with its length).
+export const RULES={win:{short:.5,std:1,long:1.5},time:{short:2/3,std:1,long:1.5}};
+export function ruleValues(mode,r){
+  const D=MODES[mode];r=r||{};if(!D)return{win:0,time:0,bots:true};
+  return{win:D.pvp?Math.max(1,Math.ceil(D.win*(RULES.win[r.win]||1))):0,time:D.pvp?Math.round((D.time||MATCH_TIME)*(RULES.time[r.time]||1)):0,bots:r.bots!==false};
+}
+export const isCustom=(r,mode)=>!!r&&!!MODES[mode]?.pvp&&((r.win||'std')!=='std'||(r.time||'std')!=='std');
 export function createMatch(o={}){
   if(typeof o==='string')o={diff:o};
-  const mode=MODES[o.mode]?o.mode:'arena',D=MODES[mode];
+  const mode=MODES[o.mode]?o.mode:'arena',D=o.win>0&&MODES[mode].pvp?{...MODES[mode],win:o.win|0}:MODES[mode];
   const mapKey=MAPS[o.map]&&D.maps.includes(o.map)?o.map:D.maps[0],map=MAPS[mapKey];
   return{mode,D,mapKey,map,units:[],log:[],bossKeys:[],projs:[],zones:[],timers:[],events:[],beams:[],rings:[],loot:[],danger:[],
-    score:[0,0],time:0,timeLeft:D.waves?1e9:D.time||MATCH_TIME,countdown:3,state:'countdown',
+    score:[0,0],time:0,timeLeft:D.waves?1e9:o.time>0?o.time:D.time||MATCH_TIME,countdown:3,state:'countdown',custom:!!o.custom,
     elim:D.rounds?{n:1,state:'fight',t:0,t0:-1,r:map.r}:null,
     relic:{state:mode==='arena'?'wait':'off',t:20},
     points:mode==='control'?map.points.map(p=>({x:p.x,z:p.z,r:4,own:-1,prog:0})):[],
@@ -1091,7 +1099,7 @@ export function step(M,dt=TICK){
 // ---------- network views ----------
 export function roster(M){return M.units.map(u=>({i:u.id,n:u.name,k:u.key,kind:u.kind[0],t:u.team,mh:u.maxHp,b:u.ctrl==='human'?0:1,sk:u.skin,lv:u.level}))}
 export function stats(M){return M.units.filter(u=>u.kind==='hero').map(u=>({i:u.id,n:u.name,k:u.clsKey,t:u.team,b:u.ctrl==='bot'?1:0,ki:u.kills,de:u.deaths,dm:Math.round(u.dmgDealt),he:Math.round(u.healDone),re:u.relics,nk:u.npcKills,tk:Math.round(u.dmgTaken||0),cp:u.caps||0,nd:Math.round(u.naniteDmg||0)}))}
-export function matchInfo(M){return{mode:M.mode,map:M.mapKey,boss:M.bossKey,diff:M.diffKey,mission:M.mission,mods:[...M.emod],last:M.last}}
+export function matchInfo(M){return{mode:M.mode,map:M.mapKey,boss:M.bossKey,diff:M.diffKey,mission:M.mission,mods:[...M.emod],last:M.last,win:M.D.win||0,custom:M.custom}}
 function flags(u){const s=u.st;return (s.stun>0?1:0)|(s.silence>0?2:0)|(s.bleed?4:0)|(s.slow>0?8:0)|(s.relic>0?16:0)|(s.cloak>0?32:0)|(s.inv>0?64:0)|(u.dash?128:0)|(u.invuln?256:0)|(u.air?512:0)|(u.bomb?1024:0)|(s.nanite?2048:0)|(s.decon>0?4096:0)|(s.marked>0?8192:0)|(s.burn?16384:0)|(s.poison?32768:0)|(s.shock?65536:0)}
 // Per-viewer snapshot: hides cloaked enemies far from the viewer and loot that belongs to someone else.
 export function snapshotFor(M,uid,events){

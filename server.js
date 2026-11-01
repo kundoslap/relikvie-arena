@@ -102,7 +102,7 @@ const QUICK_WAIT=20000; // a quick-play room starts on its own after this, the r
 const RANKED_WAIT=12000; // a ranked room with an opponent starts this long after the last player joined (at once when full)
 function publicRooms(){
   return [...rooms.values()].filter(r=>r.pub&&!r.solo&&!r.mission).map(r=>({code:r.code,mode:r.mode,map:r.map,boss:r.boss,diff:r.diff,state:r.state,
-    players:r.clients.size,max:maxPlayers(r),host:r.clients.get(r.host)?.name||'',quick:!!r.quick,ranked:!!r.ranked})).sort((a,b)=>(a.state==='lobby'?0:1)-(b.state==='lobby'?0:1)||b.players-a.players).slice(0,30);
+    players:r.clients.size,max:maxPlayers(r),host:r.clients.get(r.host)?.name||'',quick:!!r.quick,ranked:!!r.ranked,custom:S.isCustom(r.rules,r.mode)||r.rules?.bots===false})).sort((a,b)=>(a.state==='lobby'?0:1)-(b.state==='lobby'?0:1)||b.players-a.players).slice(0,30);
 }
 function inMatch(pid){for(const r of rooms.values())if(r.match&&r.match.state!=='end')for(const c of r.clients.values())if(c.profile?.id===pid&&c.unitId)return true;return false}
 function newCode(){const A='ABCDEFGHJKLMNPQRSTUVWXYZ';let c;do{c=Array.from({length:4},()=>A[Math.floor(Math.random()*A.length)]).join('')}while(rooms.has(c));return c}
@@ -112,7 +112,7 @@ const loadOf=c=>c.profile?meta.loadoutFor(c.profile,c.cls,c.room?.ranked?S.MASTE
 
 function lobbyMsg(room,c){
   return{type:'lobby',code:room.code,you:c.cid,host:room.host,state:room.state,diff:room.diff,mode:room.mode,map:room.map,boss:room.boss,solo:!!room.solo,mission:room.mission||null,
-    pub:!!room.pub,ranked:!!room.ranked,rk:c.rk,
+    pub:!!room.pub,ranked:!!room.ranked,rk:c.rk,rules:room.rules||null,
     autoIn:room.quick&&room.state==='lobby'&&!(room.ranked&&room.clients.size<2)?Math.max(0,Math.ceil((room.autoAt-Date.now())/1000)):0,
     players:humans(room).map(x=>({cid:x.cid,name:x.name,cls:x.cls,team:x.team,off:x.gone?1:0,lv:x.profile?.level||0,tag:x.profile?meta.tagOf(x.profile.id):null,rt:room.ranked?x.profile?.ranked?.rating??null:null}))};
 }
@@ -250,16 +250,17 @@ function startMatch(room){
   else for(const c of humans(room))c.team=0;
   room.rankedEntries=room.ranked?humans(room).filter(c=>c.profile).map(c=>({pid:c.profile.id,team:c.team,cid:c.cid})):null;
   const ms=room.mission==='echo'?{...S.echoOfWeek(S.weekKey()),mode:'boss'}:S.missionById(room.mission);
+  const custom=!ms&&S.isCustom(room.rules,room.mode),rv=S.ruleValues(room.mode,ms?null:room.rules);
   const M=S.createMatch(ms?{mode:ms.mode,map:ms.map,boss:ms.boss,last:ms.waves,waveBoss:ms.waveBoss,mods:ms.mods,mission:room.mission,diff:room.diff}
-    :{mode:room.mode,map:room.map,diff:room.diff,boss:room.boss});
-  if(MATCH_SECONDS&&!M.D.waves)M.timeLeft=MATCH_SECONDS;
+    :{mode:room.mode,map:room.map,diff:room.diff,boss:room.boss,...(custom?{win:rv.win,time:rv.time,custom:true}:{})});
+  if(MATCH_SECONDS&&!M.D.waves&&!(custom&&room.rules.time!=='std'))M.timeLeft=MATCH_SECONDS;
   const names=[...S.BOT_NAMES].sort(()=>Math.random()-.5);
   for(const team of pvp?[0,1]:[0]){
     const hs=humans(room).filter(c=>c.team===team),size=S.teamSize(room.mode);
     for(const c of hs){const u=S.addUnit(M,c.cls,team,'human',c.name,loadOf(c));u.joinedAt=0;c.unitId=u.id}
     const used=hs.map(c=>c.cls);
-    // bots take random classes the team does not have yet
-    for(let i=hs.length;i<size;i++){const free=S.CLASS_KEYS.filter(x=>!used.includes(x)),pool=free.length?free:S.CLASS_KEYS,k=pool[Math.floor(Math.random()*pool.length)];used.push(k);S.addUnit(M,k,team,'bot',names.pop())}
+    // bots take random classes the team does not have yet (unless the room plays without bots)
+    if(rv.bots)for(let i=hs.length;i<size;i++){const free=S.CLASS_KEYS.filter(x=>!used.includes(x)),pool=free.length?free:S.CLASS_KEYS,k=pool[Math.floor(Math.random()*pool.length)];used.push(k);S.addUnit(M,k,team,'bot',names.pop())}
   }
   S.startMatch(M);
   room.match=M;room.state='match';room.endSent=false;room.tick=0;
@@ -273,6 +274,12 @@ function joinMatch(room,c){
     if(b){b.remove=true;const u=S.addUnit(M,c.cls,team,'human',c.name,loadOf(c));u.joinedAt=M.time;c.team=team;c.unitId=u.id;
       // Eliminace: taking over a bot that already fell this round means waiting for the next one
       if(M.elim&&b.dead){u.dead=true;u.hp=0;u.respawn=1e9}
+      return true}}
+  // without bots a late joiner takes a free seat on the smaller team; in Eliminace they wait for the next round
+  if(room.rules?.bots===false){const size=S.teamSize(room.mode),cnt=t=>M.units.filter(x=>x.kind==='hero'&&x.team===t&&!x.remove).length;
+    const team=order.filter(t=>cnt(t)<size).sort((a,b)=>cnt(a)-cnt(b))[0];
+    if(team!=null){const u=S.addUnit(M,c.cls,team,'human',c.name,loadOf(c));u.joinedAt=M.time;c.team=team;c.unitId=u.id;
+      if(M.elim&&M.elim.state==='fight'&&M.elim.t0>=0){u.dead=true;u.hp=0;u.respawn=1e9}
       return true}}
   return false;
 }
@@ -415,7 +422,8 @@ function onMessage(c,m){
           if(m.mission){const err=meta.canStartMission(c.profile,m.mission);if(err)return send(c,{type:'error',msg:err});
             mission=m.mission;const ms=mission==='echo'?{...S.echoOfWeek(S.weekKey()),mode:'boss'}:S.missionById(mission);mode=ms.mode;map=ms.map;boss=ms.boss||ms.waveBoss}
           r={code:newCode(),host:c.cid,clients:new Map(),state:'lobby',diff:S.DIFF[m.diff]?m.diff:'normal',mode,mission,
-            map:S.MODES[mode].maps.includes(map)?map:S.MODES[mode].maps[0],boss:S.BOSSES[boss]?boss:'collector',match:null,solo:!!m.solo,pub:!!m.pub&&!m.solo&&!mission};
+            map:S.MODES[mode].maps.includes(map)?map:S.MODES[mode].maps[0],boss:S.BOSSES[boss]?boss:'collector',match:null,solo:!!m.solo,pub:!!m.pub&&!m.solo&&!mission,
+            rules:mission||m.solo?null:{win:'std',time:'std',bots:true}};
           rooms.set(r.code,r);
         }else{r=rooms.get(String(m.room||'').toUpperCase().trim());
           if(!r)return send(c,{type:'error',msg:'Místnost s tímto kódem neexistuje.'});
@@ -445,8 +453,16 @@ function onMessage(c,m){
         if(S.MODES[room.mode].maps.includes(m.map))room.map=m.map;
         if(S.BOSSES[m.boss])room.boss=m.boss;
         if(S.DIFF[m.diff])room.diff=m.diff;
+        const R=m.rules;
+        if(room.rules&&R&&typeof R==='object'){if(Object.hasOwn(S.RULES.win,R.win))room.rules.win=R.win;if(Object.hasOwn(S.RULES.time,R.time))room.rules.time=R.time;
+          if(typeof R.bots==='boolean')room.rules.bots=R.bots}
         broadcastLobby(room);break}
-      case 'start':if(room&&(room.host===c.cid||room.quick)&&room.state==='lobby'&&!(room.ranked&&room.clients.size<2))startMatch(room);break;
+      case 'start':{
+        if(!(room&&(room.host===c.cid||room.quick)&&room.state==='lobby'&&!(room.ranked&&room.clients.size<2)))break;
+        // without bots both PvP teams need a player, otherwise the match would be won against nobody
+        if(room.rules?.bots===false&&S.MODES[room.mode].pvp&&teamCounts(room).some(n=>!n)){
+          send(c,{type:'error',msg:'Bez botů musí mít každý tým aspoň jednoho hráče. Přesuňte se do týmů, nebo zapněte doplnění boty.'});break}
+        startMatch(room);break}
       case 'input':{
         if(!room||!room.match)return;
         const u=room.match.units.find(x=>x.id===c.unitId);if(!u||u.ctrl!=='human')return;

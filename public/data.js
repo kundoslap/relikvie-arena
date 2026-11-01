@@ -54,6 +54,8 @@ export const CLASS_KEYS=Object.keys(CLASSES);
 export const MAX_LEVEL=50;
 export const xpFor=l=>Math.round(100+l*50+l*l*3); // xp needed to go from level l to l+1
 export const DIFF_REWARD={easy:.6,normal:1,hard:1.35};
+// a match with custom room rules pays in full from this many seconds; wins count for goals from CUSTOM_GOAL of it
+export const CUSTOM_FULL=240,CUSTOM_GOAL=.6;
 
 // ---------- stats (items and skill tree feed the same modifiers) ----------
 export const STATS={

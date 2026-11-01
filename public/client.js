@@ -561,7 +561,7 @@ function connect(hello,resuming){
 }
 function onNet(m){
   switch(m.type){
-    case 'error':Hub.netError(m.msg);if(G.mode!=='on'&&$('#lobby').hidden)closeWs();break;
+    case 'error':Hub.netError(m.msg);if(!$('#lobby').hidden)Hub.toast(m.msg,true);if(G.mode!=='on'&&$('#lobby').hidden)closeWs();break;
     case 'lobby':
       G.lobby=m;G.solo=m.solo;Social.roomReset(m.solo?null:m.code);
       saveRejoin(m.state==='match'&&m.rk&&!G.ended?{code:m.code,rk:m.rk}:null);
@@ -602,6 +602,16 @@ const hubCallbacks={
   tutorial:o=>{closeWs();startTutorial(o)},
   spectate:pid=>connect({type:'spectate',friend:pid})
 };
+// custom rules of a created room: score to win and match length (PvP) and filling empty seats with bots
+function rulesHTML(L,seg){
+  const r=L.rules,pvp=MODES[L.mode].pvp,v=k=>S.ruleValues(L.mode,{[k]:'short'}),n=S.ruleValues(L.mode,{}),l=k=>S.ruleValues(L.mode,{[k]:'long'});
+  const min=s=>`${Math.round(s/60*2)/2} min`.replace('.',',');
+  return `<div class="lbl" style="margin-top:4px">Pravidla</div>
+    ${pvp?`<div class="rrow"><small>Cíl</small>${seg('lWin',[['short',`Kratší · ${v('win').win}`],['std',`Normální · ${n.win}`],['long',`Delší · ${l('win').win}`]],r.win)}</div>
+    <div class="rrow"><small>Délka</small>${seg('lTime',[['short',min(v('time').time)],['std',min(n.time)],['long',min(l('time').time)]],r.time)}</div>`:''}
+    <div class="rrow"><small>Boti</small>${seg('lBots',[['1','Doplnit volná místa'],['0','Bez botů']],r.bots?'1':'0')}</div>
+    ${S.isCustom(r,L.mode)||!r.bots&&pvp?`<p class="help">${S.isCustom(r,L.mode)?'Vlastní pravidla: odměny se počítají podle skutečné délky zápasu (plné od 4 minut). ':''}${!r.bots&&pvp?'Bez botů musí mít každý tým aspoň jednoho hráče.':''}</p>`:''}`;
+}
 function renderLobby(){
   const L=G.lobby;if(!L)return;
   const me=L.players.find(p=>p.cid===L.you),host=L.host===L.you,M=MODES[L.mode],pvp=M.pvp;
@@ -618,16 +628,18 @@ function renderLobby(){
     ${seg('lMap',M.maps.map(k=>[k,MAPS[k].name]),L.map)}
     ${L.mode==='boss'?seg('lBoss',Object.entries(BOSSES).map(([k,b])=>[k,b.name]),L.boss):''}
     ${seg('lDiff',[['easy','Lehká'],['normal','Normální'],['hard','Těžká']],L.diff)}
+    ${L.rules?rulesHTML(L,seg):''}
     <p class="help">${M.desc}${host?'':' Nastavení mění hostitel.'}</p></div>`;
   const cfg=(id,key)=>document.querySelectorAll(`#${id} button`).forEach(b=>b.onclick=()=>wsSend({type:'cfg',[key]:b.dataset.v}));
-  if(!ms&&!L.ranked){cfg('lMode','mode');cfg('lMap','map');cfg('lBoss','boss');cfg('lDiff','diff')}
+  const rule=(id,key,val=v=>v)=>document.querySelectorAll(`#${id} button`).forEach(b=>b.onclick=()=>wsSend({type:'cfg',rules:{[key]:val(b.dataset.v)}}));
+  if(!ms&&!L.ranked){cfg('lMode','mode');cfg('lMap','map');cfg('lBoss','boss');cfg('lDiff','diff');rule('lWin','win');rule('lTime','time');rule('lBots','bots',v=>v==='1')}
   const teams=pvp?[0,1]:[0],size=S.teamSize(L.mode);
   $('#lobbyTeams').className='teams'+(pvp?'':' one');
   $('#lobbyTeams').innerHTML=teams.map(t=>{
     const ps=L.players.filter(p=>pvp?p.team===t:true);
     const rk=p=>p.rt!=null?` <small style="color:${S.DIVISIONS[S.divisionOf(p.rt)].color}">· ${S.DIVISIONS[S.divisionOf(p.rt)].name} ${p.rt}</small>`:'';
     const rows=ps.map(p=>`<div class="pl${p.cid===L.you?' mine':''}"><span>${p.tag?`<span class="cg">[${esc(p.tag)}]</span> `:''}${esc(p.name)}${p.lv?` <small>· úr. ${p.lv}</small>`:''}${rk(p)}${p.cid===L.host&&!L.ranked?' <small>· hostitel</small>':''}</span><small>${CLASSES[p.cls].name}</small></div>`).join('');
-    const empty=L.ranked?`<span>Volné místo</span><small>${size===1?'čeká se na soupeře':'hráč nebo bot'}</small>`:'<span>Bot</span><small>doplní se</small>';
+    const empty=L.ranked?`<span>Volné místo</span><small>${size===1?'čeká se na soupeře':'hráč nebo bot'}</small>`:L.rules?.bots===false?'<span>Volné místo</span><small>bez bota</small>':'<span>Bot</span><small>doplní se</small>';
     const bots=Array.from({length:Math.max(0,size-ps.length)},()=>`<div class="pl bot">${empty}</div>`).join('');
     const canMove=pvp&&!L.ranked&&me&&me.team!==t&&ps.length<size;
     return `<div class="team t${t}"><h3>${pvp?TEAM_NAME[t]:'Tým'}</h3>${rows}${bots}${canMove?`<button class="ghost" type="button" data-team="${t}">Přejít k týmu ${TEAM_NAME[t]}</button>`:''}</div>`}).join('');
@@ -636,7 +648,7 @@ function renderLobby(){
   $('#lobbyCls').querySelectorAll('button').forEach(b=>b.onclick=()=>wsSend({type:'cls',cls:b.dataset.k}));
   Social.lobbyFriends($('#lobbyFriends'),L);
   $('#lobbyStart').hidden=L.ranked?!L.autoIn:!host&&!L.autoIn;
-  $('#lobbyWait').textContent=L.ranked&&!L.autoIn?'Hodnocená hra · hledám soupeře. Zápas začne, jakmile se připojí další hráč s účtem.':L.ranked?`Hodnocená hra · soupeř nalezen, zápas začne za ${L.autoIn} s.`:L.autoIn?`Rychlá hra · zápas začne za ${L.autoIn} s, zbytek doplní boti. Spustit ho může kdokoli.`:host?(L.pub?'Veřejná místnost · ':'')+`${L.players.length} / ${M.max} ${L.players.length===1?'hráč':'hráči'} · zbytek doplní boti`:'Čeká se, až hostitel spustí zápas.';
+  $('#lobbyWait').textContent=L.ranked&&!L.autoIn?'Hodnocená hra · hledám soupeře. Zápas začne, jakmile se připojí další hráč s účtem.':L.ranked?`Hodnocená hra · soupeř nalezen, zápas začne za ${L.autoIn} s.`:L.autoIn?`Rychlá hra · zápas začne za ${L.autoIn} s, zbytek doplní boti. Spustit ho může kdokoli.`:host?(L.pub?'Veřejná místnost · ':'')+`${L.players.length} / ${M.max} ${L.players.length===1?'hráč':'hráči'} · ${L.rules?.bots===false?'bez botů':'zbytek doplní boti'}`:'Čeká se, až hostitel spustí zápas.';
 }
 $('#lobbyStart').onclick=()=>wsSend({type:'start'});
 $('#lobbyLeave').onclick=()=>toHub();
@@ -740,7 +752,7 @@ function drawHUD(){
   const info=G.info,mode=info.mode,meInfo=G.roster.get(G.you),sk=mySkills();if(sk&&G.slotsFor!==sk.key)buildSlots();
   const clock=s.tl>1e6?'':`${Math.floor(s.tl/60)}:${String(s.tl%60).padStart(2,'0')}`;
   let mb='';
-  if(MODES[mode]?.pvp){setTxt('sL','Modří');setTxt('sR','Rudí');setTxt('s0',s.sc[0]);setTxt('s1',s.sc[1]);setTxt('scoreSub','do '+MODES[mode].win);
+  if(MODES[mode]?.pvp){setTxt('sL','Modří');setTxt('sR','Rudí');setTxt('s0',s.sc[0]);setTxt('s1',s.sc[1]);setTxt('scoreSub','do '+(G.info?.win||MODES[mode].win));
     if(mode==='ctf'&&s.fg){const my=meInfo?.t??0;mb=`<div class="flags">${[my,1-my].map(team=>`<div class="fl${team}"><b>${team===my?'Vaše':'Soupeřova'} relikvie</b> ${flagText(s.fg[team])}</div>`).join('')}</div>`}
     if(mode==='elim'&&s.el){const [n,pause,,a0,a1,shrinkIn]=s.el,my=meInfo?.t??0,size=S.teamSize(mode),dots=(k,t)=>`<span class="t${t}">${'●'.repeat(k)}${'○'.repeat(Math.max(0,size-k))}</span>`;
       mb=`<div class="elimbar"><b>Kolo ${n}</b> ${dots(my?a1:a0,my)} <small>proti</small> ${dots(my?a0:a1,1-my)}<small>${pause?`další kolo za ${pause} s`:shrinkIn?`kruh se zmenší za ${shrinkIn} s`:'aréna se zmenšuje'}</small></div>`}

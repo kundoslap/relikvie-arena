@@ -651,14 +651,16 @@ export function createMeta(db,{admins=''}={}){
   // ---------- rewards ----------
   function rewardsFor(M,u,p,loot,mvp=false,rk=null){
     migrate(p);const achBefore=achReachedAll(p);
-    const mult=D.DIFF_REWARD[M.diffKey]||1,part=Math.max(.25,Math.min(1,(M.time-(u.joinedAt||0))/Math.max(1,M.time)));
+    // custom rules (shorter target or time): rewards follow how long the match really took, so short matches cannot be farmed
+    const custom=M.custom?Math.min(1,M.time/D.CUSTOM_FULL):1;
+    const mult=D.DIFF_REWARD[M.diffKey]||1,part=Math.max(.25,Math.min(1,(M.time-(u.joinedAt||0))/Math.max(1,M.time)))*custom;
     let xp=0,cr=0,res='loss',record=0;const items=[...u.bag,...loot];
     const pveWin=!M.D.pvp&&(M.winner===0||M.D.endless&&M.wave>=D.ENDLESS_WIN);
     if(M.time<45&&!pveWin){let sold=0;for(const it of items)if(!giveItem(p,it))sold++;db.touch();return{xp:0,credits:0,items,res:'short',levelUps:[],sold,skin:null}}
     if(M.D.pvp){
       res=M.winner===u.team?'win':M.winner===-1||M.winner===null?'draw':'loss';
       xp={win:140,draw:100,loss:70}[res]+u.kills*8+u.relics*15;cr={win:60,draw:45,loss:30}[res]+u.kills*3;
-      if(Math.random()<{win:.6,draw:.45,loss:.3}[res])items.push(D.rollItem(p.level));
+      if(Math.random()<{win:.6,draw:.45,loss:.3}[res]*custom)items.push(D.rollItem(p.level));
     }else if(M.mode==='boss'){
       res=M.winner===0?'win':'loss';xp=(res==='win'?260:90)+u.npcKills*3;cr=res==='win'?150:40;
       if(res==='win'&&Math.random()<.4)items.push(D.rollItem(p.level,{boost:.4}));
@@ -689,7 +691,7 @@ export function createMeta(db,{admins=''}={}){
         }else if(key){c.shards[key]=(c.shards[key]|0)+D.SHARDS_PER_WIN;camp.shards={boss:key,n:c.shards[key]}}}
     }
     // goals
-    const won=res==='win',delta={matches:1,wins:won?1:0,winArena:won&&M.mode==='arena'?1:0,winControl:won&&M.mode==='control'?1:0,
+    const won=res==='win'&&custom>=D.CUSTOM_GOAL,delta={matches:1,wins:won?1:0,winArena:won&&M.mode==='arena'?1:0,winControl:won&&M.mode==='control'?1:0,
       kills:M.D.pvp?u.kills:0,npcKills:u.npcKills,bossKills:won&&!M.D.pvp?(M.bossKills||0):0,wave:M.mode==='waves'?M.wave:0,endless:M.D.endless?M.wave:0,relics:u.relics,
       dmg:Math.round(u.dmgDealt),heal:Math.round(u.healDone),campaign:M.mission&&won?1:0};
     const done=[];
@@ -708,7 +710,7 @@ export function createMeta(db,{admins=''}={}){
     const crystals=[];if(Math.random()<(.12+(res==='win'?.1:0)+(res==='win'&&M.bossKills?.15:0))*part)crystals.push(D.rollCrystal(M.diffKey==='hard'||M.bossKills?2:1));
     for(const k of crystals)addCrystal(p,k);
     // guild: XP for the guild, the weekly goal and the member bonus
-    const guild=guildMatch(p,xp,cr,res==='win');if(guild){xp+=guild.bx;cr+=guild.bc}
+    const guild=guildMatch(p,xp,cr,won);if(guild){xp+=guild.bx;cr+=guild.bc}
     // apply
     p.credits+=cr;const levelUps=grantXp(p,xp);const pass=passGain(p,xp);
     let sold=0;for(const it of items)if(!giveItem(p,it))sold++;
