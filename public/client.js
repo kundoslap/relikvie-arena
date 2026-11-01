@@ -11,6 +11,7 @@ import * as Hub from './hub.js';
 import {svg,esc} from './hub.js';
 import * as Social from './social.js';
 import * as Snd from './audio.js';
+import * as Cfg from './settings.js';
 
 const {TICK,TEAM_COL,TEAM_NAME,CLASSES,MAPS,MODES,BOSSES,RARITIES}=S;
 const V3=THREE.Vector3,$=s=>document.querySelector(s);
@@ -20,9 +21,10 @@ const store={get(k,d){try{const v=localStorage.getItem('rel.'+k);return v==null?
 let isTouch=matchMedia('(pointer: coarse)').matches;
 
 // ---------- renderer ----------
-const hiQ=store.get('q',isTouch?'low':'high')==='high';
+const hiQ=Cfg.quality()==='high';
 const renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance'});
-renderer.setPixelRatio(Math.min(devicePixelRatio,hiQ?2:1.25));
+const pixelRatio=()=>Math.min(devicePixelRatio,hiQ?2:1.25)*Cfg.get('scale');
+renderer.setPixelRatio(pixelRatio());
 renderer.toneMapping=THREE.ACESFilmicToneMapping;
 renderer.shadowMap.enabled=hiQ;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
 $('#stage').appendChild(renderer.domElement);
@@ -34,10 +36,16 @@ scene.environment=envTex;
 const camera=new THREE.PerspectiveCamera(46,1,.1,500);
 const composer=new EffectComposer(renderer);
 composer.addPass(new RenderPass(scene,camera));
-composer.addPass(new UnrealBloomPass(new THREE.Vector2(1,1),hiQ?.65:.5,.4,.7));
+const bloomPass=new UnrealBloomPass(new THREE.Vector2(1,1),hiQ?.65:.5,.4,.7);composer.addPass(bloomPass);bloomPass.enabled=Cfg.get('bloom');
 composer.addPass(new OutputPass());
 function resize(){const w=innerWidth,h=innerHeight;renderer.setSize(w,h);composer.setSize(w,h);camera.aspect=w/h;camera.updateProjectionMatrix()}
 addEventListener('resize',resize);resize();
+// settings that apply at once: resolution, bloom, names over units
+function applyCfg(){
+  if(Math.abs(renderer.getPixelRatio()-pixelRatio())>.001){renderer.setPixelRatio(pixelRatio());composer.setPixelRatio?.(pixelRatio());resize()}
+  bloomPass.enabled=Cfg.get('bloom');G.slotsFor='';document.body.classList.toggle('nonames',!Cfg.get('names'));$('#fps').hidden=!Cfg.get('fps');
+}
+Cfg.onChange(applyCfg);
 
 let arena=null;
 function setMap(key){if(!MAPS[key])key='core';if(arena&&arena.mapKey===key)return;arena?.dispose();arena=buildArena(scene,key,hiQ)}
@@ -52,7 +60,7 @@ const pGeo=new THREE.BufferGeometry();pGeo.setAttribute('position',new THREE.Buf
 const pTex=(()=>{const c=document.createElement('canvas');c.width=c.height=64;const g=c.getContext('2d'),gr=g.createRadialGradient(32,32,0,32,32,32);gr.addColorStop(0,'#fff');gr.addColorStop(.3,'rgba(255,255,255,.6)');gr.addColorStop(1,'rgba(255,255,255,0)');g.fillStyle=gr;g.fillRect(0,0,64,64);return new THREE.CanvasTexture(c)})();
 const points=new THREE.Points(pGeo,new THREE.PointsMaterial({size:.55,map:pTex,vertexColors:true,transparent:true,depthWrite:false,blending:THREE.AdditiveBlending}));points.frustumCulled=false;scene.add(points);
 const _c=new THREE.Color();
-function burst(p,color,n,spd=6,up=3,life=.6,y=1.2){_c.set(color);if(!hiQ)n=Math.ceil(n*.5);
+function burst(p,color,n,spd=6,up=3,life=.6,y=1.2){_c.set(color);if(!hiQ)n*=.5;n=Math.ceil(n*Cfg.get('particles'));
   for(let i=0;i<n&&parts.length<PMAX;i++){const a=rnd(0,Math.PI*2),s=rnd(.2,1)*spd;parts.push({x:p.x,y,z:p.z,vx:Math.cos(a)*s,vy:rnd(0,up),vz:Math.sin(a)*s,l:life*rnd(.6,1.2),m:life,r:_c.r*2,g:_c.g*2,b:_c.b*2})}}
 function updParts(dt){let n=0;
   for(let i=parts.length-1;i>=0;i--){const q=parts[i];q.l-=dt;if(q.l<=0){parts[i]=parts[parts.length-1];parts.pop();continue}
@@ -91,7 +99,7 @@ function teleFx(e){
 // ---------- text overlays ----------
 let floaters=[];const _v=new V3();
 function toScreen(p,y){_v.set(p.x,y??p.y??0,p.z).project(camera);return{x:(_v.x*.5+.5)*innerWidth,y:(-_v.y*.5+.5)*innerHeight,off:_v.z>1}}
-function floatText(p,text,cls,color){if(floaters.length>60)return;const el=document.createElement('div');el.className='fl '+cls;el.textContent=text;if(color)el.style.color=color;$('#floaters').appendChild(el);floaters.push({el,p:{x:p.x+rnd(-.5,.5),y:p.y??2.7,z:p.z+rnd(-.5,.5)},t:0,life:cls==='loot'?1.8:.9})}
+function floatText(p,text,cls,color){if(floaters.length>60)return;if(!Cfg.get('dmgNums')&&(cls==='dmg'||cls==='out'||cls==='in'||cls==='dot'))return;const el=document.createElement('div');el.className='fl '+cls;el.textContent=text;if(color)el.style.color=color;$('#floaters').appendChild(el);floaters.push({el,p:{x:p.x+rnd(-.5,.5),y:p.y??2.7,z:p.z+rnd(-.5,.5)},t:0,life:cls==='loot'?1.8:.9})}
 function updFloaters(dt){for(let i=floaters.length-1;i>=0;i--){const f=floaters[i];f.t+=dt;f.p.y+=dt*1.8;if(f.t>f.life){f.el.remove();floaters.splice(i,1);continue}
   const s=toScreen(f.p);f.el.style.transform=`translate(${s.x}px,${s.y}px) translate(-50%,-50%) scale(${1+Math.max(0,.15-f.t)*3})`;f.el.style.opacity=f.t<f.life-.3?1:(f.life-f.t)/.3}}
 let bannerT=0;
@@ -99,7 +107,7 @@ function banner(title,sub='',dur=2.2,color='var(--gold)'){if(G.mode==='menu')ret
 function feed(html){if(G.mode==='menu')return;const el=document.createElement('div');el.innerHTML=html;const f=$('#feed');f.prepend(el);while(f.children.length>5)f.lastChild.remove();setTimeout(()=>el.remove(),6000)}
 const nameOf=id=>G.roster.get(id)?.n||'?';
 const tag=id=>{const r=G.roster.get(id);return r?`<span class="t${r.t}">${esc(r.n)}</span>`:'?'};
-let flashT=0;function screenFlash(k=.8){flashT=Math.max(flashT,k)}
+let flashT=0;function screenFlash(k=.8){if(Cfg.get('flash'))flashT=Math.max(flashT,k)}
 
 // ---------- session state ----------
 const G={mode:'menu',M:null,acc:0,you:0,roster:new Map(),snaps:[],last:null,evq:[],stats:[],ended:false,info:{mode:'arena',map:'core'},
@@ -145,7 +153,8 @@ function clearWorld(){
   for(const map of [projMeshes,zoneMeshes,beamMeshes,ringMeshes,lootMeshes]){for(const m of map.values()){scene.remove(m);m.traverse(o=>{o.material&&o.material.dispose()})}map.clear()}
   for(const m of pointMeshes)scene.remove(m.g);pointMeshes=[];
   fxList.forEach(dropFx);fxList=[];parts.length=0;floaters.forEach(f=>f.el.remove());floaters=[];$('#feed').innerHTML='';
-  Object.assign(G,{roster:new Map(),snaps:[],last:null,evq:[],stats:[],ended:false,pred:null,show:null,hist:[],pendingCast:[],you:0,slotsFor:''});
+  Object.assign(G,{roster:new Map(),snaps:[],last:null,evq:[],stats:[],ended:false,pred:null,show:null,hist:[],pendingCast:[],you:0,slotsFor:'',tut:null});
+  tutMarker(null);$('#hud').classList.remove('tut');$('#tut').hidden=true;
   relicMesh.visible=false;relicLight.intensity=0;
 }
 function renderTime(){return G.mode==='on'?performance.now()-100:(G.M?(G.M.time+G.acc)*1000-TICK*1000:0)}
@@ -271,16 +280,17 @@ canvas.addEventListener('contextmenu',e=>e.preventDefault());
 const inGame=()=>(G.mode==='off'||G.mode==='on')&&!G.ended;
 addEventListener('keydown',e=>{
   if(['INPUT','SELECT','TEXTAREA'].includes(e.target.tagName))return;
-  if(e.code==='Tab'&&inGame()){e.preventDefault();$('#board').hidden=false;$('#board .inner').innerHTML=boardHTML(currentStats());return}
+  if(e.code===Cfg.key('score')&&inGame()){e.preventDefault();$('#board').hidden=false;$('#board .inner').innerHTML=boardHTML(currentStats());return}
   if(e.code==='Escape'&&inGame()){setPause(!G.paused);return}
   if((e.code==='Enter'||e.code==='NumpadEnter')&&inGame()&&G.mode==='on'&&!G.solo&&!G.paused){
     e.preventDefault();for(const k in keys)keys[k]=false;mouseDown=false;Social.openMatchChat(e.shiftKey);return}
   keys[e.code]=true;
   if(!inGame()||G.paused||e.repeat)return;
-  const map={KeyQ:0,KeyE:1,KeyR:2,KeyF:3,Space:3,KeyT:4};
-  if(e.code in map){e.preventDefault();G.pendingCast.push(map[e.code])}
+  // Space stays a second key for the ultimate unless it was bound to something else
+  const i=['q','e','r','ult','tac'].findIndex(a=>Cfg.key(a)===e.code),cast=i>=0?i:e.code==='Space'&&!Object.values(Cfg.get('keys')).includes('Space')?3:-1;
+  if(cast>=0){e.preventDefault();G.pendingCast.push(cast)}
 });
-addEventListener('keyup',e=>{keys[e.code]=false;if(e.code==='Tab')$('#board').hidden=true});
+addEventListener('keyup',e=>{keys[e.code]=false;if(e.code===Cfg.key('score'))$('#board').hidden=true});
 addEventListener('blur',()=>{for(const k in keys)keys[k]=false;mouseDown=false;if(G.mode==='off'&&!G.ended)setPause(true)});
 document.addEventListener('visibilitychange',()=>{if(document.hidden&&G.mode==='off'&&!G.ended)setPause(true)});
 const touch={x:0,y:0,id:null},stick=$('#stick'),knob=stick.firstElementChild;
@@ -302,7 +312,8 @@ function inputTick(){
   if(!G.you)return;
   let mx=0,mz=0;
   if(!G.paused){
-    if(keys.KeyW||keys.ArrowUp)mz-=1;if(keys.KeyS||keys.ArrowDown)mz+=1;if(keys.KeyA||keys.ArrowLeft)mx-=1;if(keys.KeyD||keys.ArrowRight)mx+=1;
+    const K=a=>keys[Cfg.key(a)];
+    if(K('up')||keys.ArrowUp)mz-=1;if(K('down')||keys.ArrowDown)mz+=1;if(K('left')||keys.ArrowLeft)mx-=1;if(K('right')||keys.ArrowRight)mx+=1;
     if(touch.id!==null){mx=touch.x;mz=touch.y}
   }
   const l=Math.hypot(mx,mz);if(l>1){mx/=l;mz/=l}
@@ -335,6 +346,80 @@ function startLocal(o){
   G.lastOpts={...o,local:true};G.mode='off';G.paused=false;newLocalMatch(o,o.cls);
   showOnly('hud');applyTouch();buildSlots();$('#netInfo').textContent='Trénink bez serveru';
 }
+// ---------- tutorial ----------
+// A guided local match on the arena map: each step sets up the situation, watches the simulation and moves on.
+const kbd=(...a)=>a.map(x=>`<kbd>${esc(Cfg.keyLabel(Cfg.key(x)))}</kbd>`).join(' ');
+const TUT_STEPS=[
+  {k:'move',ti:'Pohyb',tx:()=>isTouch?'Levým palcem dojdi do zlatého kruhu.':`Klávesami ${kbd('up','left','down','right')} dojdi do zlatého kruhu.`},
+  {k:'attack',ti:'Útok',tx:()=>isTouch?'Tlačítkem Útok zaútoč na cvičný dron. Míří se samo na nejbližšího soupeře.':'Miř <kbd>myší</kbd> a <kbd>levým tlačítkem</kbd> znič cvičný dron.'},
+  {k:'skills',ti:'Schopnosti',tx:()=>`Použij všechny tři schopnosti ${isTouch?'tlačítky vpravo':kbd('q','e','r')}. Stojí energii (fialový pruh) a pak se chvíli nabíjejí.`},
+  {k:'ult',ti:'Ultimátka',tx:()=>`Ultimátka se nabíjí bojem. Teď ji máš nabitou: odpal ji ${isTouch?'zlatým tlačítkem':'klávesou '+kbd('ult')}.`},
+  {k:'tactic',ti:'Taktická akce',tx:()=>`Taktická akce nestojí energii. Výchozí je Úhyb: rychlý skok s krátkou nezranitelností. Použij ji ${isTouch?'modrým tlačítkem':'klávesou '+kbd('tac')}.`},
+  {k:'base',ti:'Základna',tx:()=>'Jsi zraněný. Vrať se na svou základnu (modrý kruh na okraji arény): léčí a dobíjí energii.'},
+  {k:'relic',ti:'Relikvie',tx:()=>'Ve středu arény se objevila relikvie. Seber ji: týmu dá bod a tobě na 20 s sílu podle povolání.'}
+];
+let tutMark=null;
+function tutMarker(x,z){
+  if(tutMark){scene.remove(tutMark);tutMark.traverse(o=>o.material&&o.material.dispose());tutMark=null}
+  if(x==null)return;
+  const g=new THREE.Group(),ring=new THREE.Mesh(RING_GEO,addMat(0xffc66d,2)),col=new THREE.Mesh(BEAM_GEO,addMat(0xffc66d,1));
+  ring.rotation.x=-Math.PI/2;ring.scale.setScalar(2.4);col.scale.set(.08,7,.08);col.position.y=3.5;g.add(ring,col);g.position.set(x,.1,z);scene.add(g);tutMark=g;
+}
+function startTutorial(o){
+  G.lastOpts=null;G.mode='off';G.paused=false;clearWorld();
+  const M=S.createMatch({mode:'arena',map:'core',diff:'easy'});M.timeLeft=1e9;M.countdown=.6;M.relic.state='off';
+  const you=S.addUnit(M,o.cls,0,'human',o.name||'Ty').id;S.startMatch(M);
+  G.M=M;G.acc=0;G.you=you;G.rosterVer=M.rosterVer;setInfo(S.matchInfo(M));onRoster(S.roster(M));
+  G.tut={i:-1,used:new Set(),drones:[],hold:0,acct:!!o.account};
+  showOnly('hud');$('#hud').classList.add('tut');applyTouch();buildSlots();$('#netInfo').textContent='Výcvik';
+  tutNext();
+}
+const tutMe=()=>G.M?.units.find(u=>u.id===G.you);
+function tutNext(){
+  const T=G.tut;T.i++;T.used=new Set();T.hold=0;const me=tutMe(),M=G.M,base=M.map.bases[0];
+  if(T.i>=TUT_STEPS.length)return tutFinish();
+  const k=TUT_STEPS[T.i].k;tutMarker(null);
+  if(k==='move'){T.goal={x:base.x*.55,z:base.z*.55+6};tutMarker(T.goal.x,T.goal.z)}
+  if(k==='attack')T.drones=[S.addTrainingNpc(M,'drone',me.x+Math.sign(-base.x||1)*9,me.z,.5,.15)];
+  if(k==='skills'){me.energy=100;T.drones=[-5,0,5].map(dz=>S.addTrainingNpc(M,'drone',me.x+Math.sign(-base.x||1)*8,me.z+dz,1.5,.15))}
+  if(k==='ult'){me.ult=100;if(!T.drones.some(d=>!d.dead))T.drones=[S.addTrainingNpc(M,'drone',me.x+Math.sign(-base.x||1)*7,me.z,1,.15)]}
+  if(k==='base'){for(const d of M.units)if(d.kind==='npc')d.remove=true;me.hp=Math.round(me.maxHp*.35);tutMarker(base.x,base.z)}
+  if(k==='relic'){M.relic.state='wait';M.relic.t=.4;tutMarker(0,0)}
+  tutUI();
+}
+function tutUI(){
+  const T=G.tut,el=$('#tut');if(!T){el.hidden=true;return}
+  const s=TUT_STEPS[T.i],extra=s.k==='skills'?` <b>${[0,1,2].filter(i=>T.used.has(i)).length} / 3</b>`:'';
+  el.hidden=false;el.innerHTML=`<div class="tutp">${TUT_STEPS.map((_,i)=>`<i class="${i<T.i?'d':i===T.i?'c':''}"></i>`).join('')}</div>
+    <small>VÝCVIK · KROK ${T.i+1} / ${TUT_STEPS.length}</small><b>${s.ti}</b><p>${s.tx()}${extra}</p><button class="ghost sm" type="button" id="tutSkip">Ukončit výcvik</button>`;
+  $('#tutSkip').onclick=()=>{G.tut=null;tutMarker(null);$('#hud').classList.remove('tut');tutUI();toHub()};
+}
+// called every simulation tick with that tick's events
+function tutTick(ev){
+  const T=G.tut;if(!T||T.i<0||T.i>=TUT_STEPS.length)return;
+  const me=tutMe(),k=TUT_STEPS[T.i].k;if(!me)return;
+  for(const e of ev)if(e.t==='atk'&&e.i===G.you&&e.s!=null)T.used.add(e.s);
+  let done=false;
+  if(k==='move')done=Math.hypot(me.x-T.goal.x,me.z-T.goal.z)<2.6;
+  if(k==='attack')done=T.drones.every(d=>d.dead||d.remove||!G.M.units.includes(d));
+  if(k==='skills'){const n=[0,1,2].filter(i=>T.used.has(i)).length;if(n!==T.shown){T.shown=n;tutUI()}done=n>=3;if(me.energy<30)me.energy=60}
+  if(k==='ult')done=T.used.has(3);
+  if(k==='tactic')done=T.used.has(4);
+  if(k==='base')done=me.hp>=me.maxHp*.95;
+  if(k==='relic')done=me.relics>0;
+  // a short pause after each success so the player sees it worked
+  if(done){T.hold+=TICK;if(T.hold>=.6){Snd.play('clear',null,{ui:true,vol:.7,dur:1});tutNext()}}
+}
+function tutFinish(){
+  const T=G.tut;tutMarker(null);G.tut=null;$('#hud').classList.remove('tut');
+  const el=$('#tut');el.hidden=false;
+  el.innerHTML=`<small>VÝCVIK DOKONČEN</small><b>Jsi připraven do arény</b><p>${T.acct?'Za dokončení dostáváš 300 kreditů a implantát.':'S účtem bys za dokončení dostal 300 kreditů a implantát.'} Další tipy: <kbd>Tab</kbd> ukáže skóre, implantáty a strom dovedností najdeš v hubu.</p>
+    <div class="btns"><button class="go sm" type="button" id="tutEnd">Do hubu</button></div>`;
+  Snd.play('win',null,{ui:true,dur:2.5});
+  if(T.acct)Hub.tutorialDone();
+  $('#tutEnd').onclick=()=>{el.hidden=true;toHub()};
+}
+
 function stepLocal(dt){
   if(!G.M||G.paused||G.ended)return;
   G.acc+=Math.min(dt,.1);
@@ -342,7 +427,7 @@ function stepLocal(dt){
     if(G.mode==='off')inputTick();
     S.step(G.M);
     if(G.M.rosterVer!==G.rosterVer){G.rosterVer=G.M.rosterVer;onRoster(S.roster(G.M))}
-    const ev=G.M.events;G.M.events=[];ingest(S.snapshotFor(G.M,G.you,ev));
+    const ev=G.M.events;G.M.events=[];if(G.tut)tutTick(ev);ingest(S.snapshotFor(G.M,G.you,ev));
     if(G.M.state==='end'){
       if(G.mode==='menu'){startAttract();return}
       showEnd({winner:G.M.winner,score:G.M.score,stats:S.stats(G.M),wave:G.M.wave,mode:G.M.mode,log:G.M.log});Hub.showRewards({guest:true});return}
@@ -398,7 +483,8 @@ const hubCallbacks={
   create:o=>connect({type:'hello',...hostOpts(o),create:true}),
   join:(code,o)=>connect({type:'hello',cls:o.cls,name:o.name,room:code}),
   quick:o=>connect({type:'hello',quick:true,mode:o.mode,diff:o.diff,cls:o.cls,name:o.name}),
-  ranked:(mode,o)=>connect({type:'hello',ranked:true,mode,cls:o.cls,name:o.name})
+  ranked:(mode,o)=>connect({type:'hello',ranked:true,mode,cls:o.cls,name:o.name}),
+  tutorial:o=>{closeWs();startTutorial(o)}
 };
 function renderLobby(){
   const L=G.lobby;if(!L)return;
@@ -450,8 +536,8 @@ function setPause(p){
   $('#pause').hidden=!p;
   $('#pauseTitle').textContent=G.mode==='on'?'Menu':'Pauza';
   $('#pauseNote').innerHTML=(G.mode==='on'?'Online zápas běží dál, tvoje postava mezitím stojí. ':'')+
-    `<button class="ghost sm" id="qBtn" type="button">Grafika: ${hiQ?'vysoká':'nízká'}</button> <small>Změna se projeví po obnovení stránky.</small>`;
-  $('#qBtn').onclick=()=>{store.set('q',hiQ?'low':'high');$('#qBtn').textContent='Uloženo · obnov stránku'};
+    `<button class="ghost sm" id="qBtn" type="button">Nastavení · ovládání, grafika, rozhraní</button>`;
+  $('#qBtn').onclick=()=>Cfg.open('controls');
   $('#pauseSnd').innerHTML=Snd.panelHTML();Snd.bindPanel($('#pauseSnd'));
 }
 function currentStats(){return G.mode==='off'&&G.M?S.stats(G.M):G.stats}
@@ -480,7 +566,7 @@ function debriefHTML(m,pve){
   const tl=(m.log||[]).map(e=>[e.at,line(e)]).filter(x=>x[1]).slice(-24);
   return`<div class="deb"><div><h4>Rozbor zápasu</h4>${mvp?`<div class="mvp">MVP · ${esc(mvp.n)}</div><small class="help">${CLASSES[mvp.k]?.name||''} · ${pve?mvp.nk+' NPC':mvp.ki+' zničení'} · ${mvp.dm} poškození${mvp.he?` · ${mvp.he} léčení`:''}</small>`:''}
       ${you?`<h4 style="margin-top:6px">Tvůj podíl v týmu</h4>${bars}`:''}</div>
-    <div><h4>Průběh</h4><div class="tl">${tl.map(([t,s])=>`<div><small>${mm(t)}</small><span>${s}</span></div>`).join('')||'<small>Bez zaznamenaných událostí.</small>'}</div></div></div>`;
+    <div><h4>Průběh</h4><div class="tline">${tl.map(([t,s])=>`<div><small>${mm(t)}</small><span>${s}</span></div>`).join('')||'<small>Bez zaznamenaných událostí.</small>'}</div></div></div>`;
 }
 function showEnd(m){
   G.ended=true;mouseDown=false;touchAtk=false;
@@ -512,7 +598,7 @@ function buildSlots(){
   const T={...S.TACTICS[s0.tac],cost:0};
   [...s0.defs,C.ult,T].forEach((s,i)=>{
     const w=document.createElement('div');w.className='slotwrap';
-    w.innerHTML=`<button type="button" class="slot${i===3?' ult':i===4?' tac':''}" style="--c:${i===3?'#ffc66d':i===4?'#9fd8ff':C.css}" aria-label="${s.name}"><span class="k">${'QERFT'[i]}</span>${svg(s.icon)}${i<3?`<span class="c">${s.cost}</span>`:''}<span class="t"></span></button>
+    w.innerHTML=`<button type="button" class="slot${i===3?' ult':i===4?' tac':''}" style="--c:${i===3?'#ffc66d':i===4?'#9fd8ff':C.css}" aria-label="${s.name}"><span class="k">${esc(Cfg.keyLabel(Cfg.key(['q','e','r','ult','tac'][i])))}</span>${svg(s.icon)}${i<3?`<span class="c">${s.cost}</span>`:''}<span class="t"></span></button>
       <div class="tip"><b>${s.name}</b>${s.desc}${i<3?`<br><small>${s.cost} energie · čekání ${s.cd} s</small>`:i===4?`<br><small>Taktická akce · čekání ${s.cd} s · bez energie</small>`:'<br><small>Nabíjí se poškozením a časem</small>'}</div>`;
     w.firstElementChild.addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagation();if(inGame()&&!G.paused)G.pendingCast.push(i)});
     el.appendChild(w);
@@ -632,12 +718,12 @@ function soundFrame(dt){
   const v=playing&&views.get(G.you);heartT-=dt;
   if(v&&!v.dead&&v.mh&&v.h/v.mh<.25&&heartT<=0){heartT=.95;Snd.play('heart',null,{ui:true,vol:.8})}
 }
-addEventListener('keydown',e=>{if(e.code==='KeyM'&&!e.repeat&&!['INPUT','SELECT','TEXTAREA'].includes(e.target.tagName)){Snd.toggleMute();Hub.toast(Snd.settings().mute?'Zvuk vypnutý (M)':'Zvuk zapnutý (M)')}});
+addEventListener('keydown',e=>{if(e.code===Cfg.key('mute')&&!e.repeat&&!['INPUT','SELECT','TEXTAREA'].includes(e.target.tagName)){Snd.toggleMute();Hub.toast(Snd.settings().mute?'Zvuk vypnutý (M)':'Zvuk zapnutý (M)')}});
 // a quiet tick for menu buttons (not the skill slots, those have their own sounds)
 document.addEventListener('click',e=>{const b=e.target.closest?.('button');if(b&&!b.closest('#slots')&&!b.disabled)Snd.play('click',null,{ui:true,vol:.6})},true);
 
 // ---------- main loop ----------
-const camPos=new V3(),clock=new THREE.Clock();let menuAngle=0;
+const camPos=new V3(),clock=new THREE.Clock();let menuAngle=0,fpsN=0,fpsT=0;
 function frame(){
   requestAnimationFrame(frame);
   const dt=Math.min(clock.getDelta(),.05),t=clock.elapsedTime;
@@ -656,6 +742,7 @@ function frame(){
     if(Math.random()<(hiQ?.7:.35)){_c.set(m.userData.c);parts.push({x:m.position.x,y:1.3,z:m.position.z,vx:rnd(-.3,.3),vy:rnd(-.2,.2),vz:rnd(-.3,.3),l:.25,m:.25,r:_c.r*2,g:_c.g*2,b:_c.b*2})}}
   for(const m of zoneMeshes.values()){m.material.opacity=.22*Math.min(1,m.userData.t)+.06*Math.sin(t*8);m.rotation.z+=dt*.6;
     if(Math.random()<.6){const a=rnd(0,6.28),r=rnd(0,3.5);burst({x:m.position.x+Math.cos(a)*r,z:m.position.z+Math.sin(a)*r},m.userData.c,1,.6,2.2,.7,0)}}
+  if(tutMark){tutMark.children[0].scale.setScalar(2.4+Math.sin(t*4)*.25);tutMark.children[1].material.opacity=.5+.3*Math.sin(t*6)}
   for(const g of lootMeshes.values()){g.userData.gem.rotation.y+=dt*2;g.userData.gem.position.y=1+Math.sin(t*3)*.15}
   for(const g of beamMeshes.values())g.userData.glow.material.opacity=.5+.3*Math.sin(t*30);
   if(G.last&&pointMeshes.length)for(const P of pointMeshes){const [o,pr]=G.last.pt[P.i]||[-1,0],c=o===0?TEAM_COL[0]:o===1?TEAM_COL[1]:0xffc66d;
@@ -663,9 +750,10 @@ function frame(){
   const up=!!(G.last&&G.last.rl[0]&&G.info.mode==='arena');relicMesh.visible=up;
   if(up){relicMesh.rotation.y+=dt*1.4;relicMesh.rotation.x+=dt*.6;relicMesh.position.y=1.6+Math.sin(t*2)*.15;relicLight.intensity=10+Math.sin(t*4)*3;if(Math.random()<.4)burst({x:0,z:0},0xffc66d,1,1.2,2,.8,1.2)}
   else relicLight.intensity=Math.max(0,relicLight.intensity-dt*20);
-  G.shake=Math.max(0,G.shake-dt*2.2);
+  G.shake=Cfg.get('shake')?Math.max(0,G.shake-dt*2.2):0;
+  if(!$('#fps').hidden){fpsN++;fpsT+=dt;if(fpsT>=.5){$('#fps').textContent=`${Math.round(fpsN/fpsT)} FPS`;fpsN=0;fpsT=0}}
   if(G.mode==='menu'){menuAngle+=dt*.06;camera.position.set(Math.cos(menuAngle)*46,30,Math.sin(menuAngle)*46);camera.lookAt(-6,0,0)}
-  else{const p=myPos();camPos.lerp(new V3(p.x,0,p.z),1-Math.exp(-dt*6));const far=camera.aspect<1?1.45:1,boss=G.info.mode==='boss'||G.last?.bs?1.12:1;
+  else{const p=myPos();camPos.lerp(new V3(p.x,0,p.z),1-Math.exp(-dt*6));const far=(camera.aspect<1?1.45:1)*Cfg.get('zoom'),boss=G.info.mode==='boss'||G.last?.bs?1.12:1;
     const sx=(Math.random()-.5)*G.shake*.9,sz=(Math.random()-.5)*G.shake*.9;
     camera.position.set(camPos.x+sx,26*far*boss,camPos.z+17*far*boss+sz);camera.lookAt(camPos.x+sx*.5,0,camPos.z-1+sz*.5)}
   ray.setFromCamera(ndc,camera);ray.ray.intersectPlane(groundPlane,mouseWorld);
@@ -675,6 +763,7 @@ function frame(){
   drawHUD();
 }
 
+Cfg.setup();applyCfg();
 Social.setup({join:code=>Hub.joinRoom(code),sendRoom:(text,team)=>wsSend({type:'say',ch:'room',text,team}),pvp:()=>!!MODES[G.info?.mode||G.lobby?.mode]?.pvp});
 Social.onChange(()=>{if(!$('#lobby').hidden&&G.lobby)Social.lobbyFriends($('#lobbyFriends'),G.lobby)});
 applyTouch();startAttract();frame();

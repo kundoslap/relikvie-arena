@@ -29,7 +29,7 @@ export function createMeta(db){
     p.merchant??={day:null,offers:[],rerolled:false};p.tactic??='dodge';p.builds??=[];p.history??=[];
     p.ranked??={season:null,rating:D.RATING_START,games:0,wins:0,losses:0,peak:D.RATING_START};p.rankedPrev??=null;
     p.social??={friends:[],inReq:[],outReq:[],blocked:[]};
-    p.guild??=null;p.guildInv??=[];p.guildWeek??=null;
+    p.guild??=null;p.guildInv??=[];p.guildWeek??=null;p.pass??={season:null,xp:0,claimed:[]};
     // a disbanded guild, or a membership that was removed while the save was elsewhere
     if(p.guild&&!isMember(guildById(p.guild),p.id))p.guild=null;
     // repairs saves damaged by the old "constructor" lookups (NaN credits, empty items, unknown class)
@@ -46,7 +46,33 @@ export function createMeta(db){
     if(G.week!==wk){const keys=Object.keys(D.WEEKLY_GOALS);G.week=wk;G.weekly={id:keys[Math.floor(Math.random()*keys.length)],prog:0,claimed:false}}
     const c=p.campaign;if(c.week!==wk){c.week=wk;c.weekWins=0;c.weekClaimed=false;c.echoWon=false}
     if(p.merchant.day!==day){p.merchant={day,offers:merchantOffers(p),rerolled:false}}
-    rollSeason(p);
+    rollSeason(p);rollPass(p);
+  }
+  // ---------- season pass ----------
+  // a new month starts a new pass; tiers reached but not claimed are paid out automatically (a skin of your current class)
+  function rollPass(p){
+    const P=p.pass,key=D.seasonKey();if(P.season===key)return;
+    let auto=0;
+    if(P.season)for(let n=1;n<=D.passTier(P.xp);n++)if(!P.claimed.includes(n))try{passClaim(p,n,p.cls);auto++}catch{}
+    p.pass={season:key,xp:0,claimed:[],auto:auto?{season:P.season,n:auto}:null};
+  }
+  function passGain(p,xp){rollPass(p);const before=D.passTier(p.pass.xp);p.pass.xp+=Math.max(0,Math.round(xp));return{gain:Math.round(xp),tier:D.passTier(p.pass.xp),before}}
+  const passSkins=()=>D.CLASS_KEYS.map(k=>[k,D.SKINS[k].find(s=>s.req?.pass)]).filter(x=>x[1]);
+  function passClaim(p,n,cls){
+    const P=p.pass;n=Number(n);
+    if(!Number.isInteger(n)||n<1||n>D.PASS.tiers)fail('Neznámý stupeň průkazu.');
+    if(D.passTier(P.xp)<n)fail('Tento stupeň ještě nemáš.');if(P.claimed.includes(n))fail('Odměnu už máš.');
+    const R=D.PASS_REWARDS[n-1],out={credits:R.credits||0,item:null,skins:[],title:null};
+    if(R.minR!=null&&p.inv.length>=D.INV_MAX)fail('Inventář je plný. Uvolni místo pro implantát.');
+    if(R.skin==='pick'){
+      const s=D.SKINS[cls]?.find(x=>x.req?.pass);if(!s)fail('Vyber povolání pro vzhled.');
+      if(D.skinOwned(p,cls,s.k)){if(passSkins().some(([k,x])=>!D.skinOwned(p,k,x.k)))fail('Tento vzhled už máš, vyber jiné povolání.');out.credits+=600}
+      else{p.skins.push(cls+':'+s.k);out.skins.push(s.name)}
+    }
+    if(R.skin==='all'){const left=passSkins().filter(([k,x])=>!D.skinOwned(p,k,x.k));for(const [k,x] of left){p.skins.push(k+':'+x.k);out.skins.push(x.name)}if(!left.length)out.credits+=600}
+    if(R.minR!=null){out.item=D.rollItem(p.level,{minR:R.minR,boost:.3});p.inv.push(out.item)}
+    if(R.title&&!p.titles.includes(R.title)){p.titles.push(R.title);out.title=R.title}
+    p.credits+=out.credits;P.claimed.push(n);return out;
   }
   // a new month starts a new season: the rating is softened and the best division of the old one waits as a reward
   function rollSeason(p){
@@ -165,7 +191,23 @@ export function createMeta(db){
       g.claimed=true;let xp=def.xp,cr=def.cr,item=null;
       if(weekly){item=D.rollItem(p.level,{minR:3});giveItem(p,item)}
       else if(!G.bonus&&G.list.every(x=>x.claimed)){G.bonus=true;xp+=D.DAILY_BONUS.xp;cr+=D.DAILY_BONUS.cr;item=D.rollItem(p.level,{boost:D.DAILY_BONUS.boost,minR:1});giveItem(p,item)}
-      p.credits+=cr;const levelUps=grantXp(p,xp);return{xp,credits:cr,item,levelUps};
+      p.credits+=cr;const levelUps=grantXp(p,xp);
+      const pass=passGain(p,weekly?D.PASS.weeklyXp:D.PASS.goalXp+(G.bonus&&!weekly&&G.list.every(x=>x.claimed)&&item?D.PASS.bonusXp:0));
+      return{xp,credits:cr,item,levelUps,pass};
+    },
+    passClaim(p,{n,cls}){return passClaim(p,n,cls)},
+    // one-time reward for finishing the tutorial (it runs on the client, so the reward is small and given once)
+    tutorialDone(p){
+      if(p.tutorial)return{already:true};
+      p.tutorial=true;p.credits+=300;const item=D.rollItem(p.level,{minR:1,boost:.3});giveItem(p,item);return{credits:300,item};
+    },
+    // every reached tier except the skin choice, which needs a class
+    passClaimAll(p){
+      const P=p.pass,got={credits:0,items:[],skins:[],titles:[],n:0};
+      for(let n=1;n<=D.passTier(P.xp);n++){if(P.claimed.includes(n)||D.PASS_REWARDS[n-1].skin==='pick')continue;
+        if(D.PASS_REWARDS[n-1].minR!=null&&p.inv.length>=D.INV_MAX)break;
+        const o=passClaim(p,n);got.credits+=o.credits;if(o.item)got.items.push(o.item);got.skins.push(...o.skins);if(o.title)got.titles.push(o.title);got.n++}
+      if(!got.n)fail(p.inv.length>=D.INV_MAX?'Inventář je plný.':'Není co vyzvednout.');return got;
     },
     rerollGoal(p,{id}){
       const G=p.goals;if(G.rerolled)fail('Dnes už jsi cíl jednou vyměnil.');
@@ -508,7 +550,7 @@ export function createMeta(db){
     // guild: XP for the guild, the weekly goal and the member bonus
     const guild=guildMatch(p,xp,cr,res==='win');if(guild){xp+=guild.bx;cr+=guild.bc}
     // apply
-    p.credits+=cr;const levelUps=grantXp(p,xp);
+    p.credits+=cr;const levelUps=grantXp(p,xp);const pass=passGain(p,xp);
     let sold=0;for(const it of items)if(!giveItem(p,it))sold++;
     const st=p.stats;st.matches++;if(res==='win')st.wins++;else if(res==='loss')st.losses++;
     st.kills+=u.kills;st.npcKills+=u.npcKills;st.bossKills+=res==='win'?(M.bossKills||0):0;if(M.mode==='waves')st.bestWave=Math.max(st.bestWave,M.wave);if(M.D.endless)st.bestEndless=Math.max(st.bestEndless|0,M.wave);
@@ -522,7 +564,7 @@ export function createMeta(db){
       score:M.D.pvp?[M.score[u.team],M.score[1-u.team]]:null,dur:Math.round(M.time),xp,cr,mvp,rk});
     p.history.length=Math.min(p.history.length,D.HISTORY_MAX);
     db.touch();
-    return{xp,credits:cr,items,res,levelUps,sold,skin,camp,goalsDone:done,record,mvp,guild,achNew:achDiff(p,achBefore)};
+    return{xp,credits:cr,items,res,levelUps,sold,skin,camp,goalsDone:done,record,mvp,guild,pass,achNew:achDiff(p,achBefore)};
   }
 
   // ---------- achievements ----------

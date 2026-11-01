@@ -55,6 +55,8 @@ function addNpc(M,key,x,z,hpScale=1,dmgScale=1,team=1){
   u.hpScale=hpScale;u.dmgScale=dmgScale;u.maxHp=Math.round(C.hp*hpScale);
   spawnAt(u,x,z,M);M.units.push(u);M.rosterVer++;fx(M,{t:'spawn',x:r2(u.x),z:r2(u.z),g:u.id});return u;
 }
+// the tutorial places weak enemy NPCs by hand
+export const addTrainingNpc=(M,key,x,z,hpScale=.6,dmgScale=.25)=>addNpc(M,key,x,z,hpScale,dmgScale,1);
 function spawnBoss(M,key,scale){
   const C=BOSSES[key],u=baseUnit(M,C,1,'boss',C.name,'boss',key);
   const heroes=M.units.filter(x=>x.kind==='hero').length;

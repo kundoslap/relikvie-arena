@@ -306,8 +306,8 @@ h2.sec{margin:0;font-family:var(--display);font-size:26px;font-weight:800;letter
 .cb{display:grid;grid-template-columns:120px 1fr 48px;gap:8px;align-items:center;font-size:13px}
 .cb i{height:7px;border-radius:4px;background:linear-gradient(90deg,var(--gold) var(--w),rgba(130,160,255,.15) var(--w))}
 .cb b{text-align:right}
-.tl{display:grid;gap:3px;font-size:13px;max-height:190px;overflow-y:auto}
-.tl div{display:grid;grid-template-columns:42px 1fr;gap:6px}.tl small{color:var(--muted)}.tl .t0{color:var(--blue)}.tl .t1{color:var(--red)}
+.tline{display:grid;gap:3px;font-size:13px;max-height:190px;overflow-y:auto}
+.tline div{display:grid;grid-template-columns:42px 1fr;gap:6px}.tline small{color:var(--muted)}.tline .t0{color:var(--blue)}.tline .t1{color:var(--red)}
 @media (max-width:640px){.deb{grid-template-columns:1fr}.cb{grid-template-columns:96px 1fr 42px}}
 .rank{display:flex;gap:14px;align-items:center;flex-wrap:wrap}
 .rank b{font-family:var(--display);font-size:26px;font-weight:800;letter-spacing:.04em;display:block}
@@ -367,6 +367,48 @@ body.touch #mchatBtn{display:block;position:fixed;right:calc(var(--gr) + 48px);t
 .dot{flex:none;width:9px;height:9px;border-radius:50%;background:#3a425c}
 .dot.online{background:var(--green);box-shadow:0 0 8px var(--green)} .dot.lobby{background:var(--gold);box-shadow:0 0 8px var(--gold)} .dot.match{background:var(--blue);box-shadow:0 0 8px var(--blue)}
 .nav button b{display:inline-grid;place-items:center;min-width:16px;height:16px;padding:0 4px;margin-left:5px;border-radius:8px;background:var(--red);color:#fff;font-size:10px;box-sizing:border-box}
+/* settings */
+#settings{z-index:18;background:rgba(4,6,12,.55)}
+.setcard{width:min(620px,100%)}
+#setBody{display:grid;gap:8px;min-height:300px;align-content:start}
+.setrow{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:8px 10px;border:1px solid var(--line);border-radius:3px;background:rgba(10,14,28,.6);font-size:14px;cursor:pointer}
+.setrow>span:first-child{display:grid;gap:2px}
+.setrow small{font-size:11.5px;color:var(--muted);line-height:1.35}
+.setrow input[type=checkbox]{width:20px;height:20px;accent-color:var(--gold);flex:none}
+.rng{display:flex;align-items:center;gap:10px;flex:none}.rng input{width:min(180px,36vw);accent-color:var(--gold)}.rng b{min-width:46px;text-align:right;font-weight:500;font-variant-numeric:tabular-nums}
+.keys{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:6px}
+.kb{min-width:110px;padding:6px 10px;border:1px solid var(--line);border-radius:3px;background:rgba(255,255,255,.05);font-weight:600;letter-spacing:.06em}
+.kb:hover{border-color:var(--gold);color:var(--gold)}
+.kb.cap{border-color:var(--gold);color:var(--gold);animation:pulse 1s infinite}
+@keyframes pulse{50%{box-shadow:0 0 12px rgba(255,198,109,.5)}}
+#fps{position:fixed;right:var(--gr);bottom:calc(var(--gb) + 46px);z-index:6;font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums;pointer-events:none}
+body.nonames .ub .n{display:none}
+/* tutorial */
+#hud.tut .top,#hud.tut #modeBar,#hud.tut #relicInfo{display:none}
+#tut{position:fixed;top:var(--gt);left:50%;transform:translateX(-50%);width:min(520px,calc(100vw - 32px));display:grid;gap:6px;padding:12px 16px;background:rgba(8,12,24,.94);border:1px solid var(--gold);border-radius:3px;box-shadow:0 0 30px rgba(255,198,109,.18);box-sizing:border-box;z-index:5}
+#tut small{font-size:11px;letter-spacing:.2em;color:var(--gold)}
+#tut>b{font-family:var(--display);font-size:24px;font-weight:800;letter-spacing:.06em;text-transform:uppercase}
+#tut p{margin:0;font-size:14px;line-height:1.5;color:#c4cce6}
+#tut p b{color:var(--green)}
+#tut kbd{font-family:var(--body);font-size:12px;border:1px solid var(--line);border-radius:2px;padding:1px 6px;color:var(--ink);background:rgba(255,255,255,.05)}
+#tut>.ghost{justify-self:end}
+.tutp{display:flex;gap:4px}.tutp i{flex:1;height:4px;border-radius:2px;background:rgba(255,255,255,.1)}.tutp i.d{background:var(--green)}.tutp i.c{background:var(--gold)}
+body.touch #tut{top:calc(var(--gt) + 4px);left:calc(var(--gl) + 120px);right:calc(var(--gr) + 52px);transform:none;width:auto;padding:8px 10px}
+body.touch #tut p{font-size:12.5px}
+.tutoffer{border-color:var(--gold);background:linear-gradient(90deg,rgba(255,198,109,.1),var(--panel2) 60%)}
+/* season pass */
+.ptg{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.ptc{display:grid;gap:6px;align-content:start;padding:10px;border:1px solid var(--line);border-radius:3px;background:rgba(10,14,28,.7);opacity:.6}
+.ptc.open{opacity:1;border-color:#3fffd2;box-shadow:0 0 14px rgba(63,255,210,.15)}
+.ptc.got{opacity:.85;background:rgba(63,255,210,.05)}
+.ptc.big{border-style:double;border-width:3px}
+.ptc small{font-size:11.5px;line-height:1.35;color:#c4cce6}
+.ptc .btns{gap:4px}.ptc .go.sm{padding:5px 8px;font-size:12px}
+.ptn{font-family:var(--display);font-size:24px;font-weight:800;color:#3fffd2;line-height:1}
+.ptc:not(.open):not(.got) .ptn{color:var(--muted)}
+.psw{display:flex;gap:4px}.psw i{width:22px;height:14px;border-radius:2px;background:linear-gradient(135deg,var(--a) 0 55%,var(--g) 55% 62%,var(--a) 62%)}
+.psk{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px}
+.psk .skin.cur{border-color:#3fffd2}
 /* achievements */
 .achs{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:8px}
 .ach{display:grid;gap:6px;align-content:start;padding:10px 12px;border:1px solid var(--line);border-radius:3px;background:rgba(10,14,28,.7)}
@@ -420,6 +462,7 @@ body.touch #mchatBtn{display:block;position:fixed;right:calc(var(--gr) + 48px);t
   <div id="dead" hidden>Zničen · obnova za <b id="deadT">5</b> s</div>
   <div id="touch" hidden><div id="stick"><i></i></div><button id="tAtk" type="button">Útok</button></div>
   <button id="pauseBtn" type="button" aria-label="Menu zápasu">II</button>
+  <div id="tut" hidden></div>
   <div id="mchat" hidden>
     <div id="mchatLog" aria-live="polite"></div>
     <form id="mchatForm" hidden autocomplete="off"><span id="mchatTo">Tým</span><input id="mchatIn" maxlength="200" placeholder="Enter odešle · Tab tým/všem · Esc zavře"></form>
@@ -483,6 +526,14 @@ body.touch #mchatBtn{display:block;position:fixed;right:calc(var(--gr) + 48px);t
     <div class="btns"><button class="go" id="againBtn" type="button">Hrát znovu</button><button class="ghost" id="menuBtn" type="button">Zpět do hubu</button></div>
   </div></div>
 </div>
+<div id="settings" class="overlay" hidden>
+  <div class="center"><div class="card setcard" role="dialog" aria-label="Nastavení">
+    <div class="row"><h2 class="sec">Nastavení</h2><div class="btns"><button class="ghost sm" id="setReset" type="button">Obnovit výchozí</button><button class="ghost sm" id="setClose" type="button" aria-label="Zavřít">Zavřít</button></div></div>
+    <div class="seg" id="setTabs"></div>
+    <div id="setBody"></div>
+  </div></div>
+</div>
+<div id="fps" hidden></div>
 <div id="invites" hidden></div>
 <div id="sndPop" hidden></div>
 <div id="chatDock" hidden>

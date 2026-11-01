@@ -2,6 +2,7 @@
 import * as D from './data.js';
 import * as Social from './social.js';
 import * as Snd from './audio.js';
+import * as Cfg from './settings.js';
 
 const $=s=>document.querySelector(s);
 export const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -96,8 +97,9 @@ export function showAuth(){
 async function logout(){Social.disconnect();try{await api('/api/logout',{})}catch{}H.token=null;store.set('token',null);H.profile=null;H.guest=false;showAuth()}
 
 // ---------- hub frame ----------
-const TABS=[['play','Hrát'],['campaign','Kampaň'],['goals','Cíle'],['ach','Úspěchy'],['hero','Postava'],['prof','Profese'],['tree','Dovednosti'],['inv','Inventář'],['market','Tržiště'],['shop','Obchod'],['friends','Přátelé'],['guild','Klan'],['stats','Statistiky'],['top','Žebříček']];
+const TABS=[['play','Hrát'],['campaign','Kampaň'],['goals','Cíle'],['pass','Průkaz'],['ach','Úspěchy'],['hero','Postava'],['prof','Profese'],['tree','Dovednosti'],['inv','Inventář'],['market','Tržiště'],['shop','Obchod'],['friends','Přátelé'],['guild','Klan'],['stats','Statistiky'],['top','Žebříček']];
 export function showHub(tab){if(tab)H.tab=tab;if(H.profile&&!H.offline)Social.connect(H.token);H.cb.showOnly('hub');renderHub()}
+export function tutorialDone(){if(H.profile&&!H.profile.tutorial)act('tutorialDone',{},j=>j.already?'':`Odměna za výcvik: +${num(j.credits)} kreditů a ${j.item.name}.`)}
 export function joinRoom(code){H.cb.join(code,{cls:H.cls,name:H.profile?H.profile.nick:H.guestName||'Host'})}
 export function renderHub(){
   const p=H.profile;
@@ -107,15 +109,16 @@ export function renderHub(){
     <div class="btns"><div class="cred">${num(p.credits)} <small>KREDITŮ</small></div>${sndBtn()}<button class="ghost sm" id="logoutBtn" type="button">Odhlásit</button></div>`
     :`<div class="who"><div class="nick">${H.offline?'Offline trénink':'Host'}</div><small class="help">${H.offline?'Postup se neukládá.':'Bez účtu se postup neukládá.'}</small></div>
     <div class="btns">${sndBtn()}${H.offline?'':'<button class="ghost sm" id="loginBtn" type="button">Přihlásit nebo založit účet</button>'}</div>`;
+  $('#cfgBtn').onclick=()=>Cfg.open();
   $('#sndBtn').onclick=()=>{const P=$('#sndPop');P.hidden=!P.hidden;if(!P.hidden){P.innerHTML=Snd.panelHTML();Snd.bindPanel(P)}};
   $('#logoutBtn')&&($('#logoutBtn').onclick=logout);
   $('#loginBtn')&&($('#loginBtn').onclick=()=>{H.guest=false;showAuth()});
-  $('#hubNav').innerHTML=TABS.map(([k,n])=>{const off=!p&&k!=='play'&&!(k==='top'&&!H.offline);return`<button type="button" data-t="${k}" ${H.tab===k?'aria-current="page"':''} ${off?'disabled title="Jen s účtem"':''}>${n}${k==='friends'?navBadge():k==='ach'&&p?.achView?.ready?` <b>${p.achView.ready}</b>`:''}</button>`}).join('');
+  $('#hubNav').innerHTML=TABS.map(([k,n])=>{const off=!p&&k!=='play'&&!(k==='top'&&!H.offline);return`<button type="button" data-t="${k}" ${H.tab===k?'aria-current="page"':''} ${off?'disabled title="Jen s účtem"':''}>${n}${k==='friends'?navBadge():k==='ach'&&p?.achView?.ready?` <b>${p.achView.ready}</b>`:k==='pass'&&passReady(p)?` <b>${passReady(p)}</b>`:''}</button>`}).join('');
   $('#hubNav').querySelectorAll('button').forEach(b=>b.onclick=()=>{H.tab=b.dataset.t;renderHub()});
   if(H.tab!=='hero')H.cb.preview(null);
-  ({play:tabPlay,campaign:tabCampaign,goals:tabGoals,hero:tabHero,prof:tabProf,inv:tabInv,tree:tabTree,market:tabMarket,shop:tabShop,friends:tabFriends,guild:tabGuild,ach:tabAch,stats:tabStats,top:tabTop})[H.tab]();
+  ({play:tabPlay,campaign:tabCampaign,goals:tabGoals,hero:tabHero,prof:tabProf,inv:tabInv,tree:tabTree,market:tabMarket,shop:tabShop,friends:tabFriends,guild:tabGuild,ach:tabAch,pass:tabPass,stats:tabStats,top:tabTop})[H.tab]();
 }
-const sndBtn=()=>`<button class="ghost sm" id="sndBtn" type="button" aria-label="Nastavení zvuku">${Snd.settings().mute?'Zvuk ✕':'Zvuk'}</button>`;
+const sndBtn=()=>`<button class="ghost sm" id="sndBtn" type="button" aria-label="Nastavení zvuku">${Snd.settings().mute?'Zvuk ✕':'Zvuk'}</button><button class="ghost sm" id="cfgBtn" type="button">Nastavení</button>`;
 Snd.onChange(()=>{const b=$('#sndBtn');if(b)b.textContent=Snd.settings().mute?'Zvuk ✕':'Zvuk'});
 // the sound popover closes on a click elsewhere and whenever the hub is left
 document.addEventListener('pointerdown',e=>{const P=$('#sndPop');if(P&&!P.hidden&&!P.contains(e.target)&&e.target.id!=='sndBtn')P.hidden=true});
@@ -156,7 +159,11 @@ function tabPlay(){
   // settings come from localStorage and may be from an older version or damaged
   const P=H.play;if(!D.MODES[P.mode])P.mode='arena';if(!D.BOSSES[P.boss])P.boss='collector';if(!D.DIFF_REWARD[P.diff])P.diff='normal';
   const M=D.MODES[P.mode];if(!M.maps.includes(P.map))P.map=M.maps[0];
+  // new players (no tutorial yet, low level, not hidden) get the tutorial offered first
+  const offer=!store.get('tutHide',false)&&(H.profile?!H.profile.tutorial&&H.profile.level<=5:true);
   $('#hubBody').innerHTML=`
+    ${offer?`<section class="panel tutoffer"><div class="row"><div><h3>Nový v aréně?</h3><p class="help">Výcvik tě za pár minut provede pohybem, útokem, schopnostmi, ultimátkou, taktickou akcí, základnou a relikvií.${H.profile?' Za dokončení dostaneš 300 kreditů a implantát.':''}</p></div>
+      <div class="btns"><button class="go" type="button" id="tutBtn">Spustit výcvik</button><button class="ghost sm" type="button" id="tutHide">Skrýt</button></div></div></section>`:''}
     <section class="panel"><h3>Povolání</h3>${classCards()}${classDetail(H.cls)}</section>
     <section class="panel"><h3>Režim</h3>
       <div class="modes">${Object.entries(D.MODES).map(([k,m])=>`<button type="button" class="mc" data-mode="${k}" aria-pressed="${k===P.mode}"><span class="tag">${m.pvp?`PVP · ${m.team||3} PROTI ${m.team||3}`:'KOOPERACE · AŽ 4'}</span><b>${m.name}</b><small>${m.desc}</small></button>`).join('')}</div>
@@ -164,7 +171,7 @@ function tabPlay(){
       ${P.mode==='boss'?`<div><div class="lbl">Boss</div><div class="chips">${Object.entries(D.BOSSES).map(([k,b])=>`<button type="button" class="chip" data-boss="${k}" aria-pressed="${k===P.boss}">${b.name} · ${b.title}<small>${b.desc}</small></button>`).join('')}</div></div>`:''}
       <div><div class="lbl">Obtížnost</div><div class="seg" id="pDiff">${[['easy','Lehká'],['normal','Normální'],['hard','Těžká']].map(([k,n])=>`<button type="button" data-d="${k}" aria-pressed="${k===P.diff}">${n}</button>`).join('')}</div>
         <p class="help">${H.profile?'Těžší obtížnost dává víc zkušeností a kreditů (lehká ×0,6, těžká ×1,35).':''}</p></div>
-      <div class="btns"><button class="go" id="soloBtn" type="button">${H.offline?'Spustit trénink':'Hrát s boty'}</button></div>
+      <div class="btns"><button class="go" id="soloBtn" type="button">${H.offline?'Spustit trénink':'Hrát s boty'}</button><button class="ghost" id="tutBtn2" type="button">Výcvik</button></div>
       ${H.offline?'':`<div class="lbl">Online s lidmi</div>
       <div class="inline">${H.profile?'':`<label class="field">Přezdívka hosta<input id="gNick" maxlength="16" value="${esc(H.guestName)}" placeholder="Např. Petan"></label>`}
         <button class="go" id="quickBtn" type="button">Rychlá hra · ${M.name}</button>
@@ -186,6 +193,9 @@ function tabPlay(){
   document.querySelectorAll('#pDiff button').forEach(b=>b.onclick=()=>{P.diff=b.dataset.d;save()});
   const opts=()=>({...P,cls:H.cls,name:H.profile?H.profile.nick:($('#gNick')?.value.trim()||H.guestName||'Host')});
   $('#soloBtn').onclick=()=>H.offline?H.cb.local(opts()):H.cb.solo(opts());
+  const tut=()=>H.cb.tutorial({cls:H.cls,name:opts().name,account:!!H.profile&&!H.profile.tutorial});
+  $('#tutBtn2').onclick=tut;$('#tutBtn')&&($('#tutBtn').onclick=tut);
+  $('#tutHide')&&($('#tutHide').onclick=()=>{store.set('tutHide',true);tabPlay()});
   if($('#createBtn')){
     const nameOk=()=>{if(H.profile)return true;const n=$('#gNick').value.trim();if(!n){$('#netErr').textContent='Zadej přezdívku hosta.';return false}H.guestName=n;store.set('nick',n);return true};
     $('#createBtn').onclick=()=>nameOk()&&H.cb.create(opts());
@@ -252,6 +262,32 @@ function friendList(){
     // removing and blocking ask for a second click
     if((k==='remove'||k==='block')&&!x.dataset.sure){x.dataset.sure='1';x.textContent='Opravdu?';setTimeout(()=>{if(x.isConnected){delete x.dataset.sure;x.textContent=k==='remove'?'Odebrat':'Blokovat'}},3000);return}
     Social.fr(k,id)});
+}
+
+// ---------- Sezónní průkaz ----------
+const passReady=p=>{if(!p?.pass)return 0;const t=D.passTier(p.pass.xp);let n=0;for(let i=1;i<=t;i++)if(!p.pass.claimed.includes(i))n++;return n};
+function tabPass(){
+  const p=H.profile,P=p.pass,tier=D.passTier(P.xp),max=D.PASS.tiers,inTier=P.xp-tier*D.PASS.xp,ready=passReady(p);
+  const days=Math.max(0,Math.ceil((D.seasonEnd(P.season||D.seasonKey())-Date.now())/864e5));
+  const skins=D.CLASS_KEYS.map(k=>[k,D.SKINS[k].find(s=>s.req?.pass)]);
+  const cell=(R,n)=>{const got=P.claimed.includes(n),open=n<=tier,big=R.skin||R.title||R.minR===4;
+    let act='';
+    if(open&&!got){if(R.skin==='pick'){const left=skins.filter(([k,s])=>!D.skinOwned(p,k,s.k));
+        act=`<div class="btns">${(left.length?left:skins).map(([k,s])=>`<button class="go sm" type="button" data-pt="${n}" data-cls="${k}" title="${esc(s.name)}">${D.CLASSES[k].name}</button>`).join('')}</div>`}
+      else act=`<button class="go sm" type="button" data-pt="${n}">Vyzvednout</button>`}
+    return`<div class="ptc${got?' got':open?' open':''}${big?' big':''}"><div class="ptn">${n}</div><small>${D.passRewardText(R)}</small>${R.skin?`<div class="psw">${skins.map(([k,s])=>`<i style="--a:${hex(s.armor)};--g:${hex(s.glow)}" title="${esc(s.name)}"></i>`).join('')}</div>`:''}
+      ${got?'<small class="help">Vyzvednuto</small>':act||(open?'':`<small class="help">${num(n*D.PASS.xp-P.xp)} bodů</small>`)}</div>`};
+  $('#hubBody').innerHTML=`<section class="panel"><div class="row"><div><div class="brand">ZDARMA PRO VŠECHNY S ÚČTEM</div><h3>Sezónní průkaz · ${D.seasonName(P.season||D.seasonKey())}</h3></div><small class="help">končí za ${days} ${days===1?'den':days>=2&&days<=4?'dny':'dní'}</small></div>
+      ${P.auto?`<p class="help">Za průkaz sezóny ${D.seasonName(P.auto.season)} ti automaticky přišlo ${P.auto.n} nevyzvednutých odměn.</p>`:''}
+      <div class="rank"><span class="rkb" style="--c:#3fffd2">Stupeň ${tier} / ${max}</span><div style="flex:1;min-width:200px"><b style="font-size:18px">${tier>=max?'Průkaz je dokončený':`${num(inTier)} / ${num(D.PASS.xp)} bodů do stupně ${tier+1}`}</b>
+        <div class="xpbar" style="width:100%"><i style="width:${tier>=max?100:inTier/D.PASS.xp*100}%"></i></div>
+        <small class="help">Body dostaneš ze zkušeností za každý zápas, za denní cíl +${D.PASS.goalXp}, za všechny tři denní cíle navíc +${D.PASS.bonusXp} a za týdenní cíl +${D.PASS.weeklyXp}. Nevyzvednuté odměny ti po konci sezóny přijdou samy.</small></div>
+        ${ready?`<button class="go" type="button" id="passAll">Vyzvednout vše (${ready})</button>`:''}</div>
+      <div class="psk">${skins.map(([k,s])=>`<div class="skin${D.skinOwned(p,k,s.k)?' cur':''}" style="--a:${hex(s.armor)};--g:${hex(s.glow)}"><div class="sw"></div><b>${esc(s.name)}</b><small>${D.CLASSES[k].name} · ${D.skinOwned(p,k,s.k)?'vlastníš':'stupeň 15 nebo 30'}</small></div>`).join('')}</div></section>
+    <section class="panel"><h3>Odměny</h3><div class="ptg">${D.PASS_REWARDS.map((R,i)=>cell(R,i+1)).join('')}</div></section>`;
+  const msg=j=>[j.credits?`+${num(j.credits)} kreditů`:'',j.item?j.item.name:'',...(j.items||[]).map(i=>i.name),...(j.skins||[]).map(s=>`vzhled ${s}`),j.title?`titul ${j.title}`:'',...(j.titles||[]).map(t=>`titul ${t}`)].filter(Boolean).join(' · ')||'Vyzvednuto.';
+  document.querySelectorAll('[data-pt]').forEach(b=>b.onclick=()=>act('passClaim',{n:+b.dataset.pt,cls:b.dataset.cls},msg));
+  $('#passAll')&&($('#passAll').onclick=()=>act('passClaimAll',{},j=>msg(j)+(p.pass.claimed.includes(15)||D.passTier(p.pass.xp)<15?'':' · vzhled na stupni 15 si vyber sám')));
 }
 
 // ---------- Úspěchy ----------
@@ -345,7 +381,7 @@ function guildMine(g){
           ${g.apps.length?`<div class="lbl">Žádosti o vstup</div><div class="flist">${g.apps.map(a=>`<div class="fr"><span><b>${esc(a.nick)}</b><small>úr. ${a.lv} · ${D.CLASSES[a.cls]?.name||''}</small></span><div class="btns"><button class="go sm" type="button" data-ga="1" data-id="${a.id}">Přijmout</button><button class="ghost sm" type="button" data-ga="0" data-id="${a.id}">Odmítnout</button></div></div>`).join('')}</div>`:'<p class="help">Žádné nevyřízené žádosti o vstup.</p>'}</section>`:''}
         ${lead?`<section class="panel"><h3>Nastavení klanu</h3><label class="field">Popis<input id="gEdDesc" maxlength="160" value="${esc(g.desc)}"></label>
           <div class="btns"><button type="button" class="chip" id="gEdOpen" aria-pressed="${g.open}">${g.open?'Otevřený vstup':'Vstup na žádost'}<small>klikni pro změnu</small></button><button class="ghost sm" type="button" id="gEdSave">Uložit popis</button></div></section>`:''}
-        <section class="panel"><h3>Dění v klanu</h3><div class="tl">${g.log.map(e=>`<div><small>${new Date(e.t).toLocaleDateString('cs-CZ',{day:'numeric',month:'numeric'})}</small><span>${esc(e.msg)}</span></div>`).join('')||'<small class="help">Zatím nic.</small>'}</div></section>
+        <section class="panel"><h3>Dění v klanu</h3><div class="tline">${g.log.map(e=>`<div><small>${new Date(e.t).toLocaleDateString('cs-CZ',{day:'numeric',month:'numeric'})}</small><span>${esc(e.msg)}</span></div>`).join('')||'<small class="help">Zatím nic.</small>'}</div></section>
         <section class="panel"><div class="btns">${lead&&g.n>1?'<p class="help">Než klan opustíš, předej vedení jinému členovi.</p>':`<button class="ghost" type="button" id="gLeave">${g.n<=1?'Rozpustit klan':'Opustit klan'}</button>`}${lead&&g.n>1?'<button class="ghost" type="button" id="gDisband">Rozpustit klan</button>':''}</div></section>
       </div></div>`;
   $('#gChat').onclick=()=>Social.openGuildChat();
@@ -460,7 +496,7 @@ function tabHero(){
     <div class="grid2">
       <section class="panel"><h3>${D.CLASSES[k].name} · vzhled</h3><canvas id="preview" width="520" height="520"></canvas>
         <div class="skins">${D.SKINS[k].map(s=>{const own=D.skinOwned(p,k,s.k),r=s.req;
-          const note=own?(s.k===cur?'Nasazeno':'Vlastníš'):r?.level?`Od úrovně ${r.level}`:r?.credits?`${num(r.credits)} kreditů v Obchodě`:'Padá z bossů';
+          const note=own?(s.k===cur?'Nasazeno':'Vlastníš'):r?.level?`Od úrovně ${r.level}`:r?.credits?`${num(r.credits)} kreditů v Obchodě`:r?.pass?'Ze sezónního průkazu':'Padá z bossů';
           return`<button type="button" class="skin${s.k===cur?' cur':''}" data-skin="${s.k}" style="--a:${hex(s.armor)};--g:${hex(s.glow)}" ${own?'':'disabled'}><div class="sw"></div><b>${s.name}</b><small>${note}</small></button>`}).join('')}</div></section>
       <section class="panel"><h3>Vlastnosti</h3><div class="stats">${d.rows.map(([a,b])=>`<div class="stat">${a}<b>${b}</b></div>`).join('')}</div>
         <div class="lbl">Bonusy z implantátů a stromu</div><div class="mods">${mods}</div>${uniq}
@@ -640,6 +676,7 @@ export function showRewards(m){
     ${m.camp?.echo?'<div class="lvup">Ozvěna jádra pokořena · bonus týdne</div>':''}
     ${m.record?`<div class="lvup">Nový rekord v Nekonečnu · vlna ${m.record}</div>`:''}
     ${m.mvp?'<div class="lvup">MVP zápasu · +15 % zkušeností a kreditů</div>':''}
+    ${m.pass?.gain?`<p class="help">Sezónní průkaz: <b style="color:#3fffd2">+${num(m.pass.gain)} bodů</b> · stupeň ${m.pass.tier} / ${D.PASS.tiers}</p>${m.pass.tier>m.pass.before?`<div class="lvup" style="color:#3fffd2">Nový stupeň průkazu ${m.pass.tier}! Odměnu vyzvedneš na kartě Průkaz.</div>`:''}`:''}
     ${m.achNew?.length?`<div class="achnew">${m.achNew.map(a=>`<span style="--c:${D.ACH_TIERS[a.tier].color}">Úspěch · ${esc(a.name)} · ${D.ACH_TIERS[a.tier].name}</span>`).join('')}<small class="help">Odměnu vyzvedneš v Úspěších.</small></div>`:''}
     ${m.guild?`<p class="help">Klan <b class="cg">[${esc(m.guild.tag)}]</b>: +${num(m.guild.gx)} zkušeností klanu${m.guild.bx||m.guild.bc?` · klanový bonus už v odměně: +${num(m.guild.bx)} zkušeností, +${num(m.guild.bc)} kreditů`:''}</p>${m.guild.up?`<div class="lvup">Klan dosáhl úrovně ${m.guild.up}!</div>`:''}`:''}
     ${m.goalsDone?.length?`<p class="help">Splněné cíle: <b style="color:var(--green)">${m.goalsDone.map(esc).join(', ')}</b>. Odměnu vyzvedneš v Cílech.</p>`:''}

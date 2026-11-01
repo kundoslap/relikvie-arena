@@ -94,17 +94,20 @@ export const SKINS={
     {k:'default',name:'Základní',armor:0x3d3226,glow:0xffb347,acc:null},
     {k:'night',name:'Noční lovec',armor:0x1a1d2b,glow:0xb388ff,acc:'cape',req:{level:5}},
     {k:'desert',name:'Pouštní stopař',armor:0x8a6a3a,glow:0xff7b3a,acc:'hood',req:{credits:900}},
-    {k:'relic',name:'Relikviový lovec',armor:0x2a2410,glow:0xffe08a,acc:'crown',req:{drop:true}}],
+    {k:'relic',name:'Relikviový lovec',armor:0x2a2410,glow:0xffe08a,acc:'crown',req:{drop:true}},
+    {k:'pass',name:'Neonový průkopník',armor:0x0c1222,glow:0x3fffd2,acc:'hood',req:{pass:true}}],
   guardian:[
     {k:'default',name:'Základní',armor:0x2b3d3a,glow:0x5dffa8,acc:null},
     {k:'obsidian',name:'Obsidián',armor:0x15161c,glow:0xff5d6c,acc:'horns',req:{level:5}},
     {k:'cobalt',name:'Kobaltová stráž',armor:0x24406e,glow:0x6acbff,acc:'crest',req:{credits:900}},
-    {k:'relic',name:'Relikviový strážce',armor:0x2a2410,glow:0xffe08a,acc:'crown',req:{drop:true}}],
+    {k:'relic',name:'Relikviový strážce',armor:0x2a2410,glow:0xffe08a,acc:'crown',req:{drop:true}},
+    {k:'pass',name:'Neonová hradba',armor:0x0c1222,glow:0xff3fb4,acc:'crest',req:{pass:true}}],
   technician:[
     {k:'default',name:'Základní',armor:0x28304e,glow:0x6acbff,acc:null},
     {k:'violet',name:'Fialový obvod',armor:0x2b2045,glow:0xe27dff,acc:'antenna',req:{level:5}},
     {k:'frost',name:'Mrazivý archivář',armor:0x8fa8bf,glow:0x9ffcff,acc:'cape',req:{credits:900}},
-    {k:'relic',name:'Relikviový technik',armor:0x2a2410,glow:0xffe08a,acc:'crown',req:{drop:true}}]
+    {k:'relic',name:'Relikviový technik',armor:0x2a2410,glow:0xffe08a,acc:'crown',req:{drop:true}},
+    {k:'pass',name:'Neonový obvod',armor:0x0c1222,glow:0x8f7dff,acc:'antenna',req:{pass:true}}]
 };
 export const skinOf=(k,s)=>SKINS[k]?.find(x=>x.k===s)||SKINS[k]?.[0];
 export function skinOwned(p,k,s){const d=skinOf(k,s);if(!d||d.k!==s)return false;if(!d.req)return true;
@@ -444,6 +447,24 @@ export const guildMaxMembers=l=>GUILD.baseMembers+GUILD.perLevel*(l-1);
 export const guildBonus=l=>Math.min(10,l-1);
 export const guildWeekTarget=n=>Math.max(15,n*4);
 export const guildWeekReward=l=>({credits:250+30*l,minR:l>=6?3:2});
+
+// ---------- season pass ----------
+// Free for every account, one per ranked season (calendar month). Pass XP comes from match XP and claimed goals.
+export const PASS={tiers:30,xp:500,goalXp:100,weeklyXp:400,bonusXp:150};
+export const passTier=xp=>Math.min(PASS.tiers,Math.floor(Math.max(0,xp)/PASS.xp));
+// reward of tier n (1–30): credits, an implant of a minimum rarity, a title, a pass skin of a chosen class, or all of them
+export const PASS_REWARDS=Array.from({length:PASS.tiers},(_,i)=>{const n=i+1;
+  if(n===30)return{credits:1000,skin:'all',title:'Šampion sezóny'};
+  if(n===15)return{skin:'pick'};
+  if(n===10)return{minR:2,title:'Průkopník sezóny'};
+  if(n===25)return{minR:4};
+  if(n%5===0)return{minR:n<10?2:3};
+  if(n%3===0)return{minR:1,credits:50};
+  return{credits:80+n*10}});
+export function passRewardText(R){
+  const a=[];if(R.credits)a.push(`${R.credits} kreditů`);if(R.minR!=null)a.push(`implantát ${RARITIES[R.minR].name.toLowerCase()}${R.minR<4?' nebo lepší':''}`);
+  if(R.skin==='pick')a.push('neonový vzhled pro povolání podle volby');if(R.skin==='all')a.push('zbylé neonové vzhledy');if(R.title)a.push(`titul „${R.title}“`);return a.join(' · ');
+}
 
 // ---------- achievements ----------
 // Three tiers each (bronze, silver, gold). Progress is read from the profile, so nothing is tracked twice.
