@@ -9,7 +9,7 @@ const store={get(k,d){try{const v=localStorage.getItem('rel.'+k);return v==null?
 const KEEP=100;
 
 const X={ws:null,want:null,retry:0,retryT:0,me:null,
-  fr:{friends:[],inReq:[],outReq:[],blocked:[]},
+  fr:{friends:[],inReq:[],outReq:[],blocked:[],recent:[]},
   world:[],dms:{},room:[],roomCode:null,guild:null,gtag:null,glog:[],unread:{world:0,room:0,guild:0},dmUnread:{},
   tab:'world',open:false,screen:'auth',filter:store.get('chatFilter',true),invites:[],pick:null,
   host:null,listeners:new Set()};
@@ -34,7 +34,7 @@ export function connect(token){
 export function disconnect(){
   X.want=null;clearTimeout(X.retryT);X.me=null;
   if(X.ws){const w=X.ws;X.ws=null;try{w.close()}catch{}}
-  X.fr={friends:[],inReq:[],outReq:[],blocked:[]};X.world=[];X.dms={};X.dmUnread={};X.unread.world=0;X.invites=[];
+  X.fr={friends:[],inReq:[],outReq:[],blocked:[],recent:[]};X.world=[];X.dms={};X.dmUnread={};X.unread.world=0;X.invites=[];
   X.guild=null;X.gtag=null;X.glog=[];X.unread.guild=0;
   renderDock();renderInvites();changed();
 }
@@ -53,7 +53,7 @@ function onMsg(m){
     case 'social':
       if(!m.ok){X.want=null;return}
       X.me=m.me;X.retry=0;X.world=m.world||[];X.dms=m.dms||{};renderDock();changed();break;
-    case 'friends':{const before=new Set(X.fr.inReq.map(f=>f.id));X.fr={friends:m.friends,inReq:m.inReq,outReq:m.outReq,blocked:m.blocked};
+    case 'friends':{const before=new Set(X.fr.inReq.map(f=>f.id));X.fr={friends:m.friends,inReq:m.inReq,outReq:m.outReq,blocked:m.blocked,recent:m.recent||[]};
       if(X.tab.startsWith('dm:')&&!isFriend(X.tab.slice(3)))X.tab='world';
       renderDock();changed();break}
     case 'chat':{
@@ -232,7 +232,7 @@ export async function profileDialog(q){
       <section><div class="lbl">Hodnocená hra</div>
         ${div?`<p><b style="color:${div.color}">${div.name}</b> · ${P.ranked.rating}${P.ranked.placed?'':' <small class="help">(umisťovací)</small>'}<br><small class="help">${P.ranked.games} zápasů této sezóny, výhry ${pct(P.ranked.wins,P.ranked.games)}</small></p>`:'<p class="help">Tuto sezónu zatím nehrál.</p>'}
         ${best?`<p class="help">Nejlepší divize: <b style="color:${best.color}">${best.name}</b></p>`:''}
-        <div class="lbl">Rekordy</div><p class="help">Poražení bossové ${s.bossKills} · nejlepší vlna ${s.bestWave||'—'} · Nekonečno ${s.bestEndless||'—'}</p></section>
+        <div class="lbl">Rekordy</div><p class="help">Poražení bossové ${s.bossKills} · nejlepší vlna ${s.bestWave||'—'} · Nekonečno ${s.bestEndless||'—'}<br>Nejdelší série ${s.bestStreak||'—'} · nejvíc naráz ${s.bestMulti>1?s.bestMulti:'—'}</p></section>
       <section><div class="lbl">Oblíbená povolání</div>${bars(P.classes,k=>D.CLASSES[k]?.name||k,k=>D.CLASSES[k]?.css)}
         <div class="lbl">Režimy</div>${bars(P.modes,k=>modeName(k))}</section>
     </div>

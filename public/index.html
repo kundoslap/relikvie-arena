@@ -412,6 +412,7 @@ body.touch #mchatBtn{display:block;position:fixed;right:calc(var(--gr) + 48px);t
 .fr>span small{display:block;color:var(--muted);font-size:11.5px}
 .fr .btns{gap:6px}
 .dot{flex:none;width:9px;height:9px;border-radius:50%;background:#3a425c}
+.dot.recent{visibility:hidden}
 .dot.online{background:var(--green);box-shadow:0 0 8px var(--green)} .dot.lobby{background:var(--gold);box-shadow:0 0 8px var(--gold)} .dot.match{background:var(--blue);box-shadow:0 0 8px var(--blue)}
 .nav button b{display:inline-grid;place-items:center;min-width:16px;height:16px;padding:0 4px;margin-left:5px;border-radius:8px;background:var(--red);color:#fff;font-size:10px;box-sizing:border-box}
 /* mastery */
@@ -502,6 +503,13 @@ body.touch #wheel{bottom:auto;top:calc(var(--gt) + 56px)}
 #hud.tut .top,#hud.tut #modeBar,#hud.tut #relicInfo{display:none}
 #tut{position:fixed;top:var(--gt);left:50%;transform:translateX(-50%);width:min(520px,calc(100vw - 32px));display:grid;gap:6px;padding:12px 16px;background:rgba(8,12,24,.94);border:1px solid var(--gold);border-radius:3px;box-shadow:0 0 30px rgba(255,198,109,.18);box-sizing:border-box;z-index:5}
 #tut small{font-size:11px;letter-spacing:.2em;color:var(--gold)}
+#range{position:fixed;top:calc(var(--gt) + 64px);right:calc(var(--gr) + 12px);width:250px;display:grid;gap:8px;padding:12px 14px;background:rgba(8,12,24,.92);border:1px solid var(--gold);border-radius:3px;box-sizing:border-box;z-index:5}
+#range small{font-size:11px;letter-spacing:.2em;color:var(--gold)}#range p{margin:0;font-size:12px;line-height:1.45;color:var(--muted)}
+#range .rgrid{display:grid;grid-template-columns:1fr auto;gap:2px 10px;font-size:13px;color:var(--muted)}#range .rgrid b{color:var(--ink);font-size:15px;text-align:right}
+#range #rDps{color:var(--gold);font-size:22px}
+#range .btns{display:flex;flex-wrap:wrap;gap:6px}#range [aria-pressed="true"]{border-color:var(--gold);color:var(--gold)}
+body.touch #range{top:auto;bottom:calc(var(--gb,0px) + 190px);right:calc(var(--gr) + 8px);width:200px;padding:8px 10px}
+body.touch #range p{display:none}
 #tut>b{font-family:var(--display);font-size:24px;font-weight:800;letter-spacing:.06em;text-transform:uppercase}
 #tut p{margin:0;font-size:14px;line-height:1.5;color:#c4cce6}
 #tut p b{color:var(--green)}
@@ -579,6 +587,7 @@ body.touch #tut p{font-size:12.5px}
   <div id="touch" hidden><div id="stick"><i></i></div><button id="tAtk" type="button">Útok</button></div>
   <button id="pauseBtn" type="button" aria-label="Menu zápasu">II</button>
   <div id="tut" hidden></div>
+  <div id="range" hidden></div>
   <div id="wheel" hidden></div>
   <div id="specBar" hidden></div>
   <div id="sigBtns"><button id="pingBtn" type="button">Ping</button><button id="wheelBtn" type="button">Zprávy</button></div>

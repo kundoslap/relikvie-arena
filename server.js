@@ -344,6 +344,9 @@ function finishMatch(room){
     const r=meta.rewardsFor(M,u,c.profile,loot,u.id===mvp,mine?mine.delta:null);
     send(c,{type:'rewards',...r,ranked:mine,rankedNone:rk?.none||null,profile:meta.view(c.profile)});
   }
+  // everyone with an account who played this match lands in the others' "recent players" list
+  const played=[...room.clients.values()].filter(c=>c.profile&&M.units.some(x=>x.id===c.unitId&&(x.ctrl==='human'||c.gone))).map(c=>({pid:c.profile.id,team:c.team}));
+  if(played.length>1){meta.coPlayers(played,M.mission?'campaign':M.mode);const idx=presenceIndex();for(const e of played)pushFriends(e.pid,idx)}
   setTimeout(()=>{if(room.match!==M)return;room.match=null;room.state='lobby';room.autoAt=Date.now()+QUICK_WAIT;for(const c of room.clients.values())c.unitId=0;
     for(const c of [...room.specs||[]])endSpectate(c,'Zápas skončil.');broadcastLobby(room)},room.solo?4000:END_LINGER);
 }

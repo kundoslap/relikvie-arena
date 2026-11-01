@@ -757,6 +757,8 @@ export const NPCS={
   sentinel:{name:'Hlídač',hp:150,speed:5.5,def:.05,atk:14,tech:0,pref:15,color:0xc08bff,radius:.8,basic:{type:'shot',dmg:15,rate:1.1,speed:30,range:21,size:1.3}},
   repair:{name:'Opravář',hp:110,speed:6.5,def:0,atk:0,tech:0,pref:4,color:0x74ffb4,radius:.6,basic:null},
   shard:{name:'Pravý střep',hp:300,speed:0,def:0,atk:0,tech:0,pref:0,color:0xffd16d,radius:.9,basic:null},
+  // Střelnice: a target that never moves or attacks; the client keeps its health topped up
+  dummy:{name:'Terč',hp:2000,speed:0,def:0,atk:0,tech:0,pref:0,color:0xffc66d,radius:1,basic:null},
   fshard:{name:'Falešný střep',hp:300,speed:0,def:0,atk:0,tech:0,pref:0,color:0xc08bff,radius:.9,basic:null}
 };
 export const BOSSES={

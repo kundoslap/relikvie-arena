@@ -182,6 +182,8 @@ function kill(M,t,src){
     if(arenaLike(M.mode)||M.mode==='duel'){if(k&&k.team!==t.team)M.score[k.team]++;else M.score[1-t.team]++}
     if(!M.D.pvp){M.lives=Math.max(0,M.lives-1);if(M.lives<=0&&M.state==='play')endMatch(M,1)}
     fx(M,k&&k.team!==t.team?{t:'feed',k:'kill',a:k.id,b:t.id}:{t:'feed',k:'field',b:t.id});
+    if(k&&k.team!==t.team&&k.kind==='hero')streakKill(M,k,t);
+    t.streak=0;
   }else{
     t.remove=true;
     if(k&&k.kind==='hero'){k.npcKills++;k.ult=Math.min(100,k.ult+(t.kind==='boss'?40:6));echoReset(M,k)}
@@ -194,6 +196,17 @@ function kill(M,t,src){
     }
   }
   checkWin(M);
+}
+// Kill streaks (kills without falling) and multi-kills (each within MULTI_GAP s of the previous): announcement events
+// at the STREAKS steps and from a double kill up; ending a streak of 3+ is a shutdown.
+export const STREAKS={3:'Série',5:'Řádění',8:'Nezastavitelný',12:'Legenda arény'},MULTI_GAP=4;
+export const MULTI_NAME=n=>n===2?'Dvojité zničení':n===3?'Trojité zničení':n===4?'Čtyřnásobné zničení':'Zničení ×'+n;
+function streakKill(M,k,t){
+  k.streak=(k.streak|0)+1;k.bestStreak=Math.max(k.bestStreak|0,k.streak);
+  k.multi=M.time-(k.lastKillT??-99)<=MULTI_GAP?(k.multi|0)+1:1;k.lastKillT=M.time;k.bestMulti=Math.max(k.bestMulti|0,k.multi);
+  if((t.streak|0)>=3)fx(M,{t:'feed',k:'shut',a:k.id,b:t.id,n:t.streak});
+  if(k.multi>=2)fx(M,{t:'feed',k:'multi',a:k.id,n:k.multi});
+  else if(STREAKS[k.streak])fx(M,{t:'feed',k:'streak',a:k.id,n:k.streak});
 }
 // Death recap, sent only to the fallen hero's player: damage taken in the last RECAP_WIN seconds per attacker
 // (direct hits, ultimates, damage over time; the arena itself as id 0) and how much health the killer had left.
@@ -1135,7 +1148,7 @@ export function step(M,dt=TICK){
 
 // ---------- network views ----------
 export function roster(M){return M.units.map(u=>({i:u.id,n:u.name,k:u.key,kind:u.kind[0],t:u.team,mh:u.maxHp,b:u.ctrl==='human'?0:1,sk:u.skin,lv:u.level}))}
-export function stats(M){return M.units.filter(u=>u.kind==='hero').map(u=>({i:u.id,n:u.name,k:u.clsKey,t:u.team,b:u.ctrl==='bot'?1:0,ki:u.kills,de:u.deaths,dm:Math.round(u.dmgDealt),he:Math.round(u.healDone),re:u.relics,nk:u.npcKills,tk:Math.round(u.dmgTaken||0),cp:u.caps||0,nd:Math.round(u.naniteDmg||0)}))}
+export function stats(M){return M.units.filter(u=>u.kind==='hero').map(u=>({i:u.id,n:u.name,k:u.clsKey,t:u.team,b:u.ctrl==='bot'?1:0,ki:u.kills,de:u.deaths,dm:Math.round(u.dmgDealt),he:Math.round(u.healDone),re:u.relics,nk:u.npcKills,tk:Math.round(u.dmgTaken||0),cp:u.caps||0,nd:Math.round(u.naniteDmg||0),bs:u.bestStreak|0,bm:u.bestMulti|0}))}
 export function matchInfo(M){return{mode:M.mode,map:M.mapKey,boss:M.bossKey,diff:M.diffKey,mission:M.mission,mods:[...M.emod],last:M.last,win:M.D.win||0,custom:M.custom}}
 function flags(u){const s=u.st;return (s.stun>0?1:0)|(s.silence>0?2:0)|(s.bleed?4:0)|(s.slow>0?8:0)|(s.relic>0?16:0)|(s.cloak>0?32:0)|(s.inv>0?64:0)|(u.dash?128:0)|(u.invuln?256:0)|(u.air?512:0)|(u.bomb?1024:0)|(s.nanite?2048:0)|(s.decon>0?4096:0)|(s.marked>0?8192:0)|(s.burn?16384:0)|(s.poison?32768:0)|(s.shock?65536:0)}
 // Per-viewer snapshot: hides cloaked enemies far from the viewer and loot that belongs to someone else.

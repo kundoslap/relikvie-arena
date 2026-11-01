@@ -56,6 +56,7 @@ async function act(name,body,okMsg){
 let toastT;
 export function toast(msg,bad){const t=$('#toast');t.textContent=msg;t.className=bad?'bad':'';t.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>t.hidden=true,3500)}
 export const token=()=>H.token;
+export const profile=()=>H.profile;
 export const playerClass=()=>H.cls;
 export const isOffline=()=>H.offline;
 export function setProfile(p){if(p){H.profile=p;H.cls=p.cls||H.cls}}
@@ -190,7 +191,7 @@ function tabPlay(){
       ${P.mode==='boss'?`<div><div class="lbl">Boss</div><div class="chips">${Object.entries(D.BOSSES).map(([k,b])=>`<button type="button" class="chip" data-boss="${k}" aria-pressed="${k===P.boss}">${b.name} · ${b.title}<small>${b.desc}</small></button>`).join('')}</div></div>`:''}
       <div><div class="lbl">Obtížnost</div><div class="seg" id="pDiff">${[['easy','Lehká'],['normal','Normální'],['hard','Těžká']].map(([k,n])=>`<button type="button" data-d="${k}" aria-pressed="${k===P.diff}">${n}</button>`).join('')}</div>
         <p class="help">${H.profile?'Těžší obtížnost dává víc zkušeností a kreditů (lehká ×0,6, těžká ×1,35).':''}</p></div>
-      <div class="btns"><button class="go" id="soloBtn" type="button">${H.offline?'Spustit trénink':'Hrát s boty'}</button><button class="ghost" id="tutBtn2" type="button">Výcvik</button></div>
+      <div class="btns"><button class="go" id="soloBtn" type="button">${H.offline?'Spustit trénink':'Hrát s boty'}</button><button class="ghost" id="tutBtn2" type="button">Výcvik</button><button class="ghost" id="rangeBtn" type="button" title="Vyzkoušej svou sestavu na terčích s měřičem poškození">Střelnice</button></div>
       ${H.offline?'':`<div class="lbl">Online s lidmi</div>
       <div class="inline">${H.profile?'':`<label class="field">Přezdívka hosta<input id="gNick" maxlength="16" value="${esc(H.guestName)}" placeholder="Např. Petan"></label>`}
         <button class="go" id="quickBtn" type="button">Rychlá hra · ${M.name}</button>
@@ -213,7 +214,7 @@ function tabPlay(){
   const opts=()=>({...P,cls:H.cls,name:H.profile?H.profile.nick:($('#gNick')?.value.trim()||H.guestName||'Host')});
   $('#soloBtn').onclick=()=>H.offline?H.cb.local(opts()):H.cb.solo(opts());
   const tut=()=>H.cb.tutorial({cls:H.cls,name:opts().name,account:!!H.profile&&!H.profile.tutorial});
-  $('#tutBtn2').onclick=tut;$('#tutBtn')&&($('#tutBtn').onclick=tut);
+  $('#tutBtn2').onclick=tut;$('#rangeBtn').onclick=()=>H.cb.range({cls:H.cls,name:opts().name});$('#tutBtn')&&($('#tutBtn').onclick=tut);
   $('#tutHide')&&($('#tutHide').onclick=()=>{store.set('tutHide',true);tabPlay()});
   if($('#createBtn')){
     const nameOk=()=>{if(H.profile)return true;const n=$('#gNick').value.trim();if(!n){$('#netErr').textContent='Zadej přezdívku hosta.';return false}H.guestName=n;store.set('nick',n);return true};
@@ -261,6 +262,9 @@ function tabFriends(){
   $('#frAdd').onsubmit=e=>{e.preventDefault();const n=$('#frNick').value.trim();if(!n)return;if(!Social.connected())return toast('Chat a přátelé se teprve připojují, zkus to za chvíli.',true);Social.fr('add',n);$('#frNick').value=''};
   friendList();
 }
+// "před 5 min", "před 3 h", "před 2 dny"
+function ago(t){const m=Math.max(0,Math.round((Date.now()-t)/60000));if(m<1)return'právě teď';if(m<60)return`před ${m} min`;const h=Math.round(m/60);if(h<24)return`před ${h} h`;
+  const d=Math.round(h/24);return`před ${d} ${d===1?'dnem':'dny'}`}
 function friendList(){
   const F=Social.friends(),on=F.friends.filter(f=>f.st!=='offline').length;
   const row=(f,btns,sub)=>`<div class="fr"><i class="dot ${f.st||'offline'}"></i><span><button type="button" class="pname" data-prof="${esc(f.id)}" title="Profil hráče">${esc(f.nick)}</button>${f.title?` <small style="display:inline;color:var(--gold)">◇ ${esc(f.title)}</small>`:''}<small>${sub}</small></span><div class="btns">${btns}</div></div>`;
@@ -273,12 +277,17 @@ function friendList(){
     <div style="display:grid;gap:22px">
     ${F.inReq.length?`<section class="panel"><h3>Žádosti o přátelství</h3><div class="flist">${F.inReq.map(f=>row(f,`${b('accept',f.id,'Přijmout','go sm')}${b('decline',f.id,'Odmítnout')}${b('block',f.id,'Blokovat')}${b('report',f.id,'Nahlásit')}`,info(f))).join('')}</div></section>`:''}
     ${F.outReq.length?`<section class="panel"><h3>Odeslané žádosti</h3><div class="flist">${F.outReq.map(f=>row(f,b('decline',f.id,'Zrušit'),'čeká na odpověď')).join('')}</div></section>`:''}
+    <section class="panel"><h3>Nedávní spoluhráči</h3><p class="help">Hráči s účtem z tvých posledních zápasů (spoluhráči i soupeři). Kliknutím na jméno otevřeš profil.</p>
+      ${F.recent?.length?`<div class="flist">${F.recent.map(f=>{const rel=F.friends.some(x=>x.id===f.id)?'<small class="help">přítel</small>':F.outReq.some(x=>x.id===f.id)?'<small class="help">žádost čeká</small>':F.inReq.some(x=>x.id===f.id)?b('accept',f.id,'Přijmout','go sm'):b('addId',f.nick,'Přidat');
+        return row({...f,st:'recent'},`${rel}${b('report',f.id,'Nahlásit')}`,`${f.ally?'spoluhráč':'soupeř'} · ${esc(D.MODES[f.mode]?.name||(f.mode==='campaign'?'Kampaň':''))} · ${ago(f.at)} · ${info(f)}`)}).join('')}</div>`
+        :'<p class="help">Zatím žádní. Objeví se tu hráči s účtem, se kterými dohraješ zápas.</p>'}</section>
     ${F.blocked.length?`<section class="panel"><h3>Zablokovaní</h3><p class="help">Jejich zprávy ani žádosti nevidíš.</p><div class="flist">${F.blocked.map(f=>row(f,b('unblock',f.id,'Odblokovat'),'')).join('')}</div></section>`:''}
     </div>`;
   document.querySelectorAll('#frList [data-f]').forEach(x=>x.onclick=()=>{const k=x.dataset.f,id=x.dataset.id;
     if(k==='join')return joinRoom(id);
     if(k==='watch')return H.cb.spectate(id);
-    if(k==='report')return Social.reportDialog(id,[...F.friends,...F.inReq].find(f=>f.id===id)?.nick||'hráče');
+    if(k==='report')return Social.reportDialog(id,[...F.friends,...F.inReq,...(F.recent||[])].find(f=>f.id===id)?.nick||'hráče');
+    if(k==='addId'){if(!Social.connected())return toast('Chat a přátelé se teprve připojují, zkus to za chvíli.',true);return Social.fr('add',id)}
     if(k==='dm')return Social.openDM(id);
     // removing and blocking ask for a second click
     if((k==='remove'||k==='block')&&!x.dataset.sure){x.dataset.sure='1';x.textContent='Opravdu?';setTimeout(()=>{if(x.isConnected){delete x.dataset.sure;x.textContent=k==='remove'?'Odebrat':'Blokovat'}},3000);return}
@@ -781,7 +790,7 @@ function tabStats(){
   const rows=(obj,name)=>Object.entries(obj).sort((a,b)=>b[1].m-a[1].m).map(([k,v])=>`<tr><td>${name(k)}</td><td>${v.m}</td><td>${v.w}</td><td>${pct(v.w,v.m)}</td></tr>`).join('');
   $('#hubBody').innerHTML=`<section class="panel"><h3>Souhrn</h3><div class="stats">${[['Zápasy',num(st.matches)],['Výhry',`${num(st.wins)} · ${pct(st.wins,st.matches)}`],['MVP zápasu',num(st.mvp)],['Odehraný čas',dur(st.time)],
       ['Zničení hráčů',num(st.kills)],['Zničení NPC',num(st.npcKills)],['Poražení bossové',num(st.bossKills)],['Poškození celkem',num(st.dmg)],['Léčení celkem',num(st.heal)],
-      ['Nejlepší vlna',num(st.bestWave)],['Rekord v Nekonečnu',num(st.bestEndless)]].map(([a,b])=>`<div class="stat">${a}<b>${b}</b></div>`).join('')}</div></section>
+      ['Nejlepší vlna',num(st.bestWave)],['Rekord v Nekonečnu',num(st.bestEndless)],['Nejdelší série v PvP',num(st.bestStreak|0)],['Nejvíc zničení naráz',num(st.bestMulti|0)]].map(([a,b])=>`<div class="stat">${a}<b>${b}</b></div>`).join('')}</div></section>
     <div class="grid2"><section class="panel"><h3>Podle povolání</h3><div class="tbl"><table class="st"><thead><tr><th>Povolání</th><th>Zápasy</th><th>Výhry</th><th>Úspěšnost</th></tr></thead><tbody>${rows(st.byCls,k=>D.CLASSES[k]?.name||k)||'<tr><td colspan="4">Zatím nic</td></tr>'}</tbody></table></div></section>
       <section class="panel"><h3>Podle režimu</h3><div class="tbl"><table class="st"><thead><tr><th>Režim</th><th>Zápasy</th><th>Výhry</th><th>Úspěšnost</th></tr></thead><tbody>${rows(st.byMode,modeName)||'<tr><td colspan="4">Zatím nic</td></tr>'}</tbody></table></div></section></div>
     <section class="panel"><h3>Poražení bossové</h3><div class="stats">${D.BOSS_KEYS.map(k=>`<div class="stat" style="${st.byBoss[k]?'':'opacity:.5'}">${D.BOSSES[k].name}<b>${num(st.byBoss[k]|0)}×</b></div>`).join('')}</div></section>

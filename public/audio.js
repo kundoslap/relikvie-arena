@@ -97,6 +97,8 @@ const SFX={
   hitIn(c){sub(c,110,42,.2,.85);hiss(c,'lowpass',700,150,.18,.55,.002)},
   death(c,o){hiss(c,'lowpass',2200,120,.55,.5,.004,1.2);sub(c,(o.f||460)/5,32,.5,.55);tone(c,'sawtooth',(o.f||460)/4,40,.45,.12,.01,['lowpass',600,150])},
   kill(c){sub(c,130,50,.18,.5);bell(c,1046,.7,.16,.04)},
+  // streak or multi-kill: a rising arpeggio, one note more for a bigger streak
+  streak(c,o){const n=clamp(o.n||2,2,6);for(let i=0;i<n;i++)bell(c,[523,659,784,1046,1318,1568][i],.35,.11,i*.07);sub(c,120,55,.2,.4)},
   // teleport gate: a rising filtered whoosh with a glassy chime on top
   warp(c){hiss(c,'bandpass',400,3200,.35,.4,.02,2.5);tone(c,'sine',220,880,.3,.14,.01);bell(c,1568,.5,.08,.12)},
   died(c){hiss(c,'lowpass',1600,60,1.3,.55,.01);sub(c,80,26,1.3,.8);pad(c,[hz(45),hz(52)],1.2,.18,600,.05)},

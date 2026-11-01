@@ -189,6 +189,7 @@ function setInfo(info){
 
 // ---------- snapshots ----------
 function clearWorld(){
+  if(G.range){G.range=null;$('#range').hidden=true;$('#hud').classList.remove('tut')}
   for(const v of [...views.values()])dropView(v);
   for(const map of [projMeshes,zoneMeshes,beamMeshes,ringMeshes,lootMeshes]){for(const m of map.values()){scene.remove(m);m.traverse(o=>{o.material&&o.material.dispose()})}map.clear()}
   for(const m of pointMeshes)scene.remove(m.g);pointMeshes=[];
@@ -309,6 +310,12 @@ const EV={
     if(e.k==='kill'){feed(`${tag(e.a)} zničil ${tag(e.b)}`);if(e.b===G.you)banner('Zničen',`Dostal tě ${nameOf(e.a)}`,2,'var(--red)');
       else if(e.a===G.you){const v=views.get(e.b);if(v)floatText(v,'Zničen','info');ui('kill')}}
     else if(e.k==='field'){feed(`${tag(e.b)} padl`);if(e.b===G.you)banner('Zničen','',2,'var(--red)')}
+    // streaks, multi-kills and shutdowns: a line in the feed for everyone, a banner and a sound for the one who did it
+    else if(e.k==='multi'||e.k==='streak'){const name=e.k==='multi'?S.MULTI_NAME(e.n):S.STREAKS[e.n];
+      feed(`${tag(e.a)} · <span class="g">${esc(name)}</span>${e.k==='streak'?` (${e.n} v řadě)`:''}`);
+      if(e.a===G.you){banner(name,e.k==='multi'?`${e.n} soupeři rychle po sobě`:`${e.n} zničení bez pádu`,2,'var(--gold)');ui('streak',{n:e.n,dur:1.2})}}
+    else if(e.k==='shut'){feed(`${tag(e.a)} ukončil sérii ${tag(e.b)} (${e.n})`);
+      if(e.a===G.you){banner('Konec série',`Zastavil jsi ${nameOf(e.b)} po ${e.n} zničeních`,2,'var(--gold)');ui('streak',{n:2,dur:1})}}
     else if(e.k==='relic'){const r=G.roster.get(e.a),mine=G.roster.get(G.you);feed(`${tag(e.a)} získal <span class="g">relikvii</span>`);
       const v=views.get(e.a);if(v){burst(v,0xffc66d,50,9,7,1);ringFx(v,0xffc66d,.5,6,.7)}
       if(r)banner(e.a===G.you?'Relikvie je tvoje':`${r.n} drží relikvii`,CLASSES[r.k]?.relic||'',2.4,!mine||r.t===mine.t?'var(--gold)':'var(--red)');
@@ -515,6 +522,50 @@ function tutFinish(){
   $('#tutEnd').onclick=()=>{el.hidden=true;toHub()};
 }
 
+// ---------- shooting range ----------
+// A local match without a server: the player's own build (with an account: implants, tree, profession, mastery)
+// against targets that never fight back, with a damage meter. Three targets stand still, one circles.
+// open ground of Neonové jádro: the player starts west of the middle, targets stand east of it
+const RANGE_START={x:-6,z:0},RANGE_SPOTS=[{x:3,z:-5},{x:5,z:0},{x:3,z:5}],RANGE_ORBIT={x:8,z:0,r:5,w:.6},DPS_WIN=5;
+function startRange(o){
+  G.lastOpts=null;G.mode='off';G.paused=false;G.tut=null;clearWorld();
+  const M=S.createMatch({mode:'arena',map:'core',diff:'normal'});M.timeLeft=1e9;M.countdown=.6;M.relic.state='off';
+  const prof=Hub.profile(),load=prof?S.computeLoadout(prof,o.cls):null;
+  const me=S.addUnit(M,o.cls,0,'human',o.name||'Ty',load);S.startMatch(M);me.x=RANGE_START.x;me.z=RANGE_START.z;
+  const targets=[...RANGE_SPOTS,{x:RANGE_ORBIT.x+RANGE_ORBIT.r,z:0}].map(p=>{const d=S.addTrainingNpc(M,'dummy',p.x,p.z,20,0);d.home=p;return d});
+  targets[3].orbit=true;
+  G.M=M;G.acc=0;G.you=me.id;G.rosterVer=M.rosterVer;setInfo(S.matchInfo(M));onRoster(S.roster(M));
+  G.range={targets,hits:[],total:0,max:0,t0:0,free:false,load:!!load};
+  showOnly('hud');$('#hud').classList.add('tut');applyTouch();buildSlots();$('#netInfo').textContent='Střelnice';
+  rangeUI();
+}
+function rangeUI(){
+  const R=G.range,el=$('#range');if(!R){el.hidden=true;return}
+  el.hidden=false;el.innerHTML=`<small>STŘELNICE</small>
+    <div class="rgrid"><span>DPS (${DPS_WIN} s)</span><b id="rDps">0</b><span>Celkem</span><b id="rTot">0</b><span>Největší zásah</span><b id="rMax">0</b><span>Čas</span><b id="rTime">0 s</b></div>
+    <p>${R.load?'Hraješ se svou sestavou: implantáty, strom, profese a mistrovství.':'Bez účtu hraješ se základním hrdinou.'} Terče nevrací úder a nedají se zničit.</p>
+    <div class="btns"><button class="ghost sm" type="button" data-r="reset">Vynulovat</button><button class="ghost sm" type="button" data-r="free" aria-pressed="${R.free}">Bez čekání</button>
+    <button class="ghost sm" type="button" data-r="ult">Nabít ultimátku</button><button class="ghost sm" type="button" data-r="end">Konec</button></div>`;
+  el.querySelectorAll('[data-r]').forEach(b=>b.onclick=()=>{const k=b.dataset.r,me=G.M?.units.find(u=>u.id===G.you);
+    if(k==='reset'){R.hits=[];R.total=0;R.max=0;R.t0=G.M.time}
+    else if(k==='free'){R.free=!R.free;b.setAttribute('aria-pressed',R.free)}
+    else if(k==='ult'&&me)me.ult=100;
+    else if(k==='end'){G.range=null;rangeUI();$('#hud').classList.remove('tut');toHub();return}
+    b.blur()});
+}
+// called every simulation tick with that tick's events
+function rangeTick(ev){
+  const R=G.range,M=G.M,me=M.units.find(u=>u.id===G.you);if(!me)return;
+  for(const e of ev)if(e.t==='dmg'&&e.s===G.you&&R.targets.some(d=>d.id===e.g)){R.hits.push({t:M.time,a:e.a});R.total+=e.a;R.max=Math.max(R.max,e.a)}
+  while(R.hits.length&&M.time-R.hits[0].t>DPS_WIN)R.hits.shift();
+  // targets stay put (the orbiting one moves on its circle) and never fall; the player cannot be hurt
+  for(const d of R.targets){d.hp=d.maxHp;d.dead=false;
+    if(d.orbit){const a=M.time*RANGE_ORBIT.w;d.x=RANGE_ORBIT.x+Math.cos(a)*RANGE_ORBIT.r;d.z=Math.sin(a)*RANGE_ORBIT.r}else{d.x=d.home.x;d.z=d.home.z}d.vx=d.vz=0}
+  me.hp=me.maxHp;if(me.dead){me.dead=false;me.respawn=0}
+  if(R.free){me.cds=[0,0,0];me.energy=100;me.tcd=0}
+  if(((M.time*30)|0)%6===0){const span=Math.min(DPS_WIN,Math.max(.5,M.time-Math.max(R.t0,R.hits[0]?.t??M.time)));
+    setTxt('rDps',R.hits.length?Math.round(R.hits.reduce((s,h)=>s+h.a,0)/span):0);setTxt('rTot',R.total);setTxt('rMax',R.max);setTxt('rTime',Math.round(M.time-R.t0)+' s')}
+}
 function stepLocal(dt){
   if(!G.M||G.paused||G.ended)return;
   G.acc+=Math.min(dt,.1);
@@ -522,7 +573,7 @@ function stepLocal(dt){
     if(G.mode==='off')inputTick();
     S.step(G.M);
     if(G.M.rosterVer!==G.rosterVer){G.rosterVer=G.M.rosterVer;onRoster(S.roster(G.M))}
-    const ev=G.M.events;G.M.events=[];if(G.tut)tutTick(ev);ingest(S.snapshotFor(G.M,G.you,ev));
+    const ev=G.M.events;G.M.events=[];if(G.tut)tutTick(ev);if(G.range)rangeTick(ev);ingest(S.snapshotFor(G.M,G.you,ev));
     if(G.M.state==='end'){
       if(G.mode==='menu'){startAttract();return}
       showEnd({winner:G.M.winner,score:G.M.score,stats:S.stats(G.M),wave:G.M.wave,mode:G.M.mode,log:G.M.log});Hub.showRewards({guest:true});return}
@@ -620,6 +671,7 @@ const hubCallbacks={
   quick:o=>connect({type:'hello',quick:true,mode:o.mode,diff:o.diff,cls:o.cls,name:o.name}),
   ranked:(mode,o)=>connect({type:'hello',ranked:true,mode,cls:o.cls,name:o.name}),
   tutorial:o=>{closeWs();startTutorial(o)},
+  range:o=>{closeWs();startRange(o)},
   spectate:pid=>connect({type:'spectate',friend:pid})
 };
 const mutatorsText=()=>'Tento týden: '+S.mutatorsOfWeek().map(k=>`<b>${S.MUTATORS[k].name}</b> (${S.MUTATORS[k].desc.toLowerCase().replace(/\.$/,'')})`).join(' a ')+'.';

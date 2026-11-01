@@ -144,12 +144,19 @@ export function buildNpc(key,team){
     const cr=mesh(body,new THREE.OctahedronGeometry(.8,0),new THREE.MeshStandardMaterial({color:C.color,emissive:C.color,emissiveIntensity:.6,metalness:.1,roughness:.1,transparent:true,opacity:.85}));cr.scale.set(.7,1.4,.7);
     spin=mesh(body,new THREE.TorusGeometry(1.1,.04,6,40),glow);spin.rotation.x=Math.PI/2;
     const beam=mesh(root,new THREE.CylinderGeometry(.06,.06,8,6,1,true),new THREE.MeshBasicMaterial({color:HDR(C.color,1.6),transparent:true,opacity:.5}));beam.position.y=4}
+  else if(key==='dummy'){
+    // training target on a post: three rings facing every way
+    mesh(body,new THREE.CylinderGeometry(.08,.12,1.2,8),dark,0,.6,0);mesh(body,new THREE.CylinderGeometry(.5,.6,.12,16),armor,0,.06,0);
+    const head=new THREE.Group();head.position.y=1.75;body.add(head);
+    mesh(head,new THREE.CylinderGeometry(.75,.75,.1,28),armor).rotation.x=Math.PI/2;
+    for(const [r,m] of [[.62,glow],[.4,dark],[.18,glow]]){const t=mesh(head,new THREE.TorusGeometry(r,.05,6,28),m);t.position.z=.06;const b=mesh(head,new THREE.TorusGeometry(r,.05,6,28),m);b.position.z=-.06}
+    spin=head;scale=1.4;}
   else{hover=1.3;mesh(body,new THREE.SphereGeometry(.34,14,10),armor,0,0,0);
     box(body,.42,.12,.12,glow,0,0,.32);box(body,.12,.42,.12,glow,0,0,.32);spin=mesh(body,new THREE.TorusGeometry(.5,.03,6,24),glow);}
   body.scale.setScalar(scale);
   const CM=common(root,K,team,scale,C.radius);
   return{root,body,legL,legR,armL,armR,...CM,mats:K.mats,flash:K.flash,height:(hover?hover+.6:2.2*scale),
-    anim(dt,t){if(hover)body.position.y=hover+Math.sin(t*3+root.id)*.12;if(spin)spin.rotation.z+=dt*3}};
+    anim(dt,t){if(hover)body.position.y=hover+Math.sin(t*3+root.id)*.12;if(spin&&key==='dummy')spin.rotation.y+=dt*.6;else if(spin)spin.rotation.z+=dt*3}};
 }
 
 // ---------- bosses ----------

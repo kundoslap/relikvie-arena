@@ -51,6 +51,13 @@ Proměnné prostředí:
 
 **Sledování zápasů přátel:** když přítel hraje (kromě hodnocené hry), v seznamu přátel je tlačítko Sledovat. Divák vidí zápas živě pohledem sledovaného hráče (jeho zdraví, schopnosti, mlhu války i týmové pingy), klávesami Q/E nebo šipkami v liště přepíná mezi hrdiny a na konci uvidí výsledek. Divák nemůže hrát ani pingovat, nepočítá se mezi hráče a místnost jich unese nejvýš 8. Sledovat můžou jen přihlášení přátelé.
 
+**Série a vícenásobná zničení** (PvP):
+- Kdo zničí soupeře dvakrát a víckrát, pokaždé do 4 s od předchozího, dostane hlášku Dvojité, Trojité, Čtyřnásobné zničení.
+- Série zničení bez vlastního pádu: Série (3), Řádění (5), Nezastavitelný (8), Legenda arény (12).
+- Kdo ukončí sérii aspoň 3 zničení, ukáže se „ukončil sérii“.
+- Hlášky vidí všichni v záznamu vpravo nahoře, ten, kdo je získal, navíc banner a stoupající zvuk.
+- Nejdelší série a nejvíc zničení naráz jsou ve Statistikách a na profilu hráče (počítá se jen PvP).
+
 **Rozbor smrti:** když tvůj hrdina padne, pod nápisem Zničen se ukáže, kdo tě za posledních 10 s jak zasáhl:
 - kdo tě dorazil a kolik životů mu zbylo;
 - až pět útočníků s povoláním (u bosse „boss“) a součtem poškození;
@@ -136,6 +143,8 @@ PvP zápas s jiným než normálním cílem nebo délkou je **vlastní zápas** 
 
 **Přátelé a chat** (přátelé jen s účtem): na kartě Přátelé pošleš žádost podle přezdívky, nebo klikneš na jméno hráče v chatu. U přátel vidíš, jestli jsou online, v místnosti nebo ve hře a v jakém režimu, a do otevřené místnosti se k nim připojíš jedním tlačítkem. V lobby můžeš online přátele pozvat, pozvánka se jim ukáže s tlačítkem Připojit. Chat má záložky Svět (všichni přihlášení), Místnost a soukromé zprávy přátelům. V zápase otevře chat Enter: v PvP píšeš týmu, Tab přepne na všechny, Esc zavře (na mobilu tlačítko Chat). Hráče jde zablokovat, pak od něj nevidíš zprávy, žádosti ani pozvánky. Filtr sprostých slov je zapnutý a jde vypnout. Zprávy mají nejvýš 200 znaků a omezení rychlosti; historie chatu se drží jen v paměti serveru, přátelé a blokování se ukládají do účtu.
 
+**Nedávní spoluhráči** (karta Přátelé, jen s účtem): posledních 20 hráčů s účtem, se kterými jsi dohrál zápas (místnost, rychlá hra, hodnocená hra i kampaň s přáteli). U každého je vidět, jestli byl spoluhráč, nebo soupeř, režim a před kolika minutami, hodinami nebo dny se hrálo, úroveň a povolání. Jméno otevře profil, dál jde poslat žádost o přátelství (nebo přijmout čekající) a nahlásit. Hosté bez účtu se do seznamu nedostanou a zablokovaný hráč z něj zmizí. Seznam se ukládá do účtu a aktualizuje se živě po konci zápasu.
+
 **Profil hráče:** kliknutím na jméno hráče v žebříčku, v seznamu přátel, v místnosti nebo v chatu (tlačítko Profil) se otevře jeho karta. Ukazuje klan, titul, úroveň, povolání, datum založení účtu, počet zápasů a výher, zničení, MVP, body úspěchů a hodiny ve hře. Dál divizi a hodnocení v aktuální sezóně a nejlepší dosaženou divizi, rekordy (bossové, vlny, Nekonečno), čtyři nejhranější povolání a režimy s úspěšností a posledních šest zápasů. Přihlášený hráč odtud může poslat žádost o přátelství nebo soukromou zprávu, nahlásit, nebo zablokovat. Profil vidí i hosté. Karta ukazuje jen herní údaje, nikdy inventář, kredity, cíle ani seznam přátel (`/api/player?id=` nebo `?nick=`).
 
 **Klany** (karta Klan, jen s účtem): klan založíš od úrovně 5 za 1000 kreditů (název, zkratka 2–4 znaky, popis, otevřený vstup nebo na žádost). Do klanu se vstupuje pozvánkou, žádostí, nebo rovnou, když je otevřený. Role: vůdce (nastavení, povyšování, předání vedení, rozpuštění), důstojník (zve, schvaluje žádosti, vyhazuje členy) a člen. Každý zápas člena dá klanu třetinu získaných zkušeností; úrovně 1–10 přidávají dvě místa (20 až 38 členů) a všem členům +1 % zkušeností a kreditů za úroveň. Týdenní cíl klanu je společný počet výher (4 na člena, aspoň 15); kdo za klan odehrál tento týden aspoň 3 zápasy, vyzvedne kredity a implantát. Klan má vlastní chat a zkratka se ukazuje u jmen v chatu a v lobby. Žebříček ukazuje nejlepší klany.
@@ -159,6 +168,13 @@ PvP zápas s jiným než normálním cílem nebo délkou je **vlastní zápas** 
 **Nastavení** (tlačítko Nastavení v hubu a v menu zápasu): Ovládání (přemapování všech kláves: pohyb, schopnosti, ultimátka, taktická akce, skóre, vypnutí zvuku; obsazená klávesa se prohodí, šipky fungují vždy), Grafika (kvalita, rozlišení vykreslování 50–100 %, záře, množství částic, otřesy kamery, záblesky obrazovky), Rozhraní (čísla poškození, jména nad postavami, oddálení kamery, počítadlo FPS) a Zvuk. Ukládá se v prohlížeči a kromě kvality platí hned.
 
 **Výcvik** (tlačítko Výcvik na kartě Hrát, novým hráčům se nabídne sám): sedm kroků na mapě Neonové jádro bez serveru, takže jde i offline. Pohyb ke zlatému kruhu, útok na cvičný dron, všechny tři schopnosti, ultimátka, taktická akce, léčení na základně a sebrání relikvie. Hra každý krok sleduje a sama pokračuje, výcvik jde kdykoli ukončit. Hráč s účtem dostane za první dokončení 300 kreditů a implantát.
+
+**Střelnice** (tlačítko Střelnice na kartě Hrát, vedle Výcviku): cvičiště bez serveru, takže jde i offline.
+- Hráč s účtem tu hraje se svou sestavou zvoleného povolání (implantáty, strom, profese, mistrovství), host se základním hrdinou.
+- Na mapě Neonové jádro stojí tři terče a čtvrtý obíhá v kruhu. Terče nevrací úder a nedají se zničit, hrdina nemůže padnout.
+- Panel ukazuje DPS za posledních 5 s, celkové poškození, největší zásah a čas.
+- Tlačítka: Vynulovat, Bez čekání (schopnosti bez čekání a s plnou energií), Nabít ultimátku a Konec.
+- Na mobilu je panel zmenšený nad ovládáním.
 
 **Sezónní průkaz** (karta Průkaz, zdarma pro každý účet): běží po kalendářních měsících stejně jako hodnocená sezóna a má 30 stupňů po 500 bodech. Body dávají zkušenosti z každého zápasu, denní cíl (+100), všechny tři denní cíle (+150 navíc) a týdenní cíl (+400). Odměny: kredity, implantáty (stupeň 25 legendární), titul „Průkopník sezóny“ na stupni 10, na stupni 15 exkluzivní neonový vzhled pro povolání podle volby a na stupni 30 zbylé neonové vzhledy, 1000 kreditů a titul „Šampion sezóny“. Neonové vzhledy jinde získat nejde. Nevyzvednuté odměny se po konci sezóny vyplatí samy.
 

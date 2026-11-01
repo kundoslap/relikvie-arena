@@ -30,7 +30,7 @@ export function createMeta(db,{admins=''}={}){
     p.goals??={day:null,list:[],rerolled:false,bonus:false,week:null,weekly:null};
     p.merchant??={day:null,offers:[],rerolled:false};p.tactic??='dodge';p.builds??=[];p.history??=[];
     p.ranked??={season:null,rating:D.RATING_START,games:0,wins:0,losses:0,peak:D.RATING_START};p.rankedPrev??=null;
-    p.social??={friends:[],inReq:[],outReq:[],blocked:[]};
+    p.social??={friends:[],inReq:[],outReq:[],blocked:[]};p.social.recent??=[];
     p.mod??={muteUntil:0,banUntil:0,warns:0,banNote:''};
     p.essence??=0;p.frags??=0;p.crystals??={};p.mastery??={};
     p.guild??=null;p.guildInv??=[];p.guildWeek??=null;p.pass??={season:null,xp:0,claimed:[]};p.login??={last:null,streak:0};
@@ -610,7 +610,7 @@ export function createMeta(db,{admins=''}={}){
     return{id:p.id,nick:p.nick,level:p.level,title:p.title,cls:p.cls,created:p.created||0,
       guild:g&&isMember(g,p.id)?{name:g.name,tag:g.tag,level:g.level}:null,
       ranked:rk?{rating:rk.rating,div:D.divisionOf(rk.rating),games:rk.games,wins:rk.wins,placed:rk.games>=D.PLACEMENT}:null,bestDiv:st.bestDiv|0,rankedGames:st.rankedGames|0,
-      stats:{matches:st.matches,wins:st.wins,kills:st.kills,mvp:st.mvp|0,bossKills:st.bossKills,bestWave:st.bestWave,bestEndless:st.bestEndless|0,time:st.time|0},
+      stats:{matches:st.matches,wins:st.wins,kills:st.kills,mvp:st.mvp|0,bossKills:st.bossKills,bestWave:st.bestWave,bestEndless:st.bestEndless|0,time:st.time|0,bestStreak:st.bestStreak|0,bestMulti:st.bestMulti|0},
       classes:top(st.byCls,4).filter(c=>D.CLASSES[c.k]),modes:top(st.byMode,4),ach:achView(p).pts,
       recent:p.history.slice(0,6).map(h=>({at:h.at,mode:h.mode,mission:h.mission,res:h.res,cls:h.cls,ki:h.ki,de:h.de,score:h.score,mvp:!!h.mvp}))};
   }
@@ -657,7 +657,18 @@ export function createMeta(db,{admins=''}={}){
     const list=ids=>ids.map(card).filter(Boolean);
     const order={match:0,lobby:1,online:2,offline:3};
     return{friends:list(S.friends).map(f=>({...f,...status(f.id)})).sort((a,b)=>order[a.st]-order[b.st]||a.nick.localeCompare(b.nick,'cs')),
-      inReq:list(S.inReq),outReq:list(S.outReq),blocked:list(S.blocked)};
+      inReq:list(S.inReq),outReq:list(S.outReq),blocked:list(S.blocked),
+      recent:S.recent.filter(r=>!S.blocked.includes(r.id)).map(r=>{const c=card(r.id);return c&&{...c,at:r.at,mode:r.mode,ally:r.ally}}).filter(Boolean)};
+  }
+  // players with an account who were in the same finished match: newest first, each player once, at most RECENT_KEEP
+  const RECENT_KEEP=20;
+  function coPlayers(entries,mode){
+    const at=Date.now();
+    for(const e of entries){const p=profById(e.pid);if(!p)continue;const R=p.social.recent;
+      for(const o of entries){if(o.pid===e.pid)continue;const i=R.findIndex(r=>r.id===o.pid);if(i>=0)R.splice(i,1);
+        R.unshift({id:o.pid,at,mode,ally:o.team===e.team})}
+      R.length=Math.min(R.length,RECENT_KEEP)}
+    db.touch();
   }
 
   // ---------- ranked ----------
@@ -752,6 +763,7 @@ export function createMeta(db,{admins=''}={}){
     bump2(st.byCls,u.clsKey);bump2(st.byMode,M.mission?'campaign':M.mode);
     if(res==='win')for(const b of M.bossKeys||[])st.byBoss[b]=(st.byBoss[b]|0)+1;
     st.dmg+=Math.round(u.dmgDealt);st.heal+=Math.round(u.healDone);st.time+=Math.round(M.time-(u.joinedAt||0));if(mvp)st.mvp++;
+    if(M.D.pvp){st.bestStreak=Math.max(st.bestStreak|0,u.bestStreak|0);st.bestMulti=Math.max(st.bestMulti|0,u.bestMulti|0)}
     st.relics+=u.relics|0;st.legendary+=items.filter(it=>it.r===4).length;
     p.history.unshift({at:Date.now(),mode:M.mode,map:M.mapKey,boss:M.mode==='boss'?M.bossKey:null,mission:M.mission,res,cls:u.clsKey,
       ki:u.kills,de:u.deaths,nk:u.npcKills,dm:Math.round(u.dmgDealt),he:Math.round(u.healDone),wave:M.D.waves?M.wave:0,
@@ -784,6 +796,6 @@ export function createMeta(db,{admins=''}={}){
     p.credits+=credits;return{credits,titles,tiers:tiers.length};
   }
 
-  return{register,login,logout,auth,view,act,market,top,publicProfile,rewardsFor,rankedResult,canStartMission,friendOp,friendsView,isFriend,blocks,profById,
+  return{register,login,logout,auth,view,act,market,top,publicProfile,coPlayers,rewardsFor,rankedResult,canStartMission,friendOp,friendsView,isFriend,blocks,profById,
     guildView,guildList,tagOf,report,findPlayer:t=>profById(t)||profByNick(t),modView,modAction,muted,muteText,isAdmin,guildMembers:gid=>{const g=guildById(gid);return g?memberIds(g):[]},loadoutFor:(p,k,cap)=>D.computeLoadout(p,k,cap)};
 }
