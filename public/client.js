@@ -375,7 +375,7 @@ addEventListener('keydown',e=>{
   if(G.spec&&inGame()&&!G.paused&&!e.repeat&&(e.code==='KeyQ'||e.code==='KeyE')){e.preventDefault();specSwitch(e.code==='KeyQ'?-1:1);return}
   // quick messages: the wheel opens with its key, numbers pick a message
   if(inGame()&&!G.paused&&!e.repeat&&!G.spec){
-    if(!$('#wheel').hidden&&/^(Digit|Numpad)[1-7]$/.test(e.code)){e.preventDefault();sendSignal(WHEEL[+e.code.slice(-1)-1]);toggleWheel(false);return}
+    if(!$('#wheel').hidden&&/^(Digit|Numpad)[0-9]$/.test(e.code)){e.preventDefault();sendSignal(WHEEL[(+e.code.slice(-1)+9)%10]);toggleWheel(false);return}
     if(e.code===Cfg.key('wheel')){e.preventDefault();toggleWheel();return}
     if(e.code===Cfg.key('ping')){e.preventDefault();sendSignal(e.altKey?'danger':'here',aimPoint());return}
   }
@@ -685,6 +685,14 @@ function rulesHTML(L,seg){
     <div class="rrow"><small>Boti</small>${seg('lBots',[['1','Doplnit volná místa'],['0','Bez botů']],r.bots?'1':'0')}</div>
     ${S.isCustom(r,L.mode)||!r.bots&&pvp?`<p class="help">${S.isCustom(r,L.mode)?'Vlastní pravidla: odměny se počítají podle skutečné délky zápasu (plné od 4 minut). ':''}${!r.bots&&pvp?'Bez botů musí mít každý tým aspoň jednoho hráče.':''}</p>`:''}`;
 }
+// quick play: everyone votes for the next map; the leader is highlighted, the winner is picked when the match starts
+function voteHTML(L){
+  const n=L.vote.counts,max=Math.max(0,...Object.values(n)),total=Object.values(n).reduce((a,b)=>a+b,0);
+  return`<div><div class="lbl">Hlasování o mapě${total?` · ${total} ${total===1?'hlas':total<5?'hlasy':'hlasů'}`:''}</div>
+    <div class="vote" id="lVote">${Object.keys(n).map(k=>`<button type="button" data-vote="${k}" aria-pressed="${L.vote.mine===k}" class="${max&&n[k]===max?'lead':''}">
+      <b>${MAPS[k].name}</b><small>${n[k]} ${n[k]===1?'hlas':n[k]>1&&n[k]<5?'hlasy':'hlasů'}</small><i style="width:${total?n[k]/total*100:0}%"></i></button>`).join('')}</div>
+    <p class="help">${L.vote.mine?'Hlas můžeš změnit.':'Klikni na mapu, kterou chceš hrát.'} Vyhraje mapa s nejvíc hlasy, při shodě rozhodne los. Bez hlasů zůstane ${MAPS[L.map].name}.</p></div>`;
+}
 function renderLobby(){
   const L=G.lobby;if(!L)return;
   const me=L.players.find(p=>p.cid===L.you),host=L.host===L.you,M=MODES[L.mode],pvp=M.pvp;
@@ -697,14 +705,15 @@ function renderLobby(){
       ${seg('lDiff',[['easy','Lehká'],['normal','Normální'],['hard','Těžká']],L.diff)}<p class="help">Postup v kampani se započítá každému hráči, který má misi odemčenou.</p></div>`;
     document.querySelectorAll('#lDiff button').forEach(b=>b.onclick=()=>wsSend({type:'cfg',diff:b.dataset.v}))}
   else $('#lobbyCfg').innerHTML=`<div style="display:grid;gap:10px">
-    ${seg('lMode',Object.entries(MODES).map(([k,m])=>[k,m.name]),L.mode)}
-    ${seg('lMap',M.maps.map(k=>[k,MAPS[k].name]),L.map)}
+    ${L.quick?`<div class="lbl" style="margin:0;color:var(--gold);font-size:13px">Rychlá hra · ${esc(M.name)}</div>`:seg('lMode',Object.entries(MODES).map(([k,m])=>[k,m.name]),L.mode)}
+    ${L.vote?voteHTML(L):seg('lMap',M.maps.map(k=>[k,MAPS[k].name]),L.map)}
     ${L.mode==='boss'?seg('lBoss',Object.entries(BOSSES).map(([k,b])=>[k,b.name]),L.boss):''}
     ${seg('lDiff',[['easy','Lehká'],['normal','Normální'],['hard','Těžká']],L.diff)}
     ${L.rules?rulesHTML(L,seg):''}
     <p class="help">${M.desc}${M.mutators?' '+mutatorsText():''}${host?'':' Nastavení mění hostitel.'}</p></div>`;
   const cfg=(id,key)=>document.querySelectorAll(`#${id} button`).forEach(b=>b.onclick=()=>wsSend({type:'cfg',[key]:b.dataset.v}));
   const rule=(id,key,val=v=>v)=>document.querySelectorAll(`#${id} button`).forEach(b=>b.onclick=()=>wsSend({type:'cfg',rules:{[key]:val(b.dataset.v)}}));
+  document.querySelectorAll('#lVote [data-vote]').forEach(b=>b.onclick=()=>wsSend({type:'vote',map:b.dataset.vote}));
   if(!ms&&!L.ranked){cfg('lMode','mode');cfg('lMap','map');cfg('lBoss','boss');cfg('lDiff','diff');rule('lWin','win');rule('lTime','time');rule('lBots','bots',v=>v==='1')}
   const teams=pvp?[0,1]:[0],size=S.teamSize(L.mode);
   $('#lobbyTeams').className='teams'+(pvp?'':' one');
@@ -892,7 +901,8 @@ function onSignal(e){
     Snd.play('ping',null,{ui:true,danger:e.k==='danger',gap:.2});
   }else{
     const v=views.get(e.u);if(!v)return;bubbles.get(e.u)?.el.remove();
-    const el=document.createElement('div');el.className='bubble';el.textContent=S2.name;$('#floaters').appendChild(el);bubbles.set(e.u,{el,until:performance.now()+2600});
+    const el=document.createElement('div');el.className='bubble'+(S2.emote?' emote':'');el.textContent=S2.name;$('#floaters').appendChild(el);bubbles.set(e.u,{el,until:performance.now()+(S2.emote?S2.d*1000:2600)});
+    if(S2.emote){v.emote={k:e.k,t0:performance.now(),until:performance.now()+S2.d*1000};return}
     if(v.t===G.roster.get(G.you)?.t)feed(`${tag(e.u)}: ${S2.name}`);Snd.play('msg',null,{ui:true,vol:.5,gap:.3});
   }
 }
@@ -909,10 +919,12 @@ function sendSignal(k,p){
   if(G.mode==='on')wsSend({type:'sig',k,x:p?.x??0,z:p?.z??0});
   else if(G.mode==='off'&&G.M){const u=G.M.units.find(x=>x.id===G.you);if(u)S.signal(G.M,u,k,p?.x??u.x,p?.z??u.z)}
 }
-const WHEEL=['go','back','help','hold','thanks','gg','haha'];
+// quick messages on 1–7, emotes on 8, 9 and 0
+const WHEEL=['go','back','help','hold','thanks','gg','haha','wave','dance','cheer'];
+const wheelKey=i=>String((i+1)%10);
 function toggleWheel(show=$('#wheel').hidden){
   const w=$('#wheel');w.hidden=!show;if(!show)return;
-  w.innerHTML=WHEEL.map((k,i)=>`<button type="button" data-sig="${k}"><kbd>${i+1}</kbd>${S.SIGNALS[k].name}</button>`).join('');
+  w.innerHTML=WHEEL.map((k,i)=>`<button type="button" data-sig="${k}"${S.SIGNALS[k].emote?' class="emo"':''}><kbd>${wheelKey(i)}</kbd>${S.SIGNALS[k].name}</button>`).join('');
   w.querySelectorAll('[data-sig]').forEach(b=>b.onclick=()=>{sendSignal(b.dataset.sig);toggleWheel(false)});
 }
 
@@ -932,6 +944,19 @@ function skinTrail(v,fx,sp,dt){
   }
 }
 
+// emotes override the arms and body for a few seconds; moving or attacking ends them
+function emoteAnim(v,M,sp){
+  const E=v.emote;
+  if(!E||!M.armL)return;
+  const now=performance.now();
+  if(now>E.until||sp>1.2||v.attackAnim>.05){v.emote=null;M.body.rotation.y=0;M.armL.rotation.z=M.armR.rotation.z=0;return}
+  const s=(now-E.t0)/1000;
+  if(E.k==='wave'){M.armR.rotation.x=-2.7;M.armR.rotation.z=-.25+Math.sin(s*11)*.45;M.armL.rotation.x=0}
+  else if(E.k==='cheer'){const p=Math.sin(s*9);M.armL.rotation.x=M.armR.rotation.x=-2.6-p*.35;M.armL.rotation.z=.35;M.armR.rotation.z=-.35;M.body.position.y=Math.max(0,p)*.35}
+  else if(E.k==='dance'){M.body.rotation.y=s*5;M.body.position.y=Math.abs(Math.sin(s*8))*.22;
+    M.armL.rotation.x=-1.4+Math.sin(s*8)*.9;M.armR.rotation.x=-1.4-Math.sin(s*8)*.9;M.armL.rotation.z=.6;M.armR.rotation.z=-.6;
+    if(M.legL){M.legL.rotation.x=Math.sin(s*8)*.5;M.legR.rotation.x=-Math.sin(s*8)*.5}}
+}
 // ---------- per-frame unit visuals ----------
 function unitVisual(v,st,dt,t){
   const M=v.model,b=v.bar;
@@ -952,6 +977,7 @@ function unitVisual(v,st,dt,t){
   v.attackAnim=Math.max(0,v.attackAnim-dt*5);
   if(M.armL){M.armL.rotation.x=-sw*.6;M.armR.rotation.x=sw*.6-v.attackAnim*1.5}
   if(M.legL){M.body.position.y=Math.abs(Math.sin(v.phase))*.06*amp;M.body.rotation.x=amp*.08}
+  emoteAnim(v,M,sp);
   M.anim?.(dt,t,sp,amp);
   if(M.fx)skinTrail(v,M.fx,sp,dt);
   if(M.drone){M.drone.position.set(Math.sin(t*2+v.id)*.85,2.3+Math.sin(t*3)*.12,Math.cos(t*2+v.id)*.85);M.drone.rotation.y=t*3}

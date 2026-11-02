@@ -113,9 +113,18 @@ const loadOf=c=>c.profile?meta.loadoutFor(c.profile,c.cls,c.room?.ranked?S.MASTE
 
 function lobbyMsg(room,c){
   return{type:'lobby',code:room.code,you:c.cid,host:room.host,state:room.state,diff:room.diff,mode:room.mode,map:room.map,boss:room.boss,solo:!!room.solo,mission:room.mission||null,
-    pub:!!room.pub,ranked:!!room.ranked,rk:c.rk,rules:room.rules||null,
+    pub:!!room.pub,ranked:!!room.ranked,quick:!!room.quick,rk:c.rk,rules:room.rules||null,vote:canVote(room)?{counts:voteCounts(room),mine:room.votes?.get(c.cid)||null}:null,
     autoIn:room.quick&&room.state==='lobby'&&!(room.ranked&&room.clients.size<2)?Math.max(0,Math.ceil((room.autoAt-Date.now())/1000)):0,
     players:humans(room).map(x=>({cid:x.cid,pid:x.profile?.id||null,name:x.name,cls:x.cls,team:x.team,off:x.gone?1:0,lv:x.profile?.level||0,tag:x.profile?meta.tagOf(x.profile.id):null,rt:room.ranked?x.profile?.ranked?.rating??null:null}))};
+}
+// ---------- map vote ----------
+// In a quick-play room everyone votes for the next map while the countdown runs; the most votes win, a tie is drawn.
+const canVote=room=>!!(room.quick&&!room.ranked&&room.state==='lobby'&&S.MODES[room.mode].maps.length>1);
+function voteCounts(room){const n={};for(const k of S.MODES[room.mode].maps)n[k]=0;for(const [cid,k] of room.votes||[])if(room.clients.has(cid)&&k in n)n[k]++;return n}
+function applyVote(room){
+  if(!canVote(room)||!room.votes?.size)return;
+  const n=voteCounts(room),max=Math.max(...Object.values(n));if(!max)return;
+  const top=Object.keys(n).filter(k=>n[k]===max);room.map=top.includes(room.map)?room.map:top[Math.floor(Math.random()*top.length)];
 }
 function broadcastLobby(room){for(const c of room.clients.values())send(c,lobbyMsg(room,c))}
 function broadcast(room,m){const s=JSON.stringify(m);for(const c of room.clients.values())send(c,s);for(const c of room.specs||[])send(c,s)}
@@ -241,6 +250,7 @@ function roomSay(c,m){
 }
 
 function startMatch(room){
+  applyVote(room);room.votes?.clear();
   const pvp=S.MODES[room.mode].pvp;
   if(room.ranked){
     // balanced teams: from the highest rating down, each player goes to the side with the lower rating total that still has room
@@ -444,6 +454,11 @@ function onMessage(c,m){
         else if(r.solo)startMatch(r);
         else broadcastLobby(r);
         break}
+      case 'vote':{
+        if(!room||!canVote(room)||typeof m.map!=='string'||!S.MODES[room.mode].maps.includes(m.map))break;
+        // a repeated click changes nothing and sends nothing; changing the vote is limited to once a second
+        const V=room.votes??=new Map(),now=Date.now();if(V.get(c.cid)===m.map||now-(c.voteT||0)<1000)break;
+        c.voteT=now;V.set(c.cid,m.map);broadcastLobby(room);break}
       case 'cls':if(room&&room.state==='lobby'&&S.CLASSES[m.cls]){c.cls=m.cls;if(c.profile){c.profile.cls=m.cls;db.touch()}broadcastLobby(room)}break;
       case 'team':if(room&&room.state==='lobby'&&!room.ranked&&S.MODES[room.mode].pvp&&(m.team===0||m.team===1)&&teamCounts(room)[m.team]<S.teamSize(room.mode)){c.team=m.team;broadcastLobby(room)}break;
       case 'cfg':{

@@ -978,10 +978,12 @@ function bossUpdate(M,u,dt){
 // Pings (here, attack, danger) go to the own team only and steer bot allies for a few seconds;
 // quick messages appear above the hero for everyone. Each hero may signal at most 6 times in 8 s.
 export const SIGNALS={here:{name:'Sem',ping:1},attack:{name:'Útok',ping:1},danger:{name:'Pozor',ping:1},
-  go:{name:'Útok!'},back:{name:'Ustupte!'},help:{name:'Potřebuju pomoc!'},hold:{name:'Bráním!'},thanks:{name:'Díky!'},gg:{name:'Dobrá hra!'},haha:{name:'Haha!'}};
+  go:{name:'Útok!'},back:{name:'Ustupte!'},help:{name:'Potřebuju pomoc!'},hold:{name:'Bráním!'},thanks:{name:'Díky!'},gg:{name:'Dobrá hra!'},haha:{name:'Haha!'},
+  // emotes: everyone sees the hero animate for d seconds (until it moves or attacks)
+  wave:{name:'Pozdrav',emote:1,d:2.2},dance:{name:'Tanec',emote:1,d:3.2},cheer:{name:'Oslava',emote:1,d:2.4}};
 export const SIGNAL_KEYS=Object.keys(SIGNALS);
 export function signal(M,u,k,x,z){
-  if(!u||u.kind!=='hero'||!Object.hasOwn(SIGNALS,k)||M.state==='end')return false;
+  if(!u||u.kind!=='hero'||!Object.hasOwn(SIGNALS,k)||M.state==='end'||SIGNALS[k].emote&&u.dead)return false;
   u.sigT=(u.sigT||[]).filter(t=>M.time-t<8);if(u.sigT.length>=6)return false;u.sigT.push(M.time);
   const S=SIGNALS[k];
   if(!S.ping){fx(M,{t:'sig',k,u:u.id});return true}

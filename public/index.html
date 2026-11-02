@@ -199,6 +199,10 @@ h2.sec{margin:0;font-family:var(--display);font-size:26px;font-weight:800;letter
 .pbar small{color:var(--muted);font-size:12px}
 .precent{display:grid;gap:4px}.precent>div{display:grid;grid-template-columns:70px 1fr auto;gap:8px;font-size:13px;align-items:center}
 .precent small{color:var(--muted)}.pr.w{color:var(--green)}.pr.l{color:var(--red)}.pr.d{color:var(--muted)}
+.vote{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:6px}
+.vote button{position:relative;overflow:hidden;display:grid;gap:2px;text-align:left;padding:8px 12px;background:transparent;border:1px solid var(--line);border-radius:3px;color:var(--ink)}
+.vote button small{color:var(--muted);font-size:12px}.vote button i{position:absolute;left:0;bottom:0;height:3px;background:var(--gold);transition:width .3s}
+.vote button.lead{border-color:rgba(255,198,109,.6)}.vote button[aria-pressed="true"]{background:rgba(255,198,109,.12);border-color:var(--gold)}.vote button[aria-pressed="true"] b{color:var(--gold)}
 .rrow{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.rrow>small{width:52px;color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.08em}
 .field{display:grid;gap:4px;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
 .field input,.field select{background:rgba(0,0,0,.4);border:1px solid var(--line);border-radius:3px;padding:10px 12px;font-size:15px;letter-spacing:.04em;text-transform:none;min-width:0}
@@ -494,6 +498,8 @@ body.nonames .ub .n{display:none}
 #wheel{position:fixed;left:50%;bottom:calc(var(--gb) + 110px);transform:translateX(-50%);display:flex;flex-wrap:wrap;gap:6px;justify-content:center;width:min(560px,calc(100vw - 32px));z-index:6}
 #wheel button{display:flex;gap:6px;align-items:center;padding:8px 12px;background:rgba(8,12,24,.94);border:1px solid var(--gold);border-radius:3px;font-size:14px}
 #wheel button:hover{background:rgba(255,198,109,.15)}
+#wheel button.emo{border-color:#c08bff}#wheel button.emo:hover{background:rgba(192,139,255,.15)}
+.bubble.emote{border-color:#c08bff;color:#e4d2ff;font-style:italic;box-shadow:0 0 12px rgba(192,139,255,.3)}
 #wheel kbd{font-family:var(--body);font-size:11px;border:1px solid var(--line);border-radius:2px;padding:0 5px;color:var(--gold)}
 #sigBtns{display:none}
 body.touch #sigBtns{display:flex;gap:6px;position:fixed;right:calc(var(--gr) + 110px);top:calc(var(--gt) + 4px)}
