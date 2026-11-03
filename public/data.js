@@ -70,7 +70,8 @@ export const CHANGELOG=[
     'Lovec: Přískok (kotoul 6,5 m s nezranitelností). Strážce: Štítový náraz (výpad 4,5 m za štítem, odhodí soupeře).',
     'Technik: Fázový skok (okamžitý přesun 7 m). Žhář: Ohnivý kotoul (5,5 m, za sebou nechá oheň).',
     'Klávesu jde změnit v Nastavení → Ovládání, na mobilu je úskok šesté tlačítko. Ultimátka zůstává na F.',
-    'Vyváženost: Strážce 385 HP a vyšší rychlost, Žhář 290 HP, Lovec 222 HP.']},
+    'Vyváženost: Strážce 385 HP a vyšší rychlost, Žhář 290 HP, Lovec 222 HP.',
+    'Menší zátěž procesoru: limit 60 FPS (Nastavení → Grafika), lehčí pozadí menu, které jde vypnout, a úspornější efekty.']},
   {id:'2026-11b',title:'Výzvy, štíty a bonusy',items:[
     'První výhra dne: +200 zkušeností a +120 kreditů jednou denně.',
     'Nový nepřítel ve Vlnách a Nekonečnu: Štítonoš (od vlny 4) dává okolním nepřátelům štít.',

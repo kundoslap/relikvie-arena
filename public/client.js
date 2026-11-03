@@ -37,6 +37,8 @@ const camera=new THREE.PerspectiveCamera(46,1,.1,500);
 const composer=new EffectComposer(renderer);
 composer.addPass(new RenderPass(scene,camera));
 const bloomPass=new UnrealBloomPass(new THREE.Vector2(1,1),hiQ?.65:.5,.4,.7);composer.addPass(bloomPass);bloomPass.enabled=Cfg.get('bloom');
+// the glow is soft anyway: computing it at half resolution looks the same and costs about a quarter
+{const set=bloomPass.setSize.bind(bloomPass);bloomPass.setSize=(w,h)=>set(Math.max(1,Math.round(w/2)),Math.max(1,Math.round(h/2)))}
 composer.addPass(new OutputPass());
 function resize(){const w=innerWidth,h=innerHeight;renderer.setSize(w,h);composer.setSize(w,h);camera.aspect=w/h;camera.updateProjectionMatrix()}
 addEventListener('resize',resize);resize();
@@ -84,9 +86,19 @@ let fxList=[];
 const RING_GEO=new THREE.RingGeometry(.86,1,64),SECTOR_GEO=new THREE.RingGeometry(.35,1,24,1,-Math.PI/2-.95,1.9);
 const BEAM_GEO=new THREE.CylinderGeometry(1,1,1,8,1,true),DOME_GEO=new THREE.IcosahedronGeometry(1,2),WALL_GEO=new THREE.CylinderGeometry(1,1,1.4,96,1,true);
 const BOX_Z=new THREE.BoxGeometry(1,1,1).translate(0,0,.5);
-const addMat=(color,k=2.4,extra={})=>new THREE.MeshBasicMaterial({color:HDR(color,k),transparent:true,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide,...extra});
+// Short effects reuse their materials: a brand-new material makes three.js work out its shader setup again on first
+// draw, which with dozens of rings and flashes a second was the biggest single cost of a frame.
+const matPool={a:[],w:[]};
+const addMat=(color,k=2.4,extra={})=>{const key=extra.wireframe?'w':'a',m=matPool[key].pop();
+  if(m){m.color.copy(HDR(color,k));m.opacity=1;return m}
+  return new THREE.MeshBasicMaterial({color:HDR(color,k),transparent:true,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide,...extra})};
+// a finished effect or object gives its material back: shared ones stay, effect materials go to the pool
+function releaseMat(m){if(!m||m.userData.shared)return;if(m.transparent&&m.blending===THREE.AdditiveBlending){const P=matPool[m.wireframe?'w':'a'];if(P.length<200){P.push(m);return}}m.dispose()}
+// projectiles: one sphere and one material per colour for all of them, instead of new ones for every shot
+const PROJ_GEO=new THREE.SphereGeometry(.17,10,8),projMats=new Map();
+function projMat(c){let m=projMats.get(c);if(!m){m=new THREE.MeshBasicMaterial({color:HDR(c,3.2)});m.userData.shared=true;projMats.set(c,m)}return m}
 function addFx(obj,dur,upd){scene.add(obj);fxList.push({obj,t:0,dur,upd})}
-function dropFx(f){scene.remove(f.obj);f.obj.traverse(o=>o.material&&o.material.dispose())}
+function dropFx(f){scene.remove(f.obj);f.obj.traverse(o=>releaseMat(o.material))}
 function updFx(dt){for(let i=fxList.length-1;i>=0;i--){const f=fxList[i];f.t+=dt;const k=f.t/f.dur;if(k>=1){dropFx(f);fxList.splice(i,1);continue}f.upd(k,f.obj)}}
 function ringFx(p,color,r0,r1,dur=.45,op=1){const m=new THREE.Mesh(RING_GEO,addMat(color));m.rotation.x=-Math.PI/2;m.position.set(p.x,.1,p.z);addFx(m,dur,(k,o)=>{o.scale.setScalar(r0+(r1-r0)*(1-(1-k)**3));o.material.opacity=op*(1-k)})}
 function discFx(p,color,r,dur=.35){const m=new THREE.Mesh(DISC_GEO,addMat(color,1.2));m.rotation.x=-Math.PI/2;m.position.set(p.x,.06,p.z);m.scale.setScalar(r);addFx(m,dur,(k,o)=>{o.material.opacity=.5*(1-k)})}
@@ -204,7 +216,7 @@ function setInfo(info){
 function clearWorld(){
   if(G.range){G.range=null;$('#range').hidden=true;$('#hud').classList.remove('tut')}
   for(const v of [...views.values()])dropView(v);
-  for(const map of [projMeshes,zoneMeshes,beamMeshes,ringMeshes,lootMeshes]){for(const m of map.values()){scene.remove(m);m.traverse(o=>{o.material&&o.material.dispose()})}map.clear()}
+  for(const map of [projMeshes,zoneMeshes,beamMeshes,ringMeshes,lootMeshes]){for(const m of map.values()){scene.remove(m);m.traverse(o=>releaseMat(o.material))}map.clear()}
   for(const m of pointMeshes)scene.remove(m.g);pointMeshes=[];
   fxList.forEach(dropFx);fxList=[];parts.length=0;floaters.forEach(f=>f.el.remove());floaters=[];$('#feed').innerHTML='';
   Object.assign(G,{roster:new Map(),snaps:[],last:null,evq:[],stats:[],ended:false,pred:null,show:null,hist:[],pendingCast:[],you:0,slotsFor:'',tut:null});
@@ -232,7 +244,7 @@ function viewTime(){
 function syncMap(map,list,make,update){
   const seen=new Set();
   for(const row of list){const id=row[0];seen.add(id);let m=map.get(id);if(!m){m=make(row);scene.add(m);map.set(id,m)}update(m,row)}
-  for(const [id,m] of map)if(!seen.has(id)){scene.remove(m);m.traverse(o=>{if(o.geometry&&![BEAM_GEO,BOX_Z,WALL_GEO,DISC_GEO,RING_GEO].includes(o.geometry))o.geometry.dispose();o.material&&o.material.dispose()});map.delete(id)}
+  for(const [id,m] of map)if(!seen.has(id)){scene.remove(m);m.traverse(o=>{if(o.geometry&&![BEAM_GEO,BOX_Z,WALL_GEO,DISC_GEO,RING_GEO,PROJ_GEO].includes(o.geometry))o.geometry.dispose();releaseMat(o.material)});map.delete(id)}
 }
 function ingest(s){
   s.recv=s.t*1000;if(G.mode==='on')clockSample(s.recv);
@@ -242,7 +254,7 @@ function ingest(s){
   for(const e of s.ev)G.evq.push({at:s.recv,e});
   if(s.me&&s.me.i!==G.you){G.you=s.me.i;for(const r of G.roster.values())ensureView(r)}
   if(G.mode==='on')reconcile(s);
-  syncMap(projMeshes,s.p,([id,x,z,vx,vz,c,sz])=>{const m=new THREE.Mesh(new THREE.SphereGeometry(.17*sz,10,8),new THREE.MeshBasicMaterial({color:HDR(c,3.2)}));m.userData.c=c;return m},
+  syncMap(projMeshes,s.p,([id,x,z,vx,vz,c,sz])=>{const m=new THREE.Mesh(PROJ_GEO,projMat(c));m.scale.setScalar(sz||1);m.userData.c=c;return m},
     (m,[id,x,z,vx,vz])=>{m.userData.s={x,z,vx,vz,at:s.recv}});
   syncMap(zoneMeshes,s.zn,([id,x,z,r,t,team,c])=>{const m=new THREE.Mesh(new THREE.RingGeometry(.2,r,40,3),addMat(c||0x5dff8a,1.2));m.rotation.x=-Math.PI/2;m.position.set(x,.07,z);m.userData.c=c||0x5dff8a;return m},(m,row)=>{m.userData.t=row[4]});
   syncMap(beamMeshes,s.bm,()=>{const g=new THREE.Group(),core=new THREE.Mesh(BOX_Z,addMat(0x6acbff,2.6)),glow=new THREE.Mesh(BOX_Z,addMat(0x6acbff,.8));g.add(core,glow);g.userData={core,glow};return g},
@@ -1043,7 +1055,8 @@ function autoQuality(dt){
   if(!inGame()||G.paused||document.hidden||dt>=.05){AQ.t=0;AQ.n=0;return}
   AQ.t+=dt;AQ.n++;if(AQ.t<6)return;
   const fps=AQ.n/AQ.t;AQ.t=0;AQ.n=0;
-  if(fps<30&&Cfg.get('scale')>.6){Cfg.set('scale',Math.max(.6,Math.round((Cfg.get('scale')-.15)*100)/100));
+  // with the 30 FPS limit a device that keeps the limit must not count as too slow
+  if(fps<Math.min(30,(Cfg.get('fpsCap')||60)*.8)&&Cfg.get('scale')>.6){Cfg.set('scale',Math.max(.6,Math.round((Cfg.get('scale')-.15)*100)/100));
     if(!AQ.told){AQ.told=true;Hub.toast(`Hra běžela jen ${Math.round(fps)} FPS, snížil jsem rozlišení. Změníš ho v Nastavení → Grafika.`)}}
 }
 
@@ -1062,12 +1075,18 @@ addEventListener('keydown',e=>{if(e.code===Cfg.key('mute')&&!e.repeat&&!['INPUT'
 document.addEventListener('click',e=>{const b=e.target.closest?.('button');if(b&&!b.closest('#slots')&&!b.disabled)Snd.play('click',null,{ui:true,vol:.6})},true);
 
 // ---------- main loop ----------
-const camPos=new V3(),clock=new THREE.Clock();let menuAngle=0,fpsN=0,fpsT=0;
-function frame(){
+const camPos=new V3(),clock=new THREE.Clock();let menuAngle=0,fpsN=0,fpsT=0,lastDraw=0;
+// frames per second at most: the setting in a match (0 = every display frame), 30 for the live menu background,
+// one a second when that background is switched off (its demo match then stands still)
+const MENU_FPS=30;
+function frameCap(){if(G.mode!=='menu')return Cfg.get('fpsCap');return Cfg.get('menuBg')?Math.min(MENU_FPS,Cfg.get('fpsCap')||MENU_FPS):1}
+function frame(now=performance.now()){
   requestAnimationFrame(frame);
+  const cap=frameCap();if(cap&&now-lastDraw<1000/cap-2)return;lastDraw=now;G.drawn=(G.drawn||0)+1;
   const dt=Math.min(clock.getDelta(),.05),t=clock.elapsedTime;
-  arena?.update(dt,t);
-  if(G.mode==='menu'||G.mode==='off')stepLocal(dt);
+  const still=G.mode==='menu'&&!Cfg.get('menuBg');
+  arena?.update(still?0:dt,t);
+  if(G.mode==='off'||G.mode==='menu'&&!still)stepLocal(dt);
   else if(G.mode==='on'&&!G.ended){G.inAcc+=dt;let n=0;while(G.inAcc>=TICK&&n<4){G.inAcc-=TICK;inputTick();n++}if(G.inAcc>TICK)G.inAcc=0}
   if(G.pred&&G.show){const dx=G.pred.x-G.show.x,dz=G.pred.z-G.show.z;if(dx*dx+dz*dz>16){G.show.x=G.pred.x;G.show.z=G.pred.z}else{const k=Math.min(1,dt*18);G.show.x+=dx*k;G.show.z+=dz*k}}
   else G.show=null;
@@ -1093,7 +1112,7 @@ function frame(){
   G.shake=Cfg.get('shake')?Math.max(0,G.shake-dt*2.2):0;
   if(!$('#fps').hidden){fpsN++;fpsT+=dt;if(fpsT>=.5){$('#fps').textContent=`${Math.round(fpsN/fpsT)} FPS`;fpsN=0;fpsT=0}}
   autoQuality(dt);
-  if(G.mode==='menu'){menuAngle+=dt*.06;camera.position.set(Math.cos(menuAngle)*46,30,Math.sin(menuAngle)*46);camera.lookAt(-6,0,0)}
+  if(G.mode==='menu'){if(!still)menuAngle+=dt*.06;camera.position.set(Math.cos(menuAngle)*46,30,Math.sin(menuAngle)*46);camera.lookAt(-6,0,0)}
   else{const p=camFocus();camPos.lerp(new V3(p.x,0,p.z),1-Math.exp(-dt*6));const far=(camera.aspect<1?1.45:1)*Cfg.get('zoom'),boss=G.info.mode==='boss'||G.last?.bs?1.12:1;
     const sx=(Math.random()-.5)*G.shake*.9,sz=(Math.random()-.5)*G.shake*.9;
     camera.position.set(camPos.x+sx,26*far*boss,camPos.z+17*far*boss+sz);camera.lookAt(camPos.x+sx*.5,0,camPos.z-1+sz*.5)}

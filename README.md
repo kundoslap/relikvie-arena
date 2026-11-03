@@ -184,6 +184,19 @@ PvP zápas s jiným než normálním cílem nebo délkou je **vlastní zápas** 
 
 **Aplikace:** hra je instalovatelná (PWA): tlačítko Nainstalovat v hubu (Chrome, Edge, Android), na iPhonu Sdílet → Přidat na plochu. Běží přes celou obrazovku s vlastní ikonou. Service worker bere kód hry vždy nejdřív ze sítě, takže nové verze dorazí hned; bez internetu se hra spustí z uložené kopie a nabídne trénink proti botům. API a WebSocket nikdy nejdou přes mezipaměť.
 
+**Výkon (zátěž procesoru):**
+- **Limit snímků:** hra kreslí nejvýš 60 snímků za sekundu (Nastavení → Grafika → Limit snímků: 30, 60, bez omezení). Dřív na monitoru se 144 Hz kreslila 144×.
+- **Menu:** ukázkový zápas za hubem a místností se kreslí jen 30× za sekundu. Volba „Živé pozadí menu“ ho úplně zastaví (obraz se pak obnoví jednou za sekundu).
+- **Záře (bloom)** se počítá v polovičním rozlišení.
+- **Střely** sdílejí jednu geometrii a materiál podle barvy a krátké efekty (kruhy, záblesky, paprsky) vracejí materiály do zásobníku, místo aby se pro každý zásah tvořily nové.
+- **Automatické snížení rozlišení** se nespouští, když hra jen drží limit 30 FPS.
+
+Změřeno v Edge bez okna (softwarové vykreslování, procesorové sekundy za 10 s):
+- hub z 11,5 na zhruba 7, s vypnutým pozadím na 0,75;
+- zápas na 60 FPS kolem 11, s limitem 30 FPS kolem 6.
+
+Kdo má slabší počítač nebo notebook, ať nastaví limit 30 FPS a vypne živé pozadí menu. Pokud se trhají jen ostatní hráči a FPS je v pořádku, jde o síť nebo server: `/api/status` ukazuje vytížení serveru (`load.lateMs` nad zhruba 50 ms znamená, že server nestíhá).
+
 **Nastavení** (tlačítko Nastavení v hubu a v menu zápasu): Ovládání (přemapování všech kláves: pohyb, schopnosti, ultimátka, taktická akce, skóre, vypnutí zvuku; obsazená klávesa se prohodí, šipky fungují vždy), Grafika (kvalita, rozlišení vykreslování 50–100 %, záře, množství částic, otřesy kamery, záblesky obrazovky), Rozhraní (čísla poškození, jména nad postavami, oddálení kamery, počítadlo FPS, **barvy týmů**) a Zvuk. Barvy týmů mají tři palety: modrá a růžová (výchozí), modrá a oranžová (pro protanopii a deuteranopii) a tyrkysová a červená (pro tritanopii). Paleta platí hned pro postavy, základny, sloupy, body Ovládnutí, relikvie Únosu, minimapu, skóre, záznam, chat i lobby. Ukládá se v prohlížeči a kromě kvality platí hned.
 
 **Výcvik** (tlačítko Výcvik na kartě Hrát, novým hráčům se nabídne sám): sedm kroků na mapě Neonové jádro bez serveru, takže jde i offline. Pohyb ke zlatému kruhu, útok na cvičný dron, všechny tři schopnosti, ultimátka, taktická akce, léčení na základně a sebrání relikvie. Hra každý krok sleduje a sama pokračuje, výcvik jde kdykoli ukončit. Hráč s účtem dostane za první dokončení 300 kreditů a implantát.

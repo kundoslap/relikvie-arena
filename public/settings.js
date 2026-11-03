@@ -6,7 +6,9 @@ const store={get(k,d){try{const v=localStorage.getItem('rel.'+k);return v==null?
 export const ACTIONS=[['up','Pohyb nahoru'],['down','Pohyb dolů'],['left','Pohyb doleva'],['right','Pohyb doprava'],['q','Schopnost 1'],['e','Schopnost 2'],['r','Schopnost 3'],
   ['ult','Ultimátka'],['tac','Taktická akce'],['evade','Úskok'],['ping','Ping (s Alt varování)'],['wheel','Rychlé zprávy'],['score','Skóre (držet)'],['mute','Vypnout zvuk']];
 const DEF_KEYS={up:'KeyW',down:'KeyS',left:'KeyA',right:'KeyD',q:'KeyQ',e:'KeyE',r:'KeyR',ult:'KeyF',tac:'KeyT',evade:'Space',ping:'KeyG',wheel:'KeyV',score:'Tab',mute:'KeyM'};
-const DEF={scale:1,bloom:true,particles:1,shake:true,flash:true,dmgNums:true,names:true,zoom:1,fps:false,teamPal:'std'};
+// fpsCap: frames per second at most (0 = as fast as the display); menuBg: the live match behind the menu
+const DEF={scale:1,bloom:true,particles:1,shake:true,flash:true,dmgNums:true,names:true,zoom:1,fps:false,teamPal:'std',fpsCap:60,menuBg:true};
+export const FPS_CAPS=[[30,'30'],[60,'60'],[0,'Bez omezení']];
 // team colours: [Modří, Rudí]; the alternatives keep the two teams apart for the common kinds of colour blindness
 export const TEAM_PALS={
   std:{name:'Modrá a růžová',help:'Výchozí barvy.',c:['#3fb8ff','#ff3f8e']},
@@ -23,7 +25,8 @@ if(!('evade' in savedKeys)&&Object.entries(savedKeys).some(([a,c])=>a!=='evade'&
 for(const k of Object.keys(S.keys))if(!(k in DEF_KEYS)||typeof S.keys[k]!=='string')delete S.keys[k];
 const num=(v,a,b,d)=>Number.isFinite(+v)?Math.max(a,Math.min(b,+v)):d;
 S.scale=num(S.scale,.5,1,1);S.particles=num(S.particles,.25,1,1);S.zoom=num(S.zoom,.8,1.3,1);
-for(const k of ['bloom','shake','flash','dmgNums','names','fps'])S[k]=typeof S[k]==='boolean'?S[k]:DEF[k];
+for(const k of ['bloom','shake','flash','dmgNums','names','fps','menuBg'])S[k]=typeof S[k]==='boolean'?S[k]:DEF[k];
+if(!FPS_CAPS.some(([v])=>v===S.fpsCap))S.fpsCap=DEF.fpsCap;
 if(!Object.hasOwn(TEAM_PALS,S.teamPal))S.teamPal='std';
 export const teamColors=()=>TEAM_PALS[S.teamPal].c;
 
@@ -67,6 +70,8 @@ function render(){
     <div class="btns"><button class="ghost sm" type="button" id="keysReset">Výchozí klávesy</button></div>`;
   if(tab==='graphics'){const q=quality();el.innerHTML=`
     <div class="setrow"><span>Kvalita<small>Stíny, detailnější mapy a víc částic. Projeví se po obnovení stránky.</small></span><div class="seg" id="setQ"><button type="button" data-q="high" aria-pressed="${q==='high'}">Vysoká</button><button type="button" data-q="low" aria-pressed="${q==='low'}">Nízká</button></div></div>
+    <div class="setrow"><span>Limit snímků (FPS)<small>Víc snímků je plynulejší, ale víc zatěžuje procesor a grafiku. Na monitoru se 144 Hz bez limitu hra kreslí 144× za sekundu.</small></span><div class="seg" id="setFps">${FPS_CAPS.map(([v,n])=>`<button type="button" data-fpscap="${v}" aria-pressed="${v===S.fpsCap}">${n}</button>`).join('')}</div></div>
+    ${tog('menuBg','Živé pozadí menu','Za hubem a místností běží ukázkový zápas. Vypnutí ušetří procesor, když jsi v menu.')}
     ${rng('scale','Rozlišení vykreslování',.5,1,.05,pct,'Nižší hodnota pomůže slabším zařízením.')}
     ${tog('bloom','Záře (bloom)','Neonové zářivé efekty. Vypnutí ušetří výkon.')}
     ${rng('particles','Množství částic',.25,1,.25,pct)}
@@ -80,6 +85,7 @@ function render(){
     <div class="setrow"><span>Barvy týmů<small>${TEAM_PALS[S.teamPal].help} Platí pro postavy, minimapu, skóre, záznam i chat.</small></span>
       <div class="seg" id="setPal">${Object.entries(TEAM_PALS).map(([k,p])=>`<button type="button" data-pal="${k}" aria-pressed="${k===S.teamPal}"><i class="pal" style="background:${p.c[0]}"></i><i class="pal" style="background:${p.c[1]}"></i> ${p.name}</button>`).join('')}</div></div>`;
   if(tab==='sound'){el.innerHTML=Snd.panelHTML();Snd.bindPanel(el)}
+  el.querySelectorAll('[data-fpscap]').forEach(b=>b.onclick=()=>{set('fpsCap',+b.dataset.fpscap);render()});
   el.querySelectorAll('[data-pal]').forEach(b=>b.onclick=()=>{set('teamPal',b.dataset.pal);render()});
   el.querySelectorAll('[data-tog]').forEach(i=>i.onchange=()=>set(i.dataset.tog,i.checked));
   el.querySelectorAll('[data-rng]').forEach(i=>i.oninput=()=>{set(i.dataset.rng,+i.value);i.nextElementSibling.textContent=pct(+i.value)});
