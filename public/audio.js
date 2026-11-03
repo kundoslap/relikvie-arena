@@ -100,6 +100,8 @@ const SFX={
   // streak or multi-kill: a rising arpeggio, one note more for a bigger streak
   streak(c,o){const n=clamp(o.n||2,2,6);for(let i=0;i<n;i++)bell(c,[523,659,784,1046,1318,1568][i],.35,.11,i*.07);sub(c,120,55,.2,.4)},
   // teleport gate: a rising filtered whoosh with a glassy chime on top
+  // evade: a short whoosh; the Technik's blink chimes, the Strážce's shield bash thumps
+  evade(c,o){hiss(c,'bandpass',1400,500,.18,.35,.005,1.6);if(o.k==='technician')bell(c,1318,.3,.07,.02);else if(o.k==='guardian')sub(c,120,55,.16,.5)},
   warp(c){hiss(c,'bandpass',400,3200,.35,.4,.02,2.5);tone(c,'sine',220,880,.3,.14,.01);bell(c,1568,.5,.08,.12)},
   died(c){hiss(c,'lowpass',1600,60,1.3,.55,.01);sub(c,80,26,1.3,.8);pad(c,[hz(45),hz(52)],1.2,.18,600,.05)},
   boom(c,o){const s=clamp(o.s||1,.3,3);sub(c,90/Math.sqrt(s)+20,24,.55+.35*s,.95);hiss(c,'lowpass',1800,70,.5+.4*s,.8,.003,.7);hiss(c,'bandpass',900,200,.25,.3,.002,.8)},

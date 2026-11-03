@@ -104,7 +104,8 @@ async function logout(){Social.disconnect();try{await api('/api/logout',{})}catc
 
 // ---------- hub frame ----------
 const TABS=[['play','Hrát'],['campaign','Kampaň'],['goals','Cíle'],['pass','Průkaz'],['ach','Úspěchy'],['hero','Postava'],['prof','Profese'],['tree','Dovednosti'],['mastery','Mistrovství'],['inv','Inventář'],['forge','Dílna'],['market','Tržiště'],['shop','Obchod'],['friends','Přátelé'],['guild','Klan'],['stats','Statistiky'],['top','Žebříček']];
-export function showHub(tab){if(tab)H.tab=tab;if(H.profile&&!H.offline)Social.connect(H.token);H.cb.showOnly('hub');renderHub()}
+export function showHub(tab){if(tab)H.tab=tab;if(H.profile&&!H.offline)Social.connect(H.token);H.cb.showOnly('hub');renderHub();
+  if(!H.newsChecked){H.newsChecked=true;setTimeout(()=>{if(!$('#hub').hidden)newsOnStart()},700)}}
 export function tutorialDone(){if(H.profile&&!H.profile.tutorial)act('tutorialDone',{},j=>j.already?'':`Odměna za výcvik: +${num(j.credits)} kreditů a ${j.item.name}.`)}
 export function joinRoom(code){H.cb.join(code,{cls:H.cls,name:H.profile?H.profile.nick:H.guestName||'Host'})}
 export function renderHub(){
@@ -115,7 +116,7 @@ export function renderHub(){
     <div class="btns"><div class="cred">${num(p.credits)} <small>KREDITŮ</small></div>${sndBtn()}<button class="ghost sm" id="logoutBtn" type="button">Odhlásit</button></div>`
     :`<div class="who"><div class="nick">${H.offline?'Offline trénink':'Host'}</div><small class="help">${H.offline?'Postup se neukládá.':'Bez účtu se postup neukládá.'}</small></div>
     <div class="btns">${sndBtn()}${H.offline?'':'<button class="ghost sm" id="loginBtn" type="button">Přihlásit nebo založit účet</button>'}</div>`;
-  $('#cfgBtn').onclick=()=>Cfg.open();bindAppBtn();
+  $('#cfgBtn').onclick=()=>Cfg.open();bindAppBtn();$('#newsBtn').onclick=newsDialog;
   $('#sndBtn').onclick=()=>{const P=$('#sndPop');P.hidden=!P.hidden;if(!P.hidden){P.innerHTML=Snd.panelHTML();Snd.bindPanel(P)}};
   $('#logoutBtn')&&($('#logoutBtn').onclick=logout);
   $('#loginBtn')&&($('#loginBtn').onclick=()=>{H.guest=false;showAuth()});
@@ -136,7 +137,29 @@ const appBtn=()=>standalone()?'':installEvt||isIOS?'<button class="go sm" id="ap
 function bindAppBtn(){const b=$('#appBtn');if(!b)return;b.onclick=async()=>{
   if(installEvt){installEvt.prompt();const r=await installEvt.userChoice.catch(()=>null);if(r?.outcome==='accepted')installEvt=null;renderHub()}
   else toast('Na iPhonu: v Safari klepni na Sdílet a pak na „Přidat na plochu“.')}}
-const sndBtn=()=>`${appBtn()}<button class="ghost sm" id="sndBtn" type="button" aria-label="Nastavení zvuku">${Snd.settings().mute?'Zvuk ✕':'Zvuk'}</button><button class="ghost sm" id="cfgBtn" type="button">Nastavení</button>`;
+// ---------- Novinky ----------
+// the latest changes; a dot until the newest entry was opened, shown once by itself to players who played before
+const newsUnseen=()=>store.get('news',null)!==D.CHANGELOG[0].id;
+function newsDialog(){
+  store.set('news',D.CHANGELOG[0].id);
+  document.querySelector('#newsDlg')?.remove();
+  const d=document.createElement('div');d.id='newsDlg';d.className='overlay';
+  d.innerHTML=`<div class="center"><div class="card news" role="dialog" aria-label="Novinky"><div class="row"><h2 class="sec" style="margin:0">Novinky</h2><button class="ghost sm" type="button" data-x aria-label="Zavřít">×</button></div>
+    ${D.CHANGELOG.map(c=>`<section><div class="lbl">${esc(c.title)}</div><ul>${c.items.map(i=>`<li>${esc(i)}</li>`).join('')}</ul></section>`).join('')}
+    <p class="help">Podrobnosti najdeš v nápovědě u jednotlivých karet a režimů.</p></div></div>`;
+  document.body.appendChild(d);
+  const close=()=>{d.remove();renderHub()};
+  d.querySelector('[data-x]').onclick=close;d.querySelector('[data-x]').focus();
+  d.addEventListener('pointerdown',e=>{if(e.target===d||e.target.classList.contains('center'))close()});
+  d.addEventListener('keydown',e=>{if(e.key==='Escape')close()});
+}
+// a brand-new player starts with the tutorial, not with a list of changes
+function newsOnStart(){
+  const seen=store.get('news',null);
+  if(seen===null&&!H.profile?.tutorial&&!store.get('tutHide',false)){store.set('news',D.CHANGELOG[0].id);renderHub();return}
+  if(newsUnseen())newsDialog();
+}
+const sndBtn=()=>`${appBtn()}<button class="ghost sm" id="newsBtn" type="button">Novinky${newsUnseen()?' <b class="dotn"></b>':''}</button><button class="ghost sm" id="sndBtn" type="button" aria-label="Nastavení zvuku">${Snd.settings().mute?'Zvuk ✕':'Zvuk'}</button><button class="ghost sm" id="cfgBtn" type="button">Nastavení</button>`;
 Snd.onChange(()=>{const b=$('#sndBtn');if(b)b.textContent=Snd.settings().mute?'Zvuk ✕':'Zvuk'});
 // the sound popover closes on a click elsewhere and whenever the hub is left
 document.addEventListener('pointerdown',e=>{const P=$('#sndPop');if(P&&!P.hidden&&!P.contains(e.target)&&e.target.id!=='sndBtn')P.hidden=true});
@@ -190,7 +213,7 @@ function tabPlay(){
       <div><div class="lbl">Mapa</div><div class="chips">${M.maps.map(k=>`<button type="button" class="chip" data-map="${k}" aria-pressed="${k===P.map}">${D.MAPS[k].name}<small>${D.MAPS[k].desc}</small></button>`).join('')}</div></div>
       ${P.mode==='boss'?`<div><div class="lbl">Boss</div><div class="chips">${Object.entries(D.BOSSES).map(([k,b])=>`<button type="button" class="chip" data-boss="${k}" aria-pressed="${k===P.boss}">${b.name} · ${b.title}<small>${b.desc}</small></button>`).join('')}</div></div>`:''}
       <div><div class="lbl">Obtížnost</div><div class="seg" id="pDiff">${[['easy','Lehká'],['normal','Normální'],['hard','Těžká']].map(([k,n])=>`<button type="button" data-d="${k}" aria-pressed="${k===P.diff}">${n}</button>`).join('')}</div>
-        <p class="help">${H.profile?'Těžší obtížnost dává víc zkušeností a kreditů (lehká ×0,6, těžká ×1,35).':''}</p></div>
+        <p class="help">${H.profile?'Těžší obtížnost dává víc zkušeností a kreditů (lehká ×0,6, těžká ×1,35).':''}${H.profile?.firstWinReady?` <span class="fwin">◆ Bonus za první výhru dne čeká: +${D.FIRST_WIN.xp} zkušeností a +${D.FIRST_WIN.cr} kreditů</span>`:H.profile?' <span class="help">Bonus za první výhru dne už máš, další bude zítra.</span>':''}</p></div>
       <div class="btns"><button class="go" id="soloBtn" type="button">${H.offline?'Spustit trénink':'Hrát s boty'}</button><button class="ghost" id="tutBtn2" type="button">Výcvik</button><button class="ghost" id="rangeBtn" type="button" title="Vyzkoušej svou sestavu na terčích s měřičem poškození">Střelnice</button></div>
       ${H.offline?'':`<div class="lbl">Online s lidmi</div>
       <div class="inline">${H.profile?'':`<label class="field">Přezdívka hosta<input id="gNick" maxlength="16" value="${esc(H.guestName)}" placeholder="Např. Petan"></label>`}
@@ -204,7 +227,7 @@ function tabPlay(){
     </section>
     ${rankedPanel()}
     ${H.offline?'':`<section class="panel"><div class="row"><h3>Veřejné místnosti <small class="help" id="onlineN"></small></h3><button class="ghost sm" id="roomsRef" type="button">Obnovit</button></div><div class="list" id="roomList"><p class="help">Načítám…</p></div></section>`}
-    <p class="help" id="helpText">${H.cb.isTouch()?'Levým palcem pohyb, tlačítkem Útok střelba na nejbližšího soupeře. Schopnosti míří automaticky.':'<kbd>W A S D</kbd> pohyb · <kbd>myš</kbd> míření · <kbd>levé tlačítko</kbd> útok · <kbd>Q</kbd> <kbd>E</kbd> <kbd>R</kbd> schopnosti · <kbd>F</kbd> ultimátka · <kbd>Tab</kbd> skóre · <kbd>Esc</kbd> menu'}. Vlastní základna léčí a dobíjí energii.</p>`;
+    <p class="help" id="helpText">${H.cb.isTouch()?'Levým palcem pohyb, tlačítkem Útok střelba na nejbližšího soupeře. Schopnosti míří automaticky.':'<kbd>W A S D</kbd> pohyb · <kbd>myš</kbd> míření · <kbd>levé tlačítko</kbd> útok · <kbd>Q</kbd> <kbd>E</kbd> <kbd>R</kbd> schopnosti · <kbd>F</kbd> ultimátka · <kbd>Mezerník</kbd> úskok · <kbd>Tab</kbd> skóre · <kbd>Esc</kbd> menu'}. Vlastní základna léčí a dobíjí energii.</p>`;
   bindClassCards();bindLogin();
   const save=()=>{store.set('play',P);tabPlay()};
   document.querySelectorAll('[data-mode]').forEach(b=>b.onclick=()=>{P.mode=b.dataset.mode;save()});
@@ -272,7 +295,7 @@ function friendList(){
   const b=(k,id,n,cls='ghost sm')=>`<button type="button" class="${cls}" data-f="${k}" data-id="${esc(id)}">${n}</button>`;
   $('#frList').innerHTML=`<section class="panel"><div class="row"><h3>Přátelé · ${on} online</h3><small class="help">${F.friends.length} / ${D.FRIENDS_MAX}</small></div>
       ${Social.connected()?'':'<p class="help">Připojuji k serveru přátel…</p>'}
-      <div class="flist">${F.friends.map(f=>row(f,`${f.code?b('join',f.code,'Připojit','go sm'):''}${f.watch?b('watch',f.id,'Sledovat'):''}${b('dm',f.id,'Zpráva')}${b('remove',f.id,'Odebrat')}${b('report',f.id,'Nahlásit')}`,`${Social.statusText(f)} · ${info(f)}`)).join('')
+      <div class="flist">${F.friends.map(f=>row(f,`${f.code?b('join',f.code,'Připojit','go sm'):''}${f.watch?b('watch',f.id,'Sledovat'):''}${f.st==='online'||f.st==='lobby'?b('duel',f.id,'Souboj'):''}${b('dm',f.id,'Zpráva')}${b('remove',f.id,'Odebrat')}${b('report',f.id,'Nahlásit')}`,`${Social.statusText(f)} · ${info(f)}`)).join('')
         ||'<p class="help">Zatím nemáš žádné přátele. Pošli žádost přes přezdívku nahoře.</p>'}</div></section>
     <div style="display:grid;gap:22px">
     ${F.inReq.length?`<section class="panel"><h3>Žádosti o přátelství</h3><div class="flist">${F.inReq.map(f=>row(f,`${b('accept',f.id,'Přijmout','go sm')}${b('decline',f.id,'Odmítnout')}${b('block',f.id,'Blokovat')}${b('report',f.id,'Nahlásit')}`,info(f))).join('')}</div></section>`:''}
@@ -286,6 +309,7 @@ function friendList(){
   document.querySelectorAll('#frList [data-f]').forEach(x=>x.onclick=()=>{const k=x.dataset.f,id=x.dataset.id;
     if(k==='join')return joinRoom(id);
     if(k==='watch')return H.cb.spectate(id);
+    if(k==='duel')return H.cb.challenge(id,{cls:H.cls,name:H.profile.nick});
     if(k==='report')return Social.reportDialog(id,[...F.friends,...F.inReq,...(F.recent||[])].find(f=>f.id===id)?.nick||'hráče');
     if(k==='addId'){if(!Social.connected())return toast('Chat a přátelé se teprve připojují, zkus to za chvíli.',true);return Social.fr('add',id)}
     if(k==='dm')return Social.openDM(id);
@@ -811,6 +835,10 @@ async function tabTop(){
     $('#hubBody').innerHTML=`<section class="panel"><h3>Hodnocená hra · sezóna ${D.seasonName(j.season)}</h3>${j.ranked?.length?`<div class="tbl" style="overflow-x:auto"><table class="st"><thead><tr><th>Hráč</th><th>Divize</th><th>Hodnocení</th><th>Zápasy</th><th>Výhry</th><th>Úspěšnost</th></tr></thead><tbody>
       ${j.ranked.map((x,i)=>`<tr class="${me(x)}"><td>${i+1}. ${pname(x.nick)} <small class="help">${D.CLASSES[x.cls]?.name||''}</small></td><td>${divBadge(x.rating,true)}</td><td>${x.placed?x.rating:`${x.rating} <small class="help">umisťuje se</small>`}</td><td>${x.games}</td><td>${x.wins}</td><td>${pct(x.wins,x.games)}</td></tr>`).join('')}</tbody></table></div>`
       :'<p class="help">V této sezóně zatím nikdo neodehrál hodnocený zápas.</p>'}</section>
+    ${j.guildWeek?.length?`<section class="panel"><h3>Klany tohoto týdne</h3><p class="help">Výhry členů klanu od pondělí. Počítají se zápasy, ve kterých člen hrál za klan.</p><div class="tbl" style="overflow-x:auto"><table class="st"><thead><tr><th>Klan</th><th>Zkratka</th><th>Výhry</th><th>Aktivní členové</th><th>Úroveň</th></tr></thead><tbody>
+      ${j.guildWeek.map((g,i)=>`<tr class="${H.profile?.guild===g.id?'mine':''}"><td>${i+1}. ${esc(g.name)}</td><td class="cg">[${esc(g.tag)}]</td><td>${g.wins}</td><td>${g.active} / ${g.n}</td><td>${g.level}</td></tr>`).join('')}</tbody></table></div></section>`:''}
+    ${j.streaks?.length?`<section class="panel"><h3>Nejdelší série v PvP</h3><p class="help">Nejvíc zničení soupeřů bez vlastního pádu v jednom zápase.</p><div class="tbl" style="overflow-x:auto"><table class="st"><thead><tr><th>Hráč</th><th>Povolání</th><th>Série</th><th>Nejvíc naráz</th></tr></thead><tbody>
+      ${j.streaks.map((x,i)=>`<tr class="${H.profile&&x.nick===H.profile.nick?'mine':''}"><td>${i+1}. ${x.tag?`<span class="cg">[${esc(x.tag)}]</span> `:''}${pname(x.nick)}</td><td>${D.CLASSES[x.cls]?.name||''}</td><td>${x.streak}</td><td>${x.multi>1?x.multi:'—'}</td></tr>`).join('')}</tbody></table></div></section>`:''}
     ${j.guilds?.length?`<section class="panel"><h3>Klany</h3><div class="tbl" style="overflow-x:auto"><table class="st"><thead><tr><th>Klan</th><th>Zkratka</th><th>Úroveň</th><th>Členové</th><th>Vstup</th></tr></thead><tbody>
       ${j.guilds.map((g,i)=>`<tr class="${H.profile?.guild===g.id?'mine':''}"><td>${i+1}. ${esc(g.name)}</td><td class="cg">[${esc(g.tag)}]</td><td>${g.level}</td><td>${g.n} / ${g.max}</td><td>${g.open?'otevřený':'na žádost'}</td></tr>`).join('')}</tbody></table></div></section>`:''}
     <section class="panel"><h3>Žebříček · nejvyšší úrovně</h3><div class="tbl" style="overflow-x:auto"><table class="st"><thead><tr><th>Hráč</th><th>Povolání</th><th>Úroveň</th><th>Úspěchy</th><th>Výhry</th><th>Bossové</th><th>Nejlepší vlna</th><th>Nekonečno</th></tr></thead><tbody>
@@ -836,6 +864,7 @@ export function showRewards(m){
     ${m.camp?.echo?'<div class="lvup">Ozvěna jádra pokořena · bonus týdne</div>':''}
     ${m.record?`<div class="lvup">Nový rekord v Nekonečnu · vlna ${m.record}</div>`:''}
     ${m.mvp?'<div class="lvup">MVP zápasu · +15 % zkušeností a kreditů</div>':''}
+    ${m.firstWin?`<div class="lvup">První výhra dne · +${num(m.firstWin.xp)} zkušeností a +${num(m.firstWin.cr)} kreditů (už v odměně)</div>`:''}
     ${m.masteryUps?.length?`<p class="help">Mistrovství: ${m.masteryUps.map(x=>`<b style="color:#c08bff">${esc(x.name)} ${x.rank}</b>${x.milestone?' · nový milník':''}`).join(', ')}${m.masteryUps.some(x=>x.milestone)?' · větev si vyber na kartě Mistrovství.':''}</p>`:''}
     ${m.crystals?.length?`<p class="help">Krystal: ${m.crystals.map(k=>`<b style="color:${D.parseCrystal(k)?.C.color}">${D.crystalName(k)}</b>`).join(', ')} · zasadíš ho do zdířky v Inventáři.</p>`:''}
     ${m.pass?.gain?`<p class="help">Sezónní průkaz: <b style="color:#3fffd2">+${num(m.pass.gain)} bodů</b> · stupeň ${m.pass.tier} / ${D.PASS.tiers}</p>${m.pass.tier>m.pass.before?`<div class="lvup" style="color:#3fffd2">Nový stupeň průkazu ${m.pass.tier}! Odměnu vyzvedneš na kartě Průkaz.</div>`:''}`:''}

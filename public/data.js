@@ -2,7 +2,7 @@
 // Imported by the simulation, the server and the client, so every rule has one source.
 
 export const CLASSES={
-  striker:{name:'Lovec',role:'Nápor a přesnost',color:0xffb347,css:'#ffb347',hp:230,speed:9.2,def:.08,atk:40,tech:12,pref:11,
+  striker:{name:'Lovec',role:'Nápor a přesnost',color:0xffb347,css:'#ffb347',hp:222,speed:9.2,def:.08,atk:40,tech:12,pref:11,
     talent:'Kombinátor',talentDesc:'Zásah základním útokem zkrátí čekání schopností o 0,35 s.',
     basic:{type:'shot',name:'Pulzní střela',dmg:16,rate:.3,speed:46,range:22,size:1,dot:{kind:'bleed',dps:4,t:4}},
     skills:[{name:'Průrazný výpad',cost:30,cd:6,icon:'slash',desc:'Výpad vpřed a dva seky po 90 % útoku.'},
@@ -10,7 +10,7 @@ export const CLASSES={
             {name:'Krvavý šíp',cost:20,cd:5,icon:'arrow',desc:'Průrazný šíp. Krvácení 9 HP/s na 4 s.'}],
     ult:{name:'Bouřový průraz',icon:'bolt',desc:'Tři blesky v linii před tebou, každý 170 % útoku.'},
     relic:'Bouřová relikvie: +25 % poškození na 20 s.',bars:[.45,.9,.25,.95]},
-  guardian:{name:'Strážce',role:'Výdrž a obrana',color:0x5dffa8,css:'#5dffa8',hp:360,speed:7.6,def:.22,atk:30,tech:16,pref:2.2,
+  guardian:{name:'Strážce',role:'Výdrž a obrana',color:0x5dffa8,css:'#5dffa8',hp:385,speed:7.9,def:.22,atk:30,tech:16,pref:2.2,
     talent:'Bastion',talentDesc:'Každý zásah na blízko přidá 6 bodů štítu.',
     basic:{type:'melee',name:'Pancéřový úder',dmg:30,rate:.62,range:3.4,dot:{kind:'poison',dps:4,t:3}},
     skills:[{name:'Kotva',cost:25,cd:8,icon:'anchor',desc:'Štít 90 a zpomalení nepřátel do 5,5 m o 40 %.'},
@@ -26,7 +26,7 @@ export const CLASSES={
             {name:'EMP',cost:30,cd:9,icon:'emp',desc:'Výboj v místě: 110 % TECH, −40 energie, umlčení 1,6 s.'}],
     ult:{name:'Řetězový výboj',icon:'chain',desc:'Blesk přeskočí až na 5 cílů, každý zásah 160 % TECH.'},
     relic:'Relikvie ozvěny: energie ×1,8 a čekání −30 % na 20 s.',bars:[.55,.45,1,.75]},
-  pyro:{name:'Žhář',role:'Oheň a kontrola prostoru',color:0xff6a1a,css:'#ff6a1a',hp:275,speed:8.8,def:.12,atk:28,tech:36,pref:9,
+  pyro:{name:'Žhář',role:'Oheň a kontrola prostoru',color:0xff6a1a,css:'#ff6a1a',hp:290,speed:8.8,def:.12,atk:28,tech:36,pref:9,
     talent:'Popel',talentDesc:'Základní útok zapálí cíl: hoření 5 HP/s na 3 s. Ohnivé oblasti zapalují každého, kdo v nich stojí.',
     basic:{type:'shot',name:'Žhavý projektil',dmg:19,rate:.4,speed:36,range:19,size:1.6,dot:{kind:'burn',dps:10,t:3}},
     skills:[{name:'Plamenná vlna',cost:30,cd:7,icon:'flame',desc:'Vlna ohně do 6 m před tebou: 110 % TECH a hoření 8 HP/s na 3 s.'},
@@ -56,6 +56,42 @@ export const xpFor=l=>Math.round(100+l*50+l*l*3); // xp needed to go from level 
 export const DIFF_REWARD={easy:.6,normal:1,hard:1.35};
 // a match with custom room rules pays in full from this many seconds; wins count for goals from CUSTOM_GOAL of it
 export const CUSTOM_FULL=240,CUSTOM_GOAL=.6;
+// Evade on Space: every class moves out of harm's way in its own manner; no energy, its own cooldown.
+// It goes in the direction you move (standing still: where you face) and a dash ends early at a wall.
+export const EVADES={
+  striker:{name:'Přískok',cd:4,icon:'dodge',desc:'Bleskový kotoul o 6,5 m s krátkou nezranitelností (0,3 s).'},
+  guardian:{name:'Štítový náraz',cd:5,icon:'bulwark',desc:'Výpad o 4,5 m za štítem: po dobu 0,8 s dostáváš polovinu poškození a odhodíš soupeře v cestě (60 % útoku).'},
+  technician:{name:'Fázový skok',cd:5,icon:'blink',desc:'Okamžitý přesun o 7 m (projde mezi nepřáteli, zastaví se o zeď) s mžikem nezranitelnosti.'},
+  pyro:{name:'Ohnivý kotoul',cd:4.5,icon:'firezone',desc:'Kotoul o 5,5 m s nezranitelností 0,25 s. Na výchozím místě vzplane oheň 2,2 m na 2 s.'}};
+// "Novinky" in the hub, newest first; id marks what a player has already seen
+export const CHANGELOG=[
+  {id:'2026-11c',title:'Úskok na mezerníku',items:[
+    'Každé povolání má na mezerníku vlastní úskok ve směru pohybu, bez energie a s krátkým čekáním.',
+    'Lovec: Přískok (kotoul 6,5 m s nezranitelností). Strážce: Štítový náraz (výpad 4,5 m za štítem, odhodí soupeře).',
+    'Technik: Fázový skok (okamžitý přesun 7 m). Žhář: Ohnivý kotoul (5,5 m, za sebou nechá oheň).',
+    'Klávesu jde změnit v Nastavení → Ovládání, na mobilu je úskok šesté tlačítko. Ultimátka zůstává na F.',
+    'Vyváženost: Strážce 385 HP a vyšší rychlost, Žhář 290 HP, Lovec 222 HP.']},
+  {id:'2026-11b',title:'Výzvy, štíty a bonusy',items:[
+    'První výhra dne: +200 zkušeností a +120 kreditů jednou denně.',
+    'Nový nepřítel ve Vlnách a Nekonečnu: Štítonoš (od vlny 4) dává okolním nepřátelům štít.',
+    'Výzva na souboj: tlačítko Souboj u přítele založí místnost 1 proti 1 a pošle pozvánku.',
+    'Barvy týmů pro barvoslepé v Nastavení → Rozhraní.',
+    'Pět nových úspěchů: série, vícenásobná zničení, Eliminace, Mutace týdne, věrnost.',
+    'Rychlá hra: hlasování o mapě během odpočtu.',
+    'Žebříček: klany tohoto týdne podle výher a nejdelší série v PvP.',
+    'Emoty v kolečku zpráv (V): 8 Pozdrav, 9 Tanec, 0 Oslava.']},
+  {id:'2026-11a',title:'Nové režimy, mapa a cvičiště',items:[
+    'Mutace týdne: Aréna se dvěma pravidly, která se mění každé pondělí.',
+    'Eliminace: 3 proti 3 na kola bez oživení se zmenšující se arénou.',
+    'Hvězdná observatoř: nová mapa s teleportními branami.',
+    'Střelnice: terče s měřičem poškození, vyzkoušej svou sestavu.',
+    'Série a vícenásobná zničení s hláškami, rozbor smrti po pádu.',
+    'Vlastní pravidla místnosti: cíl, délka zápasu, hra bez botů.',
+    'Profil hráče, nedávní spoluhráči, denní odměna za přihlášení.',
+    'Plynulejší online hra a návrat do zápasu po výpadku spojení.']}
+];
+// bonus for the first win of each calendar day (any mode; short custom matches do not count as a win here)
+export const FIRST_WIN={xp:200,cr:120};
 
 // ---------- stats (items and skill tree feed the same modifiers) ----------
 export const STATS={
@@ -712,6 +748,10 @@ export const ACH=[
   {id:'dmg',cat:'fight',name:'Ničitel',desc:'Způsob celkové poškození.',t:[50000,500000,3000000],v:p=>st(p).dmg|0,title:'Ničitel'},
   {id:'heal',cat:'fight',name:'Záchranář',desc:'Vyleč spojence i sebe.',t:[10000,100000,500000],v:p=>st(p).heal|0,title:'Anděl strážný'},
   {id:'classes',cat:'fight',name:'Všestranný',desc:'Získej 10 výher s různými povoláními.',t:[1,2,3],v:p=>Object.values(st(p).byCls||{}).filter(x=>x.w>=10).length,title:'Mistr všech zbraní'},
+  {id:'streak',cat:'fight',name:'Nezastavitelný',desc:'Dosáhni série zničení bez vlastního pádu v PvP.',t:[3,5,8],v:p=>st(p).bestStreak|0,title:'Nezastavitelný'},
+  {id:'multi',cat:'fight',name:'Smršť',desc:'Znič víc soupeřů rychle po sobě: dvojité, trojité a čtyřnásobné zničení.',t:[2,3,4],v:p=>st(p).bestMulti|0,title:'Smršť'},
+  {id:'elim',cat:'fight',name:'Poslední stojící',desc:'Vyhraj zápasy v Eliminaci.',t:[3,15,50],v:p=>st(p).byMode?.elim?.w|0,title:'Poslední stojící'},
+  {id:'mutant',cat:'fight',name:'Mutant',desc:'Vyhraj zápasy v Mutaci týdne.',t:[3,15,50],v:p=>st(p).byMode?.mutant?.w|0,title:'Mutant'},
   {id:'modes',cat:'fight',name:'Všude doma',desc:'Vyhraj v různých režimech.',t:[2,4,6],v:p=>Object.entries(st(p).byMode||{}).filter(([k,x])=>k!=='campaign'&&x.w>0).length,title:'Všudybyl'},
   {id:'npc',cat:'coop',name:'Vyhlazovač',desc:'Znič nepřátelská NPC.',t:[200,2000,10000],v:p=>st(p).npcKills|0,title:'Vyhlazovač'},
   {id:'bosses',cat:'coop',name:'Přemožitel',desc:'Poraz bosse.',t:[5,50,250],v:p=>st(p).bossKills|0,title:'Přemožitel bossů'},
@@ -724,6 +764,7 @@ export const ACH=[
   {id:'legendary',cat:'prog',name:'Legendární nález',desc:'Získej legendární implantáty ze zápasů.',t:[1,5,20],v:p=>st(p).legendary|0,title:'Vyvolený'},
   {id:'skins',cat:'prog',name:'Módní ikona',desc:'Získej vzhledy.',t:[1,5,10],v:p=>p.skins?.length|0,title:'Módní ikona'},
   {id:'titles',cat:'prog',name:'Sběratel titulů',desc:'Získej tituly.',t:[1,4,8],v:p=>p.titles?.length|0,title:'Titulovaný'},
+  {id:'loyal',cat:'prog',name:'Věrnost',desc:'Dokonči celou sedmidenní řadu denních odměn.',t:[1,4,12],v:p=>st(p).loginWeeks|0,title:'Věrný'},
   {id:'sold',cat:'prog',name:'Obchodník',desc:'Prodej implantáty na tržišti.',t:[1,10,50],v:p=>st(p).sold|0,title:'Magnát'},
   {id:'rgames',cat:'ranked',name:'Soutěživý',desc:'Odehraj hodnocené zápasy (napříč sezónami).',t:[10,50,200],v:p=>st(p).rankedGames|0,title:'Soutěživý'},
   {id:'rwins',cat:'ranked',name:'Šplhání žebříčkem',desc:'Vyhraj hodnocené zápasy.',t:[5,30,120],v:p=>st(p).rankedWins|0,title:'Šplhač'},
@@ -755,6 +796,9 @@ export const NPCS={
   drone:{name:'Dron',hp:80,speed:7.5,def:0,atk:10,tech:0,pref:10,color:0xff5d6c,radius:.6,basic:{type:'shot',dmg:9,rate:.9,speed:26,range:16,size:1}},
   brute:{name:'Drtič',hp:230,speed:6,def:.15,atk:22,tech:0,pref:2,color:0xff8a3d,radius:1,basic:{type:'melee',dmg:24,rate:1.1,range:2.8}},
   sentinel:{name:'Hlídač',hp:150,speed:5.5,def:.05,atk:14,tech:0,pref:15,color:0xc08bff,radius:.8,basic:{type:'shot',dmg:15,rate:1.1,speed:30,range:21,size:1.3}},
+  // shields the enemies around it every few seconds; a priority target from wave 4
+  warden:{name:'Štítonoš',hp:260,speed:4.8,def:.2,atk:12,tech:0,pref:8,color:0x6ad8ff,radius:.9,basic:{type:'shot',dmg:8,rate:1.4,speed:24,range:12,size:1},
+    shield:{every:6,r:7,frac:.3}},
   repair:{name:'Opravář',hp:110,speed:6.5,def:0,atk:0,tech:0,pref:4,color:0x74ffb4,radius:.6,basic:null},
   shard:{name:'Pravý střep',hp:300,speed:0,def:0,atk:0,tech:0,pref:0,color:0xffd16d,radius:.9,basic:null},
   // Střelnice: a target that never moves or attacks; the client keeps its health topped up

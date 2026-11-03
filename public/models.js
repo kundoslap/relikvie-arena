@@ -144,6 +144,11 @@ export function buildNpc(key,team){
     const cr=mesh(body,new THREE.OctahedronGeometry(.8,0),new THREE.MeshStandardMaterial({color:C.color,emissive:C.color,emissiveIntensity:.6,metalness:.1,roughness:.1,transparent:true,opacity:.85}));cr.scale.set(.7,1.4,.7);
     spin=mesh(body,new THREE.TorusGeometry(1.1,.04,6,40),glow);spin.rotation.x=Math.PI/2;
     const beam=mesh(root,new THREE.CylinderGeometry(.06,.06,8,6,1,true),new THREE.MeshBasicMaterial({color:HDR(C.color,1.6),transparent:true,opacity:.5}));beam.position.y=4}
+  else if(key==='warden'){hover=1.5;
+    // shield bearer: an armoured core with a hexagonal shield frame turning around it
+    mesh(body,new THREE.OctahedronGeometry(.5,0),armor,0,0,0).scale.set(1,1.3,1);mesh(body,new THREE.SphereGeometry(.16,10,8),glow,0,.05,.42);
+    spin=mesh(body,new THREE.TorusGeometry(.95,.07,4,6),glow);spin.rotation.x=Math.PI/2;
+    for(let i=0;i<3;i++){const p=box(body,.5,.7,.06,dark,Math.cos(i*2.1)*.75,0,Math.sin(i*2.1)*.75);p.rotation.y=-i*2.1+Math.PI/2}}
   else if(key==='dummy'){
     // training target on a post: three rings facing every way
     mesh(body,new THREE.CylinderGeometry(.08,.12,1.2,8),dark,0,.6,0);mesh(body,new THREE.CylinderGeometry(.5,.6,.12,16),armor,0,.06,0);

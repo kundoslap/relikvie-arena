@@ -254,7 +254,7 @@ function renderInvites(){
   const show=X.screen==='hub'||X.screen==='lobby'||X.screen==='end';
   el.hidden=!show||!X.invites.length;
   el.innerHTML=X.invites.map(i=>{const where=i.mission?(i.mission==='echo'?'Ozvěna jádra':D.missionById(i.mission)?.name||'Kampaň'):D.MODES[i.mode]?.name||'';
-    return`<div class="inv"><div><b>${esc(i.from)}</b> tě zve do hry<small>${esc(where)} · místnost ${esc(i.code)}${i.state==='match'?' · zápas běží, nahradíš bota':''}</small></div>
+    return`<div class="inv"><div><b>${esc(i.from)}</b> ${i.mode==='duel'&&!i.mission?'tě vyzývá na souboj':'tě zve do hry'}<small>${esc(where)} · místnost ${esc(i.code)}${i.state==='match'?' · zápas běží, nahradíš bota':''}</small></div>
       <div class="btns"><button class="go sm" type="button" data-ij="${esc(i.code)}">Připojit</button><button class="ghost sm" type="button" data-ix="${esc(i.pid)}">Zavřít</button></div></div>`}).join('');
   el.querySelectorAll('[data-ij]').forEach(b=>b.onclick=()=>{const code=b.dataset.ij;X.invites=X.invites.filter(i=>i.code!==code);renderInvites();X.host?.join(code)});
   el.querySelectorAll('[data-ix]').forEach(b=>b.onclick=()=>{X.invites=X.invites.filter(i=>i.pid!==b.dataset.ix);renderInvites()});

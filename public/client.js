@@ -44,8 +44,21 @@ addEventListener('resize',resize);resize();
 function applyCfg(){
   if(Math.abs(renderer.getPixelRatio()-pixelRatio())>.001){renderer.setPixelRatio(pixelRatio());composer.setPixelRatio?.(pixelRatio());resize()}
   bloomPass.enabled=Cfg.get('bloom');G.slotsFor='';document.body.classList.toggle('nonames',!Cfg.get('names'));$('#fps').hidden=!Cfg.get('fps');
+  applyTeamColors();
 }
 Cfg.onChange(applyCfg);
+// team colours from the settings: CSS variables for the interface, TEAM_COL (shared with the models) for the 3D world.
+// Heroes on the field and the team markers are rebuilt at once.
+const teamHex=t=>Cfg.teamColors()[t];
+function applyTeamColors(){
+  const c=Cfg.teamColors(),n=c.map(h=>parseInt(h.slice(1),16));
+  for(const t of [0,1])document.documentElement.style.setProperty('--t'+t,c[t]);
+  if(n[0]===TEAM_COL[0]&&n[1]===TEAM_COL[1])return;
+  TEAM_COL[0]=n[0];TEAM_COL[1]=n[1];
+  for(const v of [...views.values()]){const info=G.roster.get(v.id);dropView(v);if(info)ensureView(info)}
+  if(arena){const k=arena.mapKey;arena.dispose();arena=null;setMap(k)}
+  if(G.info)buildFlags(G.info);
+}
 
 let arena=null;
 function setMap(key){if(!MAPS[key])key='core';if(arena&&arena.mapKey===key)return;arena?.dispose();arena=buildArena(scene,key,hiQ)}
@@ -323,7 +336,7 @@ const EV={
     else if(e.k==='boss'){feed(`<span class="g">${esc(e.n)} poražen</span>`);banner(`${e.n} poražen`,e.a?`Rozhodující zásah: ${nameOf(e.a)}`:'',3,'var(--gold)');ui('relicMine',{dur:1.2})}
   },
   relicUp:()=>{ringFx({x:0,z:0},0xffc66d,.5,6,.8);columnFx({x:0,z:0},0xffc66d);banner('Relikvie se objevila','Střed arény · +1 bod a dočasná síla',2.4);ui('relicUp',{dur:1})},
-  atk:e=>{const v=views.get(e.i);if(v){v.attackAnim=1;atkSound(e,v)}},
+  atk:e=>{const v=views.get(e.i);if(!v)return;if(e.s===5){v.emote=null;sfx('evade',v,{key:e.i,gap:.05,vol:e.i===G.you?1:.55,k:v.k});return}v.attackAnim=1;atkSound(e,v)},
   arc:e=>arcFx(e,e.f,e.c,e.r),
   slash:e=>slashFx(e,e.f,e.c,e.tl),
   ring:e=>ringFx(e,e.c,e.a,e.b,e.d),
@@ -381,8 +394,7 @@ addEventListener('keydown',e=>{
   }
   keys[e.code]=true;
   if(!inGame()||G.paused||e.repeat)return;
-  // Space stays a second key for the ultimate unless it was bound to something else
-  const i=['q','e','r','ult','tac'].findIndex(a=>Cfg.key(a)===e.code),cast=i>=0?i:e.code==='Space'&&!Object.values(Cfg.get('keys')).includes('Space')?3:-1;
+  const cast=CAST_KEYS.findIndex(a=>Cfg.key(a)===e.code);
   if(cast>=0){e.preventDefault();G.pendingCast.push(cast)}
 });
 addEventListener('keyup',e=>{keys[e.code]=false;if(e.code===Cfg.key('score'))$('#board').hidden=true});
@@ -456,7 +468,7 @@ const TUT_STEPS=[
   {k:'attack',ti:'Útok',tx:()=>isTouch?'Tlačítkem Útok zaútoč na cvičný dron. Míří se samo na nejbližšího soupeře.':'Miř <kbd>myší</kbd> a <kbd>levým tlačítkem</kbd> znič cvičný dron.'},
   {k:'skills',ti:'Schopnosti',tx:()=>`Použij všechny tři schopnosti ${isTouch?'tlačítky vpravo':kbd('q','e','r')}. Stojí energii (fialový pruh) a pak se chvíli nabíjejí.`},
   {k:'ult',ti:'Ultimátka',tx:()=>`Ultimátka se nabíjí bojem. Teď ji máš nabitou: odpal ji ${isTouch?'zlatým tlačítkem':'klávesou '+kbd('ult')}.`},
-  {k:'tactic',ti:'Taktická akce',tx:()=>`Taktická akce nestojí energii. Výchozí je Úhyb: rychlý skok s krátkou nezranitelností. Použij ji ${isTouch?'modrým tlačítkem':'klávesou '+kbd('tac')}.`},
+  {k:'tactic',ti:'Taktická akce',tx:()=>`Taktická akce nestojí energii. Výchozí je Úhyb: rychlý skok s krátkou nezranitelností. Použij ji ${isTouch?'modrým tlačítkem':'klávesou '+kbd('tac')}. Navíc máš vždy po ruce úskok ${isTouch?'(fialové tlačítko)':kbd('evade')} s krátkým čekáním, jiný pro každé povolání.`},
   {k:'base',ti:'Základna',tx:()=>'Jsi zraněný. Vrať se na svou základnu (modrý kruh na okraji arény): léčí a dobíjí energii.'},
   {k:'relic',ti:'Relikvie',tx:()=>'Ve středu arény se objevila relikvie. Seber ji: týmu dá bod a tobě na 20 s sílu podle povolání.'}
 ];
@@ -635,6 +647,7 @@ function onNet(m){
     case 'error':Hub.netError(m.msg);if(!$('#lobby').hidden)Hub.toast(m.msg,true);if(G.mode!=='on'&&$('#lobby').hidden)closeWs();break;
     case 'lobby':
       G.lobby=m;G.solo=m.solo;Social.roomReset(m.solo?null:m.code);
+      if(G.challenge&&m.state==='lobby'&&m.host===m.you){const fid=G.challenge;G.challenge=null;wsSend({type:'cfg',rules:{bots:false}});Social.invite(fid)}
       saveRejoin(m.state==='match'&&m.rk&&!G.ended?{code:m.code,rk:m.rk}:null);
       if(R.until){stopResume();Hub.toast('Spojení obnoveno, jsi zpět ve hře.')}
       if(!m.solo){try{history.replaceState(null,'','?room='+m.code)}catch{}}
@@ -671,6 +684,8 @@ const hubCallbacks={
   quick:o=>connect({type:'hello',quick:true,mode:o.mode,diff:o.diff,cls:o.cls,name:o.name}),
   ranked:(mode,o)=>connect({type:'hello',ranked:true,mode,cls:o.cls,name:o.name}),
   tutorial:o=>{closeWs();startTutorial(o)},
+  // challenge a friend: a private Souboj room without bots; the invite goes out as soon as the room exists
+  challenge:(fid,o)=>{G.challenge=fid;connect({type:'hello',create:true,mode:'duel',map:'archive',diff:'normal',cls:o.cls,name:o.name})},
   range:o=>{closeWs();startRange(o)},
   spectate:pid=>connect({type:'spectate',friend:pid})
 };
@@ -749,7 +764,7 @@ function renderSpecBar(){
   el.querySelectorAll('[data-sp]').forEach(b=>b.onclick=()=>specSwitch(+b.dataset.sp));$('#specLeave').onclick=()=>toHub();
 }
 function specSwitch(d){const S2=G.spec;if(!S2)return;const H=S2.heroes,i=H.findIndex(x=>x.i===S2.target),n=H[(i+d+H.length)%H.length];if(n)wsSend({type:'specTarget',target:n.i})}
-function toHub(){closeWs();saveRejoin(null);G.lobby=null;G.spec=null;renderSpecBar();Social.roomReset(null);try{history.replaceState(null,'',location.pathname)}catch{}startAttract();Hub.showHub()}
+function toHub(){closeWs();saveRejoin(null);G.lobby=null;G.challenge=null;G.spec=null;renderSpecBar();Social.roomReset(null);try{history.replaceState(null,'',location.pathname)}catch{}startAttract();Hub.showHub()}
 function setPause(p){
   if(!inGame())return;G.paused=p;mouseDown=false;
   $('#pause').hidden=!p;
@@ -814,15 +829,17 @@ $('#pingBtn').onclick=()=>sendSignal('here',autoAim());
 $('#wheelBtn').onclick=()=>toggleWheel();
 
 // ---------- HUD ----------
+// key binding of each action slot: three abilities, ultimate, tactical action, evade
+const CAST_KEYS=['q','e','r','ult','tac','evade'];
 function mySkills(){const me=G.roster.get(G.you);if(!me||me.kind!=='h')return null;const ids=G.last?.me?.sk||['c0','c1','c2'];const tac=G.last?.me?.tc?.[0]||'dodge';return{k:me.k,ids,tac,key:me.k+':'+ids.join(',')+':'+tac,defs:ids.map(id=>S.skillDef(me.k,id)||CLASSES[me.k].skills[0])}}
 function buildSlots(){
   const s0=mySkills();if(!s0)return;
   G.slotsFor=s0.key;const C=CLASSES[s0.k],el=$('#slots');el.innerHTML='';
-  const T={...S.TACTICS[s0.tac],cost:0};
-  [...s0.defs,C.ult,T].forEach((s,i)=>{
+  const T={...S.TACTICS[s0.tac],cost:0},E={...S.EVADES[s0.k],cost:0};
+  [...s0.defs,C.ult,T,E].forEach((s,i)=>{
     const w=document.createElement('div');w.className='slotwrap';
-    w.innerHTML=`<button type="button" class="slot${i===3?' ult':i===4?' tac':''}" style="--c:${i===3?'#ffc66d':i===4?'#9fd8ff':C.css}" aria-label="${s.name}"><span class="k">${esc(Cfg.keyLabel(Cfg.key(['q','e','r','ult','tac'][i])))}</span>${svg(s.icon)}${i<3?`<span class="c">${s.cost}</span>`:''}<span class="t"></span></button>
-      <div class="tip"><b>${s.name}</b>${s.desc}${i<3?`<br><small>${s.cost} energie · čekání ${s.cd} s</small>`:i===4?`<br><small>Taktická akce · čekání ${s.cd} s · bez energie</small>`:'<br><small>Nabíjí se poškozením a časem</small>'}</div>`;
+    w.innerHTML=`<button type="button" class="slot${i===3?' ult':i===4?' tac':i===5?' eva':''}" style="--c:${i===3?'#ffc66d':i===4?'#9fd8ff':i===5?'#e4d2ff':C.css}" aria-label="${s.name}"><span class="k">${esc(Cfg.keyLabel(Cfg.key(CAST_KEYS[i])))}</span>${svg(s.icon)}${i<3?`<span class="c">${s.cost}</span>`:''}<span class="t"></span></button>
+      <div class="tip"><b>${s.name}</b>${s.desc}${i<3?`<br><small>${s.cost} energie · čekání ${s.cd} s</small>`:i===4?`<br><small>Taktická akce · čekání ${s.cd} s · bez energie</small>`:i===5?`<br><small>Úskok · čekání ${String(s.cd).replace('.',',')} s · bez energie · ve směru pohybu</small>`:'<br><small>Nabíjí se poškozením a časem</small>'}</div>`;
     w.firstElementChild.addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagation();if(inGame()&&!G.paused)G.pendingCast.push(i)});
     el.appendChild(w);
   });
@@ -839,7 +856,7 @@ function drawHUD(){
     if(mode==='ctf'&&s.fg){const my=meInfo?.t??0;mb=`<div class="flags">${[my,1-my].map(team=>`<div class="fl${team}"><b>${team===my?'Vaše':'Soupeřova'} relikvie</b> ${flagText(s.fg[team])}</div>`).join('')}</div>`}
     if(mode==='elim'&&s.el){const [n,pause,,a0,a1,shrinkIn]=s.el,my=meInfo?.t??0,size=S.teamSize(mode),dots=(k,t)=>`<span class="t${t}">${'●'.repeat(k)}${'○'.repeat(Math.max(0,size-k))}</span>`;
       mb=`<div class="elimbar"><b>Kolo ${n}</b> ${dots(my?a1:a0,my)} <small>proti</small> ${dots(my?a0:a1,1-my)}<small>${pause?`další kolo za ${pause} s`:shrinkIn?`kruh se zmenší za ${shrinkIn} s`:'aréna se zmenšuje'}</small></div>`}
-    if(mode==='control')mb=`<div class="pts">${s.pt.map(([o,pr],i)=>`<div class="pt${o>=0?' o'+o:''}" style="background:linear-gradient(0deg,${pr<0?'rgba(63,184,255,.35)':'rgba(255,63,142,.35)'} ${Math.abs(pr)}%,var(--panel) 0)">${'ABC'[i]}</div>`).join('')}</div>`}
+    if(mode==='control')mb=`<div class="pts">${s.pt.map(([o,pr],i)=>`<div class="pt${o>=0?' o'+o:''}" style="background:linear-gradient(0deg,color-mix(in srgb,var(--t${pr<0?0:1}) 35%,transparent) ${Math.abs(pr)}%,var(--panel) 0)">${'ABC'[i]}</div>`).join('')}</div>`}
   else{const wv=s.wv,W=MODES[mode]?.waves;setTxt('sL',W?'Vlna':'Životy');setTxt('s0',W?wv?.[0]??0:s.lv);setTxt('sR',W?'Životy':'Boss');
     setTxt('s1',W?s.lv:(s.bs?Math.ceil(s.bs[1]/s.bs[2]*100)+'%':'—'));
     setTxt('scoreSub',W?(wv&&wv[1]?`pauza ${wv[1]} s`:`nepřátel ${wv?.[2]??0}`):'životy týmu');}
@@ -856,7 +873,8 @@ function drawHUD(){
     const f=mv.fl,tags=[];if(me.rt>0)tags.push(`relikvie ${me.rt} s`);if(me.dr)tags.push(`průnik ×${me.dr}`);if(f&32)tags.push('maskování');if(me.am)tags.push('přepad');if(f&1)tags.push('omráčen');if(f&2)tags.push('umlčen');if(f&8)tags.push('zpomalen');if(f&4)tags.push('krvácíš');if(f&16384)tags.push('hoříš');if(f&32768)tags.push('otrávený · léčení −30 %');if(f&65536)tags.push('šok');if(f&1024)tags.push('BŘEMENO · uteč od týmu');if(f&2048)tags.push(`mor nanitů · ${me.nn} zásahů${me.tc?.[0]==='decon'?' · T: Dekontaminace':''}`);if(f&4096)tags.push('dekontaminace');if(f&8192)tags.push('označen');
     setTxt('meStatus',tags.join(' · ')||C.talent);
     document.querySelectorAll('#slots .slot').forEach((el,i)=>{
-      if(i===4){const [tk,tc]=me.tc||['dodge',0],cd=S.TACTICS[tk]?.cd||1;el.style.setProperty('--cd',Math.min(1,tc/cd).toFixed(3));el.querySelector('.t').textContent=tc>0?Math.ceil(tc):''}
+      if(i===5){const ev=me.ev||0,cd=S.EVADES[meInfo.k]?.cd||4;el.style.setProperty('--cd',Math.min(1,ev/cd).toFixed(3));el.querySelector('.t').textContent=ev>0?(ev<1?ev.toFixed(1).replace('.',','):Math.ceil(ev)):''}
+      else if(i===4){const [tk,tc]=me.tc||['dodge',0],cd=S.TACTICS[tk]?.cd||1;el.style.setProperty('--cd',Math.min(1,tc/cd).toFixed(3));el.querySelector('.t').textContent=tc>0?Math.ceil(tc):''}
       else if(i===3){el.style.setProperty('--cd',(1-me.u/100).toFixed(3));el.classList.toggle('ready',me.u>=100);el.querySelector('.t').textContent=me.u>=100?'':me.u+'%'}
       else{const sk=(sk0=>sk0?.defs[i])(mySkills())||C.skills[i];el.style.setProperty('--cd',Math.min(1,me.c[i]/sk.cd).toFixed(3));el.querySelector('.t').textContent=me.c[i]>0?Math.ceil(me.c[i]):'';el.classList.toggle('poor',me.e<sk.cost)}
     });
@@ -870,20 +888,20 @@ function drawHUD(){
   const map=MAPS[info.map],W=mini.width,sc=W/((map.r+2)*2),cx=W/2,toM=x=>cx+x*sc;
   mg.clearRect(0,0,W,W);mg.save();mg.beginPath();mg.arc(cx,cx,cx-2,0,Math.PI*2);mg.clip();
   mg.strokeStyle='rgba(143,166,255,.5)';mg.lineWidth=3;mg.beginPath();mg.arc(cx,cx,map.r*sc,0,Math.PI*2);mg.stroke();
-  map.bases.forEach((b,i)=>{mg.fillStyle=i?'rgba(255,63,142,.25)':'rgba(63,184,255,.25)';mg.beginPath();mg.arc(toM(b.x),toM(b.z),4*sc,0,Math.PI*2);mg.fill()});
+  map.bases.forEach((b,i)=>{mg.globalAlpha=.25;mg.fillStyle=teamHex(i);mg.beginPath();mg.arc(toM(b.x),toM(b.z),4*sc,0,Math.PI*2);mg.fill();mg.globalAlpha=1});
   mg.fillStyle='rgba(255,106,26,.45)';for(const h of map.hazards){mg.beginPath();mg.arc(toM(h.x),toM(h.z),h.r*sc,0,Math.PI*2);mg.fill()}
   (map.portals||[]).forEach((pair,i)=>{mg.strokeStyle=i?'#ff7de9':'#7df9ff';mg.lineWidth=3;for(const p of pair){mg.beginPath();mg.arc(toM(p.x),toM(p.z),Math.max(3,1.6*sc),0,Math.PI*2);mg.stroke()}});
   mg.fillStyle='#2a3350';for(const [x,z,r] of map.pillars){mg.beginPath();mg.arc(toM(x),toM(z),r*sc,0,Math.PI*2);mg.fill()}
-  if(mode==='control')map.points.forEach((p,i)=>{const o=s.pt[i]?.[0];mg.strokeStyle=o===0?'#3fb8ff':o===1?'#ff3f8e':'#ffc66d';mg.lineWidth=4;mg.beginPath();mg.arc(toM(p.x),toM(p.z),4*sc,0,Math.PI*2);mg.stroke()});
+  if(mode==='control')map.points.forEach((p,i)=>{const o=s.pt[i]?.[0];mg.strokeStyle=o===0||o===1?teamHex(o):'#ffc66d';mg.lineWidth=4;mg.beginPath();mg.arc(toM(p.x),toM(p.z),4*sc,0,Math.PI*2);mg.stroke()});
   if(mode==='elim'&&s.el&&s.el[2]<map.r){mg.fillStyle='rgba(255,40,80,.22)';mg.beginPath();mg.arc(cx,cx,cx,0,Math.PI*2);mg.arc(cx,cx,s.el[2]*sc,0,Math.PI*2,true);mg.fill();
     mg.strokeStyle='#ff3f5e';mg.lineWidth=3;mg.beginPath();mg.arc(cx,cx,s.el[2]*sc,0,Math.PI*2);mg.stroke()}
   if(s.rl[0]&&S.arenaLike(mode)){mg.fillStyle='#ffc66d';mg.beginPath();mg.arc(cx,cx,7,0,Math.PI*2);mg.fill()}
   for(const L of s.lt){mg.fillStyle=RARITIES[L[3]].color;mg.fillRect(toM(L[1])-4,toM(L[2])-4,8,8)}
-  if(mode==='ctf'&&s.fg)s.fg.forEach(([st,x,z],team)=>{const h=(map.flags||map.bases)[team];mg.strokeStyle=team?'#ff3f8e':'#3fb8ff';mg.lineWidth=3;mg.beginPath();mg.arc(toM(h.x),toM(h.z),9,0,Math.PI*2);mg.stroke();
-    mg.fillStyle=team?'#ff3f8e':'#3fb8ff';mg.save();mg.translate(toM(x),toM(z));mg.rotate(Math.PI/4);const k=st===2?7+3*Math.sin(performance.now()/120):8;mg.fillRect(-k/2,-k/2,k,k);mg.restore()});
+  if(mode==='ctf'&&s.fg)s.fg.forEach(([st,x,z],team)=>{const h=(map.flags||map.bases)[team];mg.strokeStyle=teamHex(team);mg.lineWidth=3;mg.beginPath();mg.arc(toM(h.x),toM(h.z),9,0,Math.PI*2);mg.stroke();
+    mg.fillStyle=teamHex(team);mg.save();mg.translate(toM(x),toM(z));mg.rotate(Math.PI/4);const k=st===2?7+3*Math.sin(performance.now()/120):8;mg.fillRect(-k/2,-k/2,k,k);mg.restore()});
   for(const p of pingMarks){mg.strokeStyle='#'+SIG_COL[p.k].toString(16).padStart(6,'0');mg.lineWidth=4;mg.beginPath();mg.arc(toM(p.x),toM(p.z),10+4*Math.sin(performance.now()/120),0,Math.PI*2);mg.stroke()}
   for(const v of views.values()){if(v.dead||v.hid)continue;
-    mg.fillStyle=v.t?'#ff3f8e':'#3fb8ff';mg.beginPath();mg.arc(toM(v.x),toM(v.z),v.kind==='b'?13:v.kind==='n'?4:v.id===G.you?9:7,0,Math.PI*2);mg.fill();
+    mg.fillStyle=teamHex(v.t?1:0);mg.beginPath();mg.arc(toM(v.x),toM(v.z),v.kind==='b'?13:v.kind==='n'?4:v.id===G.you?9:7,0,Math.PI*2);mg.fill();
     if(v.id===G.you){mg.strokeStyle='#ffc66d';mg.lineWidth=3;mg.stroke()}}
   mg.restore();
 }

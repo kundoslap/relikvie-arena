@@ -1,6 +1,6 @@
 // Relikvie Aréna — authoritative simulation. Runs on the server and, for offline matches, in the browser.
 // Pure logic: no rendering. Visual effects leave the simulation as events in M.events.
-import {CLASSES,CLASS_KEYS,MAPS,MODES,NPCS,BOSSES,BOSS_KEYS,ENDLESS_MODS,ECHO_MODS,TACTICS,BOT_TACTIC,rollItem,skillDef,MASTERY,masteryKey,BURN,POISON_HEAL,MASTERY_BASIC,MUTATORS,mutatorsOfWeek,arenaLike} from './data.js';
+import {CLASSES,CLASS_KEYS,MAPS,MODES,NPCS,BOSSES,BOSS_KEYS,ENDLESS_MODS,ECHO_MODS,TACTICS,BOT_TACTIC,rollItem,skillDef,MASTERY,masteryKey,BURN,POISON_HEAL,MASTERY_BASIC,MUTATORS,mutatorsOfWeek,arenaLike,EVADES} from './data.js';
 export * from './data.js';
 
 export const MATCH_TIME=360, RELIC_EVERY=40, TICK=1/30, TEAM_SIZE=3;
@@ -89,7 +89,7 @@ function spawnAt(u,x,z,M){
 export function resetUnit(u,M){
   const b=M.map.bases[u.team],a=rnd(0,Math.PI*2),r=rnd(0,2.4);
   u.x=b.x+Math.cos(a)*r;u.z=b.z+Math.sin(a)*r;u.vx=u.vz=0;u.face=u.team===0?Math.PI/2:-Math.PI/2;
-  u.hp=u.maxHp;u.dlog=[];u.shield=u.pass.has('reserve')?60:0;u.energy=u.uniq.has('capacitor')?100:Math.min(100,60+m(u,'start'));u.cds=[0,0,0];u.atkCd=0;u.dead=false;u.respawn=0;
+  u.hp=u.maxHp;u.dlog=[];u.ecd=0;u.shield=u.pass.has('reserve')?60:0;u.energy=u.uniq.has('capacitor')?100:Math.min(100,60+m(u,'start'));u.cds=[0,0,0];u.atkCd=0;u.dead=false;u.respawn=0;
   u.st={stun:0,slow:0,silence:0,cloak:0,inv:1.5,relic:0,bleed:null,hot:null,fieldAcc:0,hazAcc:0,haste:0,hasteK:1,bulwark:0,nanite:null,decon:0,marked:0};
   u.ambush=0;u.ambushK=0;u.drive=null;u.bomb=null;u.hurtT=-99;u.dash=null;u.lastHit=null;u.lastHitT=-99;u.ai.retreat=false;u.ai.lane=rnd(-12,12);u.hist=[];
 }
@@ -528,8 +528,26 @@ function masteryAfter(M,u,i,br){
   if(ult&&br[3]===1)u.cds=u.cds.map(c=>Math.max(0,c-2));
   if(!ult&&br[3]===1)u.mfocus={t:M.time+3,i};
 }
+// ---------- evade (Space) ----------
+// dir: where the player is moving; without movement the hero evades the way it faces
+function evade(M,u,dir){
+  if(u.kind!=='hero'||u.dead||(u.ecd||0)>0||u.dash||u.st.stun>0||M.state!=='play')return false;
+  const E=EVADES[u.clsKey];if(!E)return false;
+  let dx=dir?.x||0,dz=dir?.z||0,l=Math.hypot(dx,dz);if(l<.3){dx=Math.sin(u.face);dz=Math.cos(u.face);l=1}dx/=l;dz/=l;
+  const s=u.st,at={x:r2(u.x),z:r2(u.z)};
+  switch(u.clsKey){
+    case 'striker':s.inv=Math.max(s.inv,.3);u.dash={dx,dz,spd:30,t:6.5/30,after:.1};fx(M,{t:'burst',...at,y:.6,c:0xffd27a,n:16,s:4,u:1,l:.35});break;
+    case 'guardian':s.bulwark=Math.max(s.bulwark,.8);u.dash={dx,dz,spd:22,t:4.5/22,after:.1,hits:{r:1.7,dmg:atk(M,u)*.6,kb:2.5,set:new Set()}};
+      fx(M,{t:'dome',...at,c:0x5dffa8,r:1.4,d:.4});break;
+    case 'technician':s.inv=Math.max(s.inv,.15);fx(M,{t:'burst',...at,y:1,c:0x6acbff,n:22,s:3,u:2,l:.4});
+      u.dash={dx,dz,spd:80,t:7/80,after:0,end:()=>fx(M,{t:'burst',x:r2(u.x),z:r2(u.z),y:1,c:0x6acbff,n:26,s:4,u:2,l:.45})};break;
+    case 'pyro':s.inv=Math.max(s.inv,.25);fireZone(M,u,{x:u.x,z:u.z},2.2,2,.25);u.dash={dx,dz,spd:28,t:5.5/28,after:.1};break;
+  }
+  u.face=Math.atan2(dx,dz);u.ecd=E.cd;fx(M,{t:'atk',i:u.id,s:5});return true;
+}
 export function cast(M,u,i,pt){
   if(i===4)return tactical(M,u,pt||{x:u.aimX,z:u.aimZ});
+  if(i===5)return evade(M,u,pt);
   if(u.kind!=='hero'||u.dead||u.st.stun>0||u.st.silence>0||u.dash||M.state!=='play')return false;
   let s=null,id=null;
   if(i!==3)id=u.prof.skills[i];
@@ -572,10 +590,11 @@ export function walk(u,mx,mz,dt,frozen,map){
   u.x+=u.vx*dt;u.z+=u.vz*dt;collide(u,map);
 }
 function moveUnit(M,u,mx,mz,dt){
-  if(u.dash){const D=u.dash;u.x+=D.dx*D.spd*dt;u.z+=D.dz*D.spd*dt;D.t-=dt;collide(u,M.map);u.vx=D.dx*D.spd;u.vz=D.dz*D.spd;
+  // the last step covers only the time left, so a dash goes exactly its length
+  if(u.dash){const D=u.dash,st=Math.min(dt,Math.max(0,D.t));u.x+=D.dx*D.spd*st;u.z+=D.dz*D.spd*st;D.t-=dt;collide(u,M.map);u.vx=D.dx*D.spd;u.vz=D.dz*D.spd;
     if(D.hits)for(const e of foes(M,u))if(!D.hits.set.has(e)&&d2(e,u)<D.hits.r+e.radius){D.hits.set.add(e);damage(M,e,D.hits.dmg,u,{color:u.C.color});
       const kx=e.x-u.x,kz=e.z-u.z,l=Math.hypot(kx,kz)||1;e.x+=kx/l*D.hits.kb;e.z+=kz/l*D.hits.kb;collide(e,M.map)}
-    if(D.t<=0){u.dash=null;u.vx*=.2;u.vz*=.2;D.end&&D.end()}return}
+    if(D.t<=0){u.dash=null;const k=D.after??.2;u.vx*=k;u.vz*=k;D.end&&D.end()}return}
   walk(u,mx,mz,dt,M.state==='countdown',M.map);
 }
 // ---------- teleport gates ----------
@@ -676,7 +695,7 @@ function updStatus(M,u,dt){
   u.energy=Math.min(100,u.energy+dt*9*(1+m(u,'regen')/100)*(echo?1.8:1)*(M.emod.has('surge')?1.5:1));u.ult=Math.min(100,u.ult+dt*1.2*(1+m(u,'ult')/100));
   if(u.pass.has('recovery')&&M.time-u.hurtT>4&&u.hp<u.maxHp)u.hp=Math.min(u.maxHp,u.hp+u.maxHp*.015*dt);
   for(let i=0;i<3;i++)if(u.cds[i]>0)u.cds[i]=Math.max(0,u.cds[i]-dt);
-  if(u.tcd>0)u.tcd=Math.max(0,u.tcd-dt);
+  if(u.tcd>0)u.tcd=Math.max(0,u.tcd-dt);if(u.ecd>0)u.ecd=Math.max(0,u.ecd-dt);
   if(u.atkCd>0)u.atkCd-=dt;
   if(d2(u,M.map.bases[u.team])<4.2){if(u.hp<u.maxHp)u.hp=Math.min(u.maxHp,u.hp+dt*45);u.energy=Math.min(100,u.energy+dt*25)}
   if(M.D.pvp&&d2(u,M.map.bases[1-u.team])<5){s.fieldAcc+=dt;while(s.fieldAcc>=.5&&!u.dead){s.fieldAcc-=.5;damage(M,u,30,null,{dot:true,color:TEAM_COL[1-u.team]})}}
@@ -700,7 +719,7 @@ function ctfGoal(M,u,t,d){
 function pickTarget(u,M){
   let best=null,bs=1e9;
   for(const e of foes(M,u)){if(!visibleTo(u,e))continue;const d=d2(u,e);if(d>(M.D.pvp?32:80))continue;
-    const s=d+(e.hp/e.maxHp)*8+(blocked(M.map,u,e)?8:0)+(e===u.ai.target?-3:0)+(e.kind==='boss'?4:0);if(s<bs){bs=s;best=e}}
+    const s=d+(e.hp/e.maxHp)*8+(blocked(M.map,u,e)?8:0)+(e===u.ai.target?-3:0)+(e.kind==='boss'?4:0)+(e.C.shield?-8:0);if(s<bs){bs=s;best=e}}
   return best;
 }
 function botSkills(M,u,t,d,aim,seen){
@@ -777,6 +796,9 @@ function botUpdate(M,u,dt){
   [wx,wz]=steer(M,u,wx,wz);
   moveUnit(M,u,wx,wz,dt);
   const play=M.state==='play';
+  // evade out of a warned area (boss telegraphs, blasts), more reliably on higher difficulty
+  if(thinkNow&&play&&!(u.ecd>0)&&!u.dash){const g=M.danger.find(g=>g.own!==u&&d2(u,g)<g.r+.5);
+    if(g&&Math.random()<({easy:.25,normal:.5,hard:.8}[M.diffKey]??.5)){let ex=u.x-g.x,ez=u.z-g.z;if(Math.hypot(ex,ez)<.5){ex=Math.cos(u.face);ez=-Math.sin(u.face)}evade(M,u,{x:ex,z:ez})}}
   if(t){
     const B=u.C.basic,lead=B.speed?d/B.speed:0;
     const aim={x:t.x+t.vx*lead+ai.err.x,z:t.z+t.vz*lead+ai.err.z};
@@ -809,6 +831,12 @@ function npcUpdate(M,u,dt){
       ai.acc+=dt;if(ai.acc>=.5){ai.acc-=.5;if(d<12&&tgt.hp<tgt.maxHp&&M.state==='play'){heal(M,tgt,(tgt.kind==='boss'?40:20)*.5,null,true);fx(M,{t:'beam',a:[r2(u.x),1.4,r2(u.z)],b:[r2(tgt.x),1.4,r2(tgt.z)],c:0x74ffb4,w:.05,d:.3})}}}
     [wx,wz]=steer(M,u,wx,wz);moveUnit(M,u,wx,wz,dt);return;
   }
+  // Štítonoš: a shield for itself and the allies around it, every few seconds
+  const SH=u.C.shield;
+  if(SH&&M.state==='play'){ai.shT=(ai.shT??2)-dt;
+    if(ai.shT<=0){ai.shT=SH.every;const near=friends(M,u).filter(x=>!x.dead&&x.kind!=='boss'&&d2(u,x)<SH.r);
+      for(const x of near){x.shield=Math.max(x.shield,Math.round(x.maxHp*SH.frac));if(x!==u)fx(M,{t:'beam',a:[r2(u.x),1.6,r2(u.z)],b:[r2(x.x),1.2,r2(x.z)],c:0x6ad8ff,w:.06,d:.35})}
+      fx(M,{t:'burst',x:r2(u.x),z:r2(u.z),y:1.2,c:0x6ad8ff,n:24,s:SH.r,u:1,l:.5})}}
   if(ai.think<=0){ai.think=rnd(.4,.8);let best=null,bd=1e9;for(const e of foes(M,u)){if(!visibleTo(u,e))continue;const d=d2(u,e);if(d<bd){bd=d;best=e}}ai.target=best}
   const t=ai.target&&!ai.target.dead?ai.target:null;let wx=0,wz=0;
   if(t){const d=d2(u,t),seen=!blocked(M.map,u,t,.15);let tx=t.x-u.x,tz=t.z-u.z;const l=Math.hypot(tx,tz)||1;tx/=l;tz/=l;
@@ -1011,7 +1039,7 @@ function humanUpdate(M,u,dt){
     else{const dx=u.aimX-u.x,dz=u.aimZ-u.z;if(dx*dx+dz*dz>.01)u.face=Math.atan2(dx,dz)}
   }
   const aim={x:u.aimX,z:u.aimZ};
-  for(const i of (inp.cast||[]))if(i>=0&&i<=4)cast(M,u,i|0,aim);
+  for(const i of (inp.cast||[]))if(i===5)evade(M,u,{x:mx,z:mz});else if(i>=0&&i<=4)cast(M,u,i|0,aim);
   if(inp.atk&&M.state==='play')basic(M,u,aim);
 }
 
@@ -1102,7 +1130,9 @@ function spawnWave(M){
     if(M.D.endless){M.recent??=[];const pool=BOSS_KEYS.filter(k=>!M.recent.includes(k));key=pool[Math.floor(Math.random()*pool.length)];M.recent=[...M.recent,key].slice(-4)}
     spawnBoss(M,key,.25+.04*w);for(let k=0;k<2;k++){const p=spot();addNpc(M,'drone',p.x,p.z,hp,dmg)}}
   else{const n=3+Math.round(Math.min(w,16)*1.4)+(h-1)*2;
-    for(let k=0;k<n;k++){const p=spot(),r=Math.random();const key=w>=3&&r<.2?'sentinel':w>=2&&r<.45?'brute':'drone';later(M,k*.25,()=>addNpc(M,key,p.x,p.z,hp,dmg))}
+    // Štítonoš from wave 4: one, plus one more every 6 waves
+    let wardens=w>=4?1+Math.floor((w-4)/6):0;
+    for(let k=0;k<n;k++){const p=spot(),r=Math.random();const key=wardens>0&&k>=n/3&&r<.25?(wardens--,'warden'):w>=3&&r<.2?'sentinel':w>=2&&r<.45?'brute':'drone';later(M,k*.25,()=>addNpc(M,key,p.x,p.z,hp,dmg))}
     M.waveSpawnUntil=M.time+n*.25+.5}
   fx(M,{t:'wave',w,b:w%5===0?1:0});
 }
@@ -1174,6 +1204,6 @@ export function snapshotFor(M,uid,events){
     rg:M.rings.map(g=>[g.id,r2(g.x),r2(g.z),r2(g.r),g.color]),
     lt:M.loot.filter(L=>L.owner===uid).map(L=>[L.id,r2(L.x),r2(L.z),L.item.r]),
     me:me?{i:me.id,e:Math.floor(me.energy),u:Math.floor(me.ult),c:me.cds.map(c=>Math.round(c*10)/10),am:me.ambush>0?1:0,rt:Math.ceil(me.st.relic),q:me.lastSeq,
-      x:me.x,z:me.z,vx:me.vx,vz:me.vz,ss:[me.st.slow,me.st.stun,me.st.cloak],spd:r2(speedOf(me)),bag:me.bag.length,sk:me.prof.skills,dr:me.drive?.n||0,tc:[me.tactic,Math.round(me.tcd*10)/10],nn:me.st.nanite?me.st.nanite.hits:0}:null,
+      x:me.x,z:me.z,vx:me.vx,vz:me.vz,ss:[me.st.slow,me.st.stun,me.st.cloak],spd:r2(speedOf(me)),bag:me.bag.length,sk:me.prof.skills,dr:me.drive?.n||0,tc:[me.tactic,Math.round(me.tcd*10)/10],ev:Math.round((me.ecd||0)*10)/10,nn:me.st.nanite?me.st.nanite.hits:0}:null,
     ev:events.filter(e=>!(e.g&&me&&e.t!=='death'&&e.t!=='spawn'&&e.t!=='loot'&&!vis(M.units.find(u=>u.id===e.g)||me))&&!(e.t==='loot'&&e.g!==uid)&&!(e.only&&e.only!==uid))};
 }

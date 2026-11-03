@@ -205,7 +205,7 @@ export function createMeta(db,{admins=''}={}){
     return{...p,xpNext:p.level>=D.MAX_LEVEL?0:D.xpFor(p.level),echo:D.echoOfWeek(D.weekKey()),
       campaignView:D.MISSIONS.map(m=>({id:m.id,open:missionOpen(p,m),cleared:p.campaign.cleared.includes(m.id)})),echoOpen:echoOpen(p),
       skinState:Object.fromEntries(D.CLASS_KEYS.map(k=>[k,D.SKINS[k].map(s=>({k:s.k,owned:D.skinOwned(p,k,s.k)}))])),
-      listings:Object.values(doc.market).filter(l=>l.seller===p.id).length,achView:achView(p),admin:isAdmin(p),muteUntil:muted(p),loginView:loginState(p)};
+      listings:Object.values(doc.market).filter(l=>l.seller===p.id).length,achView:achView(p),admin:isAdmin(p),muteUntil:muted(p),loginView:loginState(p),firstWinReady:p.firstWin!==D.dayKey()};
   }
   const item=(p,id)=>p.inv.find(i=>i.id===id)||fail('Předmět nenalezen.',404);
   // own keys only: an id like "constructor" must not resolve to Object.prototype.constructor
@@ -360,7 +360,7 @@ export function createMeta(db,{admins=''}={}){
       if(R.minR){item=D.rollItem(p.level,{minR:R.minR});giveItem(p,item)}
       if(R.crystal){crystal=D.crystalKey(Object.keys(D.CRYSTALS)[Math.floor(Math.random()*Object.keys(D.CRYSTALS).length)],R.crystal);addCrystal(p,crystal)}
       const pass=R.pass?passGain(p,R.pass):null;
-      p.login={last:D.dayKey(),streak:L.day};
+      p.login={last:D.dayKey(),streak:L.day};if(L.day===D.LOGIN_DAYS.length)p.stats.loginWeeks=(p.stats.loginWeeks|0)+1;
       return{day:L.day,credits:R.cr|0,essence:R.ess|0,item,crystal,pass};
     },
     // one-time reward for finishing the tutorial (it runs on the client, so the reward is small and given once)
@@ -598,7 +598,12 @@ export function createMeta(db,{admins=''}={}){
       .map(p=>({nick:p.nick,level:p.level,cls:p.cls,ach:achView(migrate(p)).pts,wins:p.stats.wins,bossKills:p.stats.bossKills,bestWave:p.stats.bestWave,bestEndless:p.stats.bestEndless|0})),
       season,ranked:Object.values(doc.profiles).filter(p=>p.ranked?.season===season&&p.ranked.games>0).sort((a,b)=>b.ranked.rating-a.ranked.rating).slice(0,30)
         .map(p=>({nick:p.nick,cls:p.cls,rating:p.ranked.rating,div:D.divisionOf(p.ranked.rating),games:p.ranked.games,wins:p.ranked.wins,placed:p.ranked.games>=D.PLACEMENT})),
-      guilds:guildList('').slice(0,20)};
+      guilds:guildList('').slice(0,20),
+      // this week's clans by wins (only clans that played this week) and the longest PvP kill streaks
+      week:D.weekKey(),guildWeek:Object.values(doc.guilds).filter(g=>g.week?.key===D.weekKey()&&g.week.wins>0).sort((a,b)=>b.week.wins-a.week.wins||b.level-a.level).slice(0,10)
+        .map(g=>({...guildCard(g),wins:g.week.wins,active:Object.values(g.members).filter(m=>m.wk>0).length})),
+      streaks:Object.values(doc.profiles).filter(p=>(p.stats?.bestStreak|0)>=3).sort((a,b)=>b.stats.bestStreak-a.stats.bestStreak||(b.stats.bestMulti|0)-(a.stats.bestMulti|0)).slice(0,10)
+        .map(p=>({nick:p.nick,cls:p.cls,streak:p.stats.bestStreak,multi:p.stats.bestMulti|0,tag:tagOf(p.id)}))};
   }
 
   // ---------- public player profile ----------
@@ -754,6 +759,8 @@ export function createMeta(db,{admins=''}={}){
     for(const k of crystals)addCrystal(p,k);
     // guild: XP for the guild, the weekly goal and the member bonus
     const guild=guildMatch(p,xp,cr,won);if(guild){xp+=guild.bx;cr+=guild.bc}
+    // first win of the calendar day (Prague): a fixed bonus on top, once a day
+    let firstWin=null;if(won&&p.firstWin!==D.dayKey()){p.firstWin=D.dayKey();xp+=D.FIRST_WIN.xp;cr+=D.FIRST_WIN.cr;firstWin={...D.FIRST_WIN}}
     // apply
     p.credits+=cr;const levelUps=grantXp(p,xp);const pass=passGain(p,xp);
     let sold=0;for(const it of items)if(!giveItem(p,it))sold++;
@@ -770,7 +777,7 @@ export function createMeta(db,{admins=''}={}){
       score:M.D.pvp?[M.score[u.team],M.score[1-u.team]]:null,dur:Math.round(M.time),xp,cr,mvp,rk});
     p.history.length=Math.min(p.history.length,D.HISTORY_MAX);
     db.touch();
-    return{xp,credits:cr,items,res,levelUps,sold,skin,camp,goalsDone:done,record,mvp,guild,pass,crystals,masteryUps,achNew:achDiff(p,achBefore)};
+    return{xp,credits:cr,items,res,levelUps,sold,skin,camp,goalsDone:done,record,mvp,guild,pass,crystals,masteryUps,firstWin,achNew:achDiff(p,achBefore)};
   }
 
   // ---------- achievements ----------

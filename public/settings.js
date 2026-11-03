@@ -4,18 +4,28 @@ import * as Snd from './audio.js';
 
 const store={get(k,d){try{const v=localStorage.getItem('rel.'+k);return v==null?d:JSON.parse(v)}catch{return d}},set(k,v){try{localStorage.setItem('rel.'+k,JSON.stringify(v))}catch{}}};
 export const ACTIONS=[['up','Pohyb nahoru'],['down','Pohyb dolů'],['left','Pohyb doleva'],['right','Pohyb doprava'],['q','Schopnost 1'],['e','Schopnost 2'],['r','Schopnost 3'],
-  ['ult','Ultimátka'],['tac','Taktická akce'],['ping','Ping (s Alt varování)'],['wheel','Rychlé zprávy'],['score','Skóre (držet)'],['mute','Vypnout zvuk']];
-const DEF_KEYS={up:'KeyW',down:'KeyS',left:'KeyA',right:'KeyD',q:'KeyQ',e:'KeyE',r:'KeyR',ult:'KeyF',tac:'KeyT',ping:'KeyG',wheel:'KeyV',score:'Tab',mute:'KeyM'};
-const DEF={scale:1,bloom:true,particles:1,shake:true,flash:true,dmgNums:true,names:true,zoom:1,fps:false};
+  ['ult','Ultimátka'],['tac','Taktická akce'],['evade','Úskok'],['ping','Ping (s Alt varování)'],['wheel','Rychlé zprávy'],['score','Skóre (držet)'],['mute','Vypnout zvuk']];
+const DEF_KEYS={up:'KeyW',down:'KeyS',left:'KeyA',right:'KeyD',q:'KeyQ',e:'KeyE',r:'KeyR',ult:'KeyF',tac:'KeyT',evade:'Space',ping:'KeyG',wheel:'KeyV',score:'Tab',mute:'KeyM'};
+const DEF={scale:1,bloom:true,particles:1,shake:true,flash:true,dmgNums:true,names:true,zoom:1,fps:false,teamPal:'std'};
+// team colours: [Modří, Rudí]; the alternatives keep the two teams apart for the common kinds of colour blindness
+export const TEAM_PALS={
+  std:{name:'Modrá a růžová',help:'Výchozí barvy.',c:['#3fb8ff','#ff3f8e']},
+  deut:{name:'Modrá a oranžová',help:'Pro protanopii a deuteranopii (červená a zelená splývají).',c:['#3fb8ff','#ff9a1f']},
+  trit:{name:'Tyrkysová a červená',help:'Pro tritanopii (modrá a žlutá splývají).',c:['#2fe0c0','#ff3b3b']}};
 // keys the game keeps for itself: menu, chat, typing
 const RESERVED=new Set(['Escape','Enter','NumpadEnter','Backspace','MetaLeft','MetaRight','ContextMenu']);
 
 const S={...DEF,...(store.get('settings',{})||{})};
-S.keys={...DEF_KEYS,...(S.keys&&typeof S.keys==='object'?S.keys:{})};
+const savedKeys=S.keys&&typeof S.keys==='object'?S.keys:{};
+S.keys={...DEF_KEYS,...savedKeys};
+// older saves have no evade key: when another action already uses Space, evade starts unbound instead of clashing
+if(!('evade' in savedKeys)&&Object.entries(savedKeys).some(([a,c])=>a!=='evade'&&c===DEF_KEYS.evade))S.keys.evade='';
 for(const k of Object.keys(S.keys))if(!(k in DEF_KEYS)||typeof S.keys[k]!=='string')delete S.keys[k];
 const num=(v,a,b,d)=>Number.isFinite(+v)?Math.max(a,Math.min(b,+v)):d;
 S.scale=num(S.scale,.5,1,1);S.particles=num(S.particles,.25,1,1);S.zoom=num(S.zoom,.8,1.3,1);
 for(const k of ['bloom','shake','flash','dmgNums','names','fps'])S[k]=typeof S[k]==='boolean'?S[k]:DEF[k];
+if(!Object.hasOwn(TEAM_PALS,S.teamPal))S.teamPal='std';
+export const teamColors=()=>TEAM_PALS[S.teamPal].c;
 
 const subs=new Set();
 export const onChange=f=>subs.add(f);
@@ -66,8 +76,11 @@ function render(){
   if(tab==='ui')el.innerHTML=`${tog('dmgNums','Čísla poškození','Létající čísla poškození nad zasaženými.')}
     ${tog('names','Jména nad postavami')}
     ${rng('zoom','Oddálení kamery',.8,1.3,.05,pct,'Vyšší hodnota ukáže víc z arény.')}
-    ${tog('fps','Počítadlo snímků (FPS)')}`;
+    ${tog('fps','Počítadlo snímků (FPS)')}
+    <div class="setrow"><span>Barvy týmů<small>${TEAM_PALS[S.teamPal].help} Platí pro postavy, minimapu, skóre, záznam i chat.</small></span>
+      <div class="seg" id="setPal">${Object.entries(TEAM_PALS).map(([k,p])=>`<button type="button" data-pal="${k}" aria-pressed="${k===S.teamPal}"><i class="pal" style="background:${p.c[0]}"></i><i class="pal" style="background:${p.c[1]}"></i> ${p.name}</button>`).join('')}</div></div>`;
   if(tab==='sound'){el.innerHTML=Snd.panelHTML();Snd.bindPanel(el)}
+  el.querySelectorAll('[data-pal]').forEach(b=>b.onclick=()=>{set('teamPal',b.dataset.pal);render()});
   el.querySelectorAll('[data-tog]').forEach(i=>i.onchange=()=>set(i.dataset.tog,i.checked));
   el.querySelectorAll('[data-rng]').forEach(i=>i.oninput=()=>{set(i.dataset.rng,+i.value);i.nextElementSibling.textContent=pct(+i.value)});
   el.querySelectorAll('[data-bind]').forEach(b=>b.onclick=()=>{capture=capture===b.dataset.bind?null:b.dataset.bind;render()});
