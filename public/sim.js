@@ -89,7 +89,9 @@ function spawnAt(u,x,z,M){
 export function resetUnit(u,M){
   const b=M.map.bases[u.team],a=rnd(0,Math.PI*2),r=rnd(0,2.4);
   u.x=b.x+Math.cos(a)*r;u.z=b.z+Math.sin(a)*r;u.vx=u.vz=0;u.face=u.team===0?Math.PI/2:-Math.PI/2;
-  u.hp=u.maxHp;u.dlog=[];u.ecd=0;u.shield=u.pass.has('reserve')?60:0;u.energy=u.uniq.has('capacitor')?100:Math.min(100,60+m(u,'start'));u.cds=[0,0,0];u.atkCd=0;u.dead=false;u.respawn=0;
+  u.hp=u.maxHp;u.dlog=[];u.ecd=0;
+  // Náskok (ultimate mastery 30): at least 15 % ultimate after every respawn
+  if(u.mast?.[u.clsKey+':ult']?.b?.[4]===1)u.ult=Math.max(u.ult||0,15);u.shield=u.pass.has('reserve')?60:0;u.energy=u.uniq.has('capacitor')?100:Math.min(100,60+m(u,'start'));u.cds=[0,0,0];u.atkCd=0;u.dead=false;u.respawn=0;
   u.st={stun:0,slow:0,silence:0,cloak:0,inv:1.5,relic:0,bleed:null,hot:null,fieldAcc:0,hazAcc:0,haste:0,hasteK:1,bulwark:0,nanite:null,decon:0,marked:0};
   u.ambush=0;u.ambushK=0;u.drive=null;u.bomb=null;u.hurtT=-99;u.dash=null;u.lastHit=null;u.lastHitT=-99;u.ai.retreat=false;u.ai.lane=rnd(-12,12);u.hist=[];
 }
@@ -133,7 +135,10 @@ function damage(M,t,amt,src,o={}){
   if(o.ult&&src)amt*=(1+m(src,'ultDmg')/100)*(src.uniq.has('reactor')?1.3:1);
   if(src&&src.st.relic>0&&src.clsKey==='striker')amt*=1.25;
   if(t.vuln>M.time)amt*=1.25;
-  if(src&&src.kind==='hero'&&!o.dot&&basicMastery(src).b[1]===1&&myDot(src,t))amt*=1.06;
+  if(src&&src.kind==='hero'&&!o.dot){const bb=basicMastery(src).b;if((bb[1]===1||bb[6]===1)&&myDot(src,t))amt*=1+(bb[1]===1?.06:0)+(bb[6]===1?.05:0)}
+  // mastery milestones 30–100: Zesílení / Popravčí on the attacker, Odolnost on the target, Oslabení from basic hits
+  if(src){if(src.empT>M.time)amt*=1+src.empK;if(src.exT>M.time&&t.hp<t.maxHp*.35)amt*=1.15;if(src.weakT>M.time)amt*=.9}
+  if(t.drT>M.time)amt*=1-t.drK;
   if(t.st.nanite?.rot)amt*=1.1;
   amt*=1-Math.min(.6,t.C.def+m(t,'def')/100);
   if(t.st.relic>0&&t.clsKey==='guardian')amt*=.8;
@@ -145,6 +150,7 @@ function damage(M,t,amt,src,o={}){
     if(src.kind==='hero')src.ult=Math.min(100,src.ult+amt*.3*(1+m(src,'ult')/100));
     if(!o.dot&&m(src,'leech')>0&&!src.dead)heal(M,src,amt*m(src,'leech')/100,null,true);
     if(!o.dot&&src!==t&&src.kind==='hero'&&M.emod.has('vamp')&&!src.dead)heal(M,src,amt*.12,null,true);
+    if(src!==t&&src.lsT>M.time&&!src.dead)heal(M,src,amt*src.lsK,null,true);
     if(t.kind==='boss')t.threat[src.id]=(t.threat[src.id]||0)+amt}
   if(t.kind==='hero'){t.ult=Math.min(100,t.ult+amt*.08);t.hurtT=M.time;t.dmgTaken=(t.dmgTaken||0)+amt;
     // for the death recap: who hit this hero lately, and whether directly, with an ultimate or over time
@@ -159,6 +165,9 @@ function damage(M,t,amt,src,o={}){
   if(t.hp<=0){
     if(t.uniq.has('phoenix')&&!t.phoenixUsed){t.phoenixUsed=true;t.hp=Math.round(t.maxHp*.4);t.st.inv=1;
       fx(M,{t:'txt',x:r2(t.x),z:r2(t.z),s:'Fénix',c:'info'});fx(M,{t:'ring',x:r2(t.x),z:r2(t.z),c:0xffc66d,a:.5,b:5,d:.7})}
+    // Poslední vzdor (ultimate mastery 100): once a match, with the ultimate at least half charged
+    else if(t.kind==='hero'&&!t.lastStand&&t.ult>=50&&t.mast?.[t.clsKey+':ult']?.b?.[11]===1){t.lastStand=true;t.hp=1;t.ult=0;t.st.inv=2;
+      fx(M,{t:'txt',x:r2(t.x),z:r2(t.z),s:'Poslední vzdor',c:'info'});fx(M,{t:'ring',x:r2(t.x),z:r2(t.z),c:0xc08bff,a:.5,b:5,d:.7})}
     else kill(M,t,src);
   }
   return amt;
@@ -178,7 +187,7 @@ function kill(M,t,src){
   if(t.kind==='hero'){
     deathRecap(M,t,k);
     t.respawn=(M.elim?1e9:M.D.pvp?5+Math.min(4,t.deaths*.4):6+Math.min(4,t.deaths*.5))*(M.emod.has('rapid')?.5:1);
-    if(k&&k.team!==t.team&&k.kind==='hero'){k.kills++;k.ult=Math.min(100,k.ult+15);echoReset(M,k)}
+    if(k&&k.team!==t.team&&k.kind==='hero'){k.kills++;k.ult=Math.min(100,k.ult+15+(k.mast?.[k.clsKey+':ult']?.b?.[7]===0?10:0));echoReset(M,k)}
     if(arenaLike(M.mode)||M.mode==='duel'){if(k&&k.team!==t.team)M.score[k.team]++;else M.score[1-t.team]++}
     if(!M.D.pvp){M.lives=Math.max(0,M.lives-1);if(M.lives<=0&&M.state==='play')endMatch(M,1)}
     fx(M,k&&k.team!==t.team?{t:'feed',k:'kill',a:k.id,b:t.id}:{t:'feed',k:'field',b:t.id});
@@ -294,8 +303,12 @@ function updBeams(M,dt){
 
 function basic(M,u,pt){
   const B=u.C.basic;if(!B||u.dead||u.atkCd>0||u.st.stun>0||u.dash)return;
-  u.atkCd=B.rate/(1+m(u,'rate')/100);
-  let mul=(u.ctrl==='bot'?M.diff.dmg:1)*u.dmgScale*(u.kind==='hero'?1+basicMastery(u).r*MASTERY_BASIC.dmgPerRank:1);const dir=aimDir(u,pt);let col=u.C.color,pierce=false;
+  const bm=u.kind==='hero'?basicMastery(u):{r:0,b:[]},bb=bm.b;
+  u.atkCd=B.rate/(1+m(u,'rate')/100)/(bb[9]===0?1.06:1);
+  // basic attack mastery: +0.5 % per rank up to the bonus cap, Těžká / Drtivá ruka, Mistr zbraně, every 4th a Kritický zásah
+  let mul=(u.ctrl==='bot'?M.diff.dmg:1)*u.dmgScale*(1+Math.min(bm.r,MASTERY.bonusCap)*MASTERY_BASIC.dmgPerRank+(bb[5]===1?.06:0)+(bb[9]===1?.08:0)+(bb[11]===0?.1:0));
+  if(bb[5]===0){u.critN=(u.critN||0)+1;if(u.critN%4===0)mul*=1.4}
+  const dir=aimDir(u,pt);let col=u.C.color,pierce=false;
   if(u.drive&&u.drive.n>0){mul*=u.drive.mul;pierce=true;col=0xff7b5a;if(--u.drive.n<=0)u.drive=null}
   const razor=e=>{if(u.pass.has('razor')&&Math.random()<.15&&!e.dead)e.st.bleed={dps:6,t:3,acc:0,src:u};if(B.poison&&!e.dead)e.st.bleed={dps:7*u.dmgScale,t:4,acc:0,src:u}};
   fx(M,{t:'atk',i:u.id});
@@ -371,11 +384,20 @@ function basicHit(M,u,e){
   const {r,b}=basicMastery(u),B=u.C.basic;
   // the Žhář's talent burns from the start; the element replaces it from rank 5
   if(r<MASTERY_BASIC.elementRank){if(u.clsKey==='pyro')burn(e,u,BURN.talent);return}
-  const d={...B.dot,dps:B.dot.dps*(b[0]===0?1.5:1),t:B.dot.t+(b[0]===1?2:0)};applyDot(e,u,d);
-  if(b[3]===1)applyDot(e,u,{kind:MASTERY_BASIC.second[u.clsKey]||'shock',dps:3,t:2});
-  u.hitN=(u.hitN||0)+1;
-  if(b[1]===0&&u.hitN%5===0)spark(M,u,e,d);
-  if(b[3]===0&&u.hitN%8===0)detonate(M,u,e);
+  const d={...B.dot,dps:B.dot.dps*(b[0]===0?1.5:1)*(b[4]===0?1.25:1)*(b[11]===0?1.25:1),t:B.dot.t+(b[0]===1?2:0)+(b[4]===1?1:0)};applyDot(e,u,d);
+  if(b[10]===1)applyDot(e,u,{kind:MASTERY_BASIC.second[u.clsKey]||'shock',dps:6,t:3});
+  else if(b[3]===1)applyDot(e,u,{kind:MASTERY_BASIC.second[u.clsKey]||'shock',dps:3,t:2});
+  u.hitN=(u.hitN||0)+1;const n=u.hitN;
+  if(b[1]===0&&n%5===0)spark(M,u,e,d);
+  if(b[6]===0&&n%6===0)spark(M,u,e,d);
+  if(b[3]===0&&n%8===0||b[10]===0&&n%6===0)detonate(M,u,e);
+  // ranks 30–100
+  if(b[7]===0)heal(M,u,u.maxHp*.004,null,true);
+  if(b[7]===1)u.energy=Math.min(100,u.energy+1);
+  if(b[8]===0&&n%5===0)e.st.slow=Math.max(e.st.slow,1.5);
+  if(b[8]===1&&n%5===0)e.weakT=M.time+2;
+  if(b[11]===1&&n%10===0)for(const x of near(foes(M,u).filter(f=>f!==e&&!f.dead),e,6).slice(0,3)){
+    fx(M,{t:'bolt',a:[r2(e.x),1.2,r2(e.z)],b:[r2(x.x),1.2,r2(x.z)],c:0x9fd8ff});damage(M,x,B.dmg*.5*u.dmgScale,u,{color:0x9fd8ff})}
 }
 const myDot=(u,e)=>['bleed','poison','shock','burn'].some(k=>e.st[k]?.src===u);
 function detonate(M,u,e){let total=0;for(const k of ['bleed','poison','shock','burn']){const d=e.st[k];if(d?.src===u){total+=d.dps*Math.max(0,d.t);e.st[k]=null}}
@@ -527,6 +549,36 @@ function masteryAfter(M,u,i,br){
   if(ult&&br[3]===0)u.ult=25;
   if(ult&&br[3]===1)u.cds=u.cds.map(c=>Math.max(0,c-2));
   if(!ult&&br[3]===1)u.mfocus={t:M.time+3,i};
+  // ranks 30–100 (branch index 4–11); timed buffs keep the stronger of two at once
+  const buff=(k,t,v)=>{if(!(u[k+'T']>M.time)||(u[k+'K']||0)<=v){u[k+'K']=v}u[k+'T']=Math.max(u[k+'T']||0,M.time+t)};
+  const cleanse=all=>{const s=u.st;s.slow=0;s.bleed=null;s.burn=null;s.poison=null;s.shock=null;if(all){s.stun=0;s.silence=0;s.nanite=null}};
+  const haste=(k,t)=>{u.st.hasteK=u.st.haste>0?Math.max(u.st.hasteK||1,k):k;u.st.haste=Math.max(u.st.haste||0,t)};
+  if(ult){
+    if(br[5]===0)addShield(u,u.maxHp*.12,null);
+    if(br[5]===1)heal(M,u,u.maxHp*.1,null,true);
+    if(br[6]===0)buff('emp',5,.12);
+    if(br[6]===1)buff('dr',4,.2);
+    if(br[7]===1)for(const a of friends(M,u))if(a!==u&&!a.dead&&a.kind==='hero'&&d2(a,u)<8)addShield(a,a.maxHp*.06,u);
+    if(br[8]===0)u.energy=Math.min(100,u.energy+30);
+    if(br[8]===1)u.cds=u.cds.map(c=>Math.max(0,c-3));
+    if(br[9]===0)u.ult=Math.max(u.ult,35);
+    if(br[9]===1){haste(1.25,4);u.st.slow=0}
+    if(br[10]===0)buff('ls',5,.12);
+    if(br[10]===1)cleanse(true);
+    if(br[11]===0)buff('emp',5,.1);
+  }else{
+    if(br[4]===0)buff('emp',3,.08);
+    if(br[5]===0)buff('dr',3,.12);
+    if(br[6]===1)u.ult=Math.min(100,u.ult+4);
+    if(br[7]===0)buff('ls',3,.08);
+    if(br[7]===1)cleanse(false);
+    if(br[8]===0)addShield(u,u.maxHp*.06,null);
+    if(br[8]===1)heal(M,u,u.maxHp*.04,null,true);
+    if(br[9]===0)u.cds=u.cds.map((c,j)=>j===i?c:Math.max(0,c-1));
+    if(br[9]===1)u.energy=Math.min(100,u.energy+8);
+    if(br[10]===0)u.exT=M.time+3;
+    if(br[10]===1)haste(1.2,3);
+  }
 }
 // ---------- evade (Space) ----------
 // dir: where the player is moving; without movement the hero evades the way it faces
@@ -552,9 +604,10 @@ export function cast(M,u,i,pt){
   let s=null,id=null;
   if(i!==3)id=u.prof.skills[i];
   // mastery of this ability: cheaper and faster with rank, plus the chosen milestone branches
-  const mk=masteryKey(u.clsKey,i===3?'ult':id),ms=u.mast?.[mk],mr=ms?.r||0,br=ms?.b||[];
+  // the per-rank bonus counts up to MASTERY.bonusCap; higher ranks add power only through their milestones
+  const mk=masteryKey(u.clsKey,i===3?'ult':id),ms=u.mast?.[mk],mr=Math.min(ms?.r||0,MASTERY.bonusCap),br=ms?.b||[];
   const focus=u.mfocus&&u.mfocus.t>M.time&&u.mfocus.i!==i;
-  const costMul=Math.max(.5,1-mr*MASTERY.perRank-(br[0]===0?.1:0)-(focus?.2:0))*(u.pass.has('overcharge')?.9:1);
+  const costMul=Math.max(.5,1-mr*MASTERY.perRank-(br[0]===0?.1:0)-(focus?.2:0)-(br[5]===1?.1:0)-(br[11]===0?.1:0))*(u.pass.has('overcharge')?.9:1);
   if(i===3){if(u.ult<100)return false}
   else{s=skillDef(u.clsKey,id);if(!s||u.cds[i]>0)return false;
     if(u.energy<s.cost*costMul)return false}
@@ -570,8 +623,11 @@ export function cast(M,u,i,pt){
     if(id==='feint'&&pa)cd=Math.max(2,cd-4);
     if(id==='rend'&&pb)cd=Math.max(2,cd-2);
     if(u.uniq.has('mirror')&&Math.random()<.25){cd=0;fx(M,{t:'txt',x:r2(u.x),z:r2(u.z),s:'Zrcadlení',c:'info'})}
-    cd*=1-mr*MASTERY.perRank-(br[0]===1?.08:0);
-    if(br[3]===0&&cd>0&&Math.random()<.15){cd=0;fx(M,{t:'txt',x:r2(u.x),z:r2(u.z),s:'Ozvěna',c:'info'})}
+    cd*=Math.max(.4,1-mr*MASTERY.perRank-(br[0]===1?.08:0)-(br[4]===1?.08:0)-(br[11]===0?.1:0));
+    const echo=(br[3]===0?.15:0)+(br[6]===0?.1:0);
+    if(echo&&cd>0&&Math.random()<echo){cd=0;fx(M,{t:'txt',x:r2(u.x),z:r2(u.z),s:'Ozvěna',c:'info'})}
+    // Legenda: every 4th use of this ability skips its cooldown
+    if(br[11]===1){u.mleg??={};u.mleg[mk]=(u.mleg[mk]||0)+1;if(u.mleg[mk]%4===0&&cd>0){cd=0;fx(M,{t:'txt',x:r2(u.x),z:r2(u.z),s:'Legenda',c:'info'})}}
     u.cds[i]=cd}
   masteryAfter(M,u,i,br);
   if(mk&&u.ctrl==='human')u.mcount[mk]=(u.mcount[mk]||0)+1;

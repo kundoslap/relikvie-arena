@@ -253,10 +253,10 @@ export function createMeta(db,{admins=''}={}){
     // a milestone branch of one ability; free to change outside a match
     masteryBranch(p,{key,tier,choice}){
       if(typeof key!=='string'||!Object.hasOwn(p.mastery,key))fail('Tuto schopnost ještě nemáš rozvinutou.');
-      tier=Number(tier);if(![0,1,2,3].includes(tier))fail('Neplatný milník.');
+      tier=Number(tier);if(!Number.isInteger(tier)||tier<0||tier>=D.MASTERY.tiers.length)fail('Neplatný milník.');
       if(choice!==0&&choice!==1&&choice!==null)fail('Vyber jednu ze dvou větví.');
       const m=p.mastery[key];if(D.masteryRank(m.xp).rank<D.MASTERY.tiers[tier])fail(`Milník se odemyká na úrovni mistrovství ${D.MASTERY.tiers[tier]}.`);
-      m.br??=[null,null,null,null];m.br[tier]=choice;
+      m.br??=[];while(m.br.length<D.MASTERY.tiers.length)m.br.push(null);m.br[tier]=choice;
     },
     // ---------- forge ----------
     lock(p,{itemId}){const it=item(p,itemId);it.lock=!it.lock;return{lock:it.lock}},

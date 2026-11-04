@@ -168,6 +168,21 @@ PvP zápas s jiným než normálním cílem nebo délkou je **vlastní zápas** 
 
 **Mistrovství schopností** (karta Mistrovství, z původní Relikvie): každá schopnost povolání, schopnost profese a ultimátka má úroveň 0–20, která roste používáním v zápasech s účtem (1 bod za použití, ultimátka 8, nejvýš 80 bodů na schopnost za zápas; úroveň 20 je asi 1380 použití). Každá úroveň zlevní energii a zkrátí čekání o 0,5 %, u ultimátky zrychlí nabíjení o 1 %. Na úrovních 5, 10, 15 a 20 se odemkne milník se dvěma větvemi (úspora energie / kratší čekání, štít / zrychlení, léčení / vrácení energie, ozvěna bez čekání / levnější další schopnost; ultimátka má vlastní silnější varianty). Větve jde měnit zdarma mimo zápas. V hodnocené hře se počítá nejvýš úroveň 5 a jen první milník, jako kalibrované mistrovství v originále.
 
+**Pokročilé mistrovství 21–100:** mistrovství pokračuje až do úrovně 100 (každá úroveň nad 20 stojí 120 bodů, úroveň 100 je asi 11 000 použití). Bonus za úroveň (energie, čekání, nabíjení, poškození základního útoku) roste jen do úrovně 20, aby schopnosti nezlevnily na polovinu. Nad 20 přidávají sílu nové milníky na mistrovství 30, 40, 50, 60, 70, 80, 90 a 100, každý s výběrem ze dvou větví. Na kartě je milník označený M (M30 = mistrovství 30 této schopnosti, ne úroveň postavy).
+
+| Mistrovství | Schopnosti | Ultimátka | Základní útok |
+|---|---|---|---|
+| 30 | Zesílení (3 s +8 % poškození) / Rychlá ruka (−8 % čekání) | Bouřlivé nabití (+10 %) / Náskok (po oživení aspoň 15 %) | Hustý živel (+25 %) / Vytrvalý živel (+1 s) |
+| 40 | Odolnost (3 s −12 % přijatého) / Hospodárnost (−10 % energie) | Velký štít (12 % HP) / Velké léčení (10 % HP) | Kritický zásah (každý 4. +40 %) / Těžká ruka (+6 %) |
+| 50 | Silná ozvěna (+10 % šance bez čekání) / Nabíječ (+4 % ultimátky) | Zesílení (5 s +12 %) / Odolnost (4 s −20 %) | Přeskok (každý 6. zásah) / Hluboký rozklad (+5 % pod živlem) |
+| 60 | Vysávání (3 s léčí 8 % poškození) / Očista (zpomalení a poškození v čase) | Lovec duší (+10 % za zničení) / Ochránce (štít spojencům do 8 m) | Pijavice (0,4 % HP za zásah) / Jiskření (+1 energie) |
+| 70 | Bariéra (štít 6 % HP) / Druhý dech (léčení 4 % HP) | Velký tok (+30 energie) / Velké soustředění (−3 s čekání) | Mráz (každý 5. zpomalí) / Oslabení (každý 5.: cíl −10 %) |
+| 80 | Řetězení (ostatní −1 s) / Úsporný tok (+8 energie) | Silná ozvěna (zůstane 35 %) / Vichr (4 s +25 % rychlost) | Rychlá palba (+6 % rychlost útoku) / Drtivá ruka (+8 %) |
+| 90 | Popravčí (3 s +15 % na cíle pod 35 % HP) / Vítr (3 s +20 % rychlost) | Vysávání (5 s léčí 12 %) / Očista (všechny negativní efekty) | Řetězová exploze (každý 6.) / Silný druhý živel (6 HP/s) |
+| 100 | Mistr (−10 % energie a čekání) / Legenda (každé 4. použití bez čekání) | Vrchol (+15 % nabíjení, 5 s +10 %) / Poslední vzdor (jednou za zápas přežiješ na 1 HP) | Mistr zbraně (+10 % útok, +25 % živel) / Bouře (každý 10. zásah výboj do 3 soupeřů) |
+
+Kdo už měl schopnost na úrovni 20 a hrál dál, má nasbírané body započítané, takže může začít rovnou výš.
+
 **Mistrovství základního útoku (živly):** základní útok má vlastní mistrovství 0–20 (1 bod za 4 zásahy, +0,5 % poškození za úroveň). Úroveň 5 odemkne živel povolání, který působí při každém zásahu: Lovec **krvácení** 4 HP/s, Strážce **jed** 4 HP/s (cíl se navíc léčí o 30 % méně), Technik **elektrický šok** 4 HP/s, Žhář silnější **hoření** 10 HP/s (jeho talent zapaluje slabším ohněm 5 HP/s už od začátku). Milníky: Síla živlu (+50 %) / Trvalost (+2 s), Jiskra (každý 5. zásah přeskočí na dalšího soupeře) / Rozklad (cíle pod tvým živlem dostávají o 6 % víc), Vysátí (léčí 15 % poškození živlu) / Šíření (při pádu cíle živel přeskočí na soupeře do 4 m), Exploze (každý 8. zásah odpálí zbytek živlu) / Dvojí živel (přidá druhý živel). Efekty se nesčítají, nový zásah obnoví trvání. Dekontaminace odstraní všechny, Obnova krvácení a hoření. V hodnocené hře platí úroveň 5, takže živel má každý; vyváženost je ověřená souboji botů na úrovni 0 i 5.
 
 **Dílna a krystaly** (z původní Relikvie: esence, vylepšování, přeladění, zamykání a výroba; zdířky s krystaly jsou nové):

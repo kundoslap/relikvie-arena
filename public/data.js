@@ -65,6 +65,11 @@ export const EVADES={
   pyro:{name:'Ohnivý kotoul',cd:4.5,icon:'firezone',desc:'Kotoul o 5,5 m s nezranitelností 0,25 s. Na výchozím místě vzplane oheň 2,2 m na 2 s.'}};
 // "Novinky" in the hub, newest first; id marks what a player has already seen
 export const CHANGELOG=[
+  {id:'2026-11d',title:'Mistrovství až do 100',items:[
+    'Mistrovství schopností, ultimátek i základního útoku teď roste až do úrovně 100.',
+    'Nové milníky na mistrovství 30, 40, 50, 60, 70, 80, 90 a 100, každý s výběrem ze dvou větví (24 nových voleb na každou schopnost).',
+    'Mezi nimi Legenda (každé 4. použití bez čekání), Poslední vzdor (jednou za zápas přežiješ na 1 HP) nebo Bouře (výboj do tří soupeřů).',
+    'Značka M u milníku je úroveň mistrovství schopnosti, ne úroveň postavy. Bonus za úroveň roste do 20, výš sílí jen milníky.']},
   {id:'2026-11c',title:'Úskok na mezerníku',items:[
     'Každé povolání má na mezerníku vlastní úskok ve směru pohybu, bez energie a s krátkým čekáním.',
     'Lovec: Přískok (kotoul 6,5 m s nezranitelností). Strážce: Štítový náraz (výpad 4,5 m za štítem, odhodí soupeře).',
@@ -359,7 +364,7 @@ export function computeLoadout(p,k,cap=MASTERY.max){
   const tactic=TACTICS[p?.tactic]&&(p.level||1)>=TACTICS[p.tactic].lvl?p.tactic:'dodge';
   // ultimate mastery charges the ultimate faster: +1 % per rank, +10 % with the Rychlé nabití branch
   const mastery=masteryLoadout(p,cap),um=mastery[k+':ult'];
-  if(um)add('ult',um.r*MASTERY.ultPerRank+(um.b[0]===0?10:0));
+  if(um)add('ult',Math.min(um.r,MASTERY.bonusCap)*MASTERY.ultPerRank+(um.b[0]===0?10:0)+(um.b[4]===0?10:0)+(um.b[11]===0?15:0));
   return{mods,uniq,skin,level:p?.level||1,prof,title:p?.title||null,tactic,mastery};
 }
 
@@ -665,23 +670,43 @@ export const guildWeekTarget=n=>Math.max(15,n*4);
 export const guildWeekReward=l=>({credits:250+30*l,minR:l>=6?3:2});
 
 // ---------- ability mastery (from the original Relikvie) ----------
-// Every class skill, profession skill and ultimate has a mastery rank 0–20 earned by using it in matches.
-// Each rank: −0.5 % energy cost and −0.5 % cooldown (ultimate: +1 % charge). Ranks 5, 10, 15 and 20 unlock a milestone
+// Every class skill, profession skill and ultimate has a mastery rank 0–100 earned by using it in matches.
+// Each rank up to bonusCap (20): −0.5 % energy cost and −0.5 % cooldown (ultimate: +1 % charge, basic attack +0.5 %
+// damage); above it only the milestones add power. Ranks 5, 10, 15, 20 and then every 10 up to 100 unlock a milestone
 // with a choice of two branches. Ranked matches cap the rank at 5 (the original's calibrated mastery).
-export const MASTERY={max:20,tiers:[5,10,15,20],perRank:.005,ultPerRank:1,rankedCap:5,ultXp:8,matchCap:80};
-export const masteryXpFor=n=>12+6*n; // XP from rank n to n+1, one XP per use
+export const MASTERY={max:100,bonusCap:20,tiers:[5,10,15,20,30,40,50,60,70,80,90,100],perRank:.005,ultPerRank:1,rankedCap:5,ultXp:8,matchCap:80};
+// XP from rank n to n+1, one XP per use: the first 20 ranks as before, then a flat 120 per rank
+export const masteryXpFor=n=>n<20?12+6*n:120;
 export const masteryRank=xp=>{let n=0;while(n<MASTERY.max&&xp>=masteryXpFor(n)){xp-=masteryXpFor(n);n++}return{rank:n,into:xp,need:n<MASTERY.max?masteryXpFor(n):0}};
 export const MASTERY_BRANCHES=[
   [{k:'thrift',name:'Úspora',desc:'Stojí o 10 % méně energie.'},{k:'tempo',name:'Spád',desc:'Čekání je o 8 % kratší.'}],
   [{k:'ward',name:'Ochranný impuls',desc:'Použití ti dá štít 4 % max. HP.'},{k:'surge',name:'Nápor',desc:'Po použití máš na 2 s o 15 % rychlejší pohyb.'}],
   [{k:'mend',name:'Záchranný impuls',desc:'Použití tě vyléčí o 3 % max. HP.'},{k:'battery',name:'Zpětný tok',desc:'Použití vrátí 5 energie.'}],
-  [{k:'echo',name:'Ozvěna',desc:'15% šance, že se nespustí čekání.'},{k:'focus',name:'Soustředění',desc:'Další jiná schopnost do 3 s stojí o 20 % méně energie.'}]
+  [{k:'echo',name:'Ozvěna',desc:'15% šance, že se nespustí čekání.'},{k:'focus',name:'Soustředění',desc:'Další jiná schopnost do 3 s stojí o 20 % méně energie.'}],
+  // ranks 30–100
+  [{k:'empower',name:'Zesílení',desc:'Po použití způsobuješ 3 s o 8 % víc poškození.'},{k:'tempo2',name:'Rychlá ruka',desc:'Čekání je o dalších 8 % kratší.'}],
+  [{k:'guard',name:'Odolnost',desc:'Po použití dostáváš 3 s o 12 % méně poškození.'},{k:'thrift2',name:'Hospodárnost',desc:'Stojí o dalších 10 % méně energie.'}],
+  [{k:'echo2',name:'Silná ozvěna',desc:'Dalších 10% šance, že se nespustí čekání.'},{k:'ultfeed',name:'Nabíječ',desc:'Použití nabije ultimátku o 4 %.'}],
+  [{k:'leech',name:'Vysávání',desc:'3 s po použití tě léčí 8 % poškození, které způsobíš.'},{k:'cleanse',name:'Očista',desc:'Použití odstraní zpomalení, krvácení, hoření, jed a šok.'}],
+  [{k:'ward2',name:'Bariéra',desc:'Použití ti dá štít 6 % max. HP.'},{k:'mend2',name:'Druhý dech',desc:'Použití tě vyléčí o 4 % max. HP.'}],
+  [{k:'chain',name:'Řetězení',desc:'Použití zkrátí čekání ostatních schopností o 1 s.'},{k:'battery2',name:'Úsporný tok',desc:'Použití vrátí 8 energie.'}],
+  [{k:'execute',name:'Popravčí',desc:'3 s po použití dáváš soupeřům pod 35 % HP o 15 % víc.'},{k:'gale',name:'Vítr',desc:'Po použití máš na 3 s o 20 % rychlejší pohyb.'}],
+  [{k:'master',name:'Mistr',desc:'Stojí o 10 % méně energie a má o 10 % kratší čekání.'},{k:'legend',name:'Legenda',desc:'Každé 4. použití nespustí čekání.'}]
 ];
 export const MASTERY_ULT_BRANCHES=[
   [{k:'charge',name:'Rychlé nabití',desc:'Ultimátka se nabíjí o 10 % rychleji.'},{k:'start',name:'Připravenost',desc:'Zápas začínáš s ultimátkou nabitou na 25 %.'}],
   [{k:'ward',name:'Ochranný impuls',desc:'Ultimátka ti dá štít 8 % max. HP.'},{k:'surge',name:'Nápor',desc:'Po ultimátce máš na 3 s o 20 % rychlejší pohyb.'}],
   [{k:'mend',name:'Záchranný impuls',desc:'Ultimátka tě vyléčí o 6 % max. HP.'},{k:'battery',name:'Zpětný tok',desc:'Ultimátka vrátí 20 energie.'}],
-  [{k:'echo',name:'Ozvěna',desc:'Po ultimátce zůstane 25 % jejího nabití.'},{k:'focus',name:'Soustředění',desc:'Ultimátka zkrátí čekání všech schopností o 2 s.'}]
+  [{k:'echo',name:'Ozvěna',desc:'Po ultimátce zůstane 25 % jejího nabití.'},{k:'focus',name:'Soustředění',desc:'Ultimátka zkrátí čekání všech schopností o 2 s.'}],
+  // ranks 30–100
+  [{k:'charge2',name:'Bouřlivé nabití',desc:'Ultimátka se nabíjí o dalších 10 % rychleji.'},{k:'start2',name:'Náskok',desc:'Po každém oživení máš ultimátku nabitou aspoň na 15 %.'}],
+  [{k:'ward2',name:'Velký štít',desc:'Ultimátka ti dá štít 12 % max. HP.'},{k:'mend2',name:'Velké léčení',desc:'Ultimátka tě vyléčí o 10 % max. HP.'}],
+  [{k:'empower',name:'Zesílení',desc:'Po ultimátce způsobuješ 5 s o 12 % víc poškození.'},{k:'guard',name:'Odolnost',desc:'Po ultimátce dostáváš 4 s o 20 % méně poškození.'}],
+  [{k:'killcharge',name:'Lovec duší',desc:'Zničení soupeřova hrdiny nabije ultimátku o dalších 10 %.'},{k:'team',name:'Ochránce',desc:'Ultimátka dá spojencům do 8 m štít 6 % jejich max. HP.'}],
+  [{k:'battery2',name:'Velký tok',desc:'Ultimátka vrátí 30 energie.'},{k:'focus2',name:'Velké soustředění',desc:'Ultimátka zkrátí čekání všech schopností o 3 s.'}],
+  [{k:'echo2',name:'Silná ozvěna',desc:'Po ultimátce zůstane 35 % jejího nabití.'},{k:'gale',name:'Vichr',desc:'Po ultimátce máš 4 s o 25 % rychlejší pohyb a zmizí zpomalení.'}],
+  [{k:'leech',name:'Vysávání',desc:'5 s po ultimátce tě léčí 12 % poškození, které způsobíš.'},{k:'cleanse',name:'Očista',desc:'Ultimátka odstraní omráčení, umlčení, zpomalení a všechna poškození v čase.'}],
+  [{k:'apex',name:'Vrchol',desc:'Ultimátka se nabíjí o 15 % rychleji a po ní způsobuješ 5 s o 10 % víc.'},{k:'lastStand',name:'Poslední vzdor',desc:'Jednou za zápas: smrtelný zásah tě nechá na 1 HP s 2 s nezranitelností, když máš ultimátku nabitou aspoň na 50 % (spotřebuje ji).'}]
 ];
 // basic attack mastery: rank 5 unlocks the class element (Lovec bleed, Strážce poison, Technik shock, Žhář a stronger
 // burn); every rank adds 0.5 % basic attack damage; one XP per four hits
@@ -690,7 +715,16 @@ export const MASTERY_BASIC_BRANCHES=[
   [{k:'potent',name:'Síla živlu',desc:'Efekt živlu dává o 50 % víc poškození.'},{k:'lasting',name:'Trvalost',desc:'Efekt živlu trvá o 2 s déle.'}],
   [{k:'spark',name:'Jiskra',desc:'Každý 5. zásah přeskočí na dalšího soupeře do 6 m (25 % síly) a přenese živel.'},{k:'expose',name:'Rozklad',desc:'Soupeři pod tvým živlem dostávají od tebe o 6 % víc.'}],
   [{k:'siphon',name:'Vysátí',desc:'Vyléčíš se o 15 % poškození, které způsobí tvůj živel.'},{k:'spread',name:'Šíření',desc:'Když soupeř pod tvým živlem padne, živel přeskočí na soupeře do 4 m.'}],
-  [{k:'detonate',name:'Exploze',desc:'Každý 8. zásah okamžitě vybuchne zbytek živlu na cíli.'},{k:'dual',name:'Dvojí živel',desc:'Zásahy přidají i druhý živel (3 HP/s na 2 s).'}]
+  [{k:'detonate',name:'Exploze',desc:'Každý 8. zásah okamžitě vybuchne zbytek živlu na cíli.'},{k:'dual',name:'Dvojí živel',desc:'Zásahy přidají i druhý živel (3 HP/s na 2 s).'}],
+  // ranks 30–100
+  [{k:'potent2',name:'Hustý živel',desc:'Efekt živlu dává o dalších 25 % víc poškození.'},{k:'lasting2',name:'Vytrvalý živel',desc:'Efekt živlu trvá o 1 s déle.'}],
+  [{k:'crit',name:'Kritický zásah',desc:'Každý 4. základní útok dává o 40 % víc poškození.'},{k:'heavy',name:'Těžká ruka',desc:'Základní útok dává o 6 % víc poškození.'}],
+  [{k:'chain',name:'Přeskok',desc:'Každý 6. zásah přeskočí na dalšího soupeře do 6 m (25 % síly) a přenese živel.'},{k:'expose2',name:'Hluboký rozklad',desc:'Soupeři pod tvým živlem dostávají od tebe o dalších 5 % víc.'}],
+  [{k:'siphon2',name:'Pijavice',desc:'Každý zásah tě vyléčí o 0,4 % max. HP.'},{k:'spark2',name:'Jiskření',desc:'Každý zásah vrátí 1 energii.'}],
+  [{k:'chill',name:'Mráz',desc:'Každý 5. zásah zpomalí cíl o 40 % na 1,5 s.'},{k:'weaken',name:'Oslabení',desc:'Každý 5. zásah: cíl 2 s způsobuje o 10 % méně poškození.'}],
+  [{k:'rapid',name:'Rychlá palba',desc:'Útočíš o 6 % rychleji.'},{k:'heavy2',name:'Drtivá ruka',desc:'Základní útok dává o dalších 8 % víc poškození.'}],
+  [{k:'detonate2',name:'Řetězová exploze',desc:'Každý 6. zásah vybuchne zbytek živlu na cíli.'},{k:'dual2',name:'Silný druhý živel',desc:'Zásahy přidají druhý živel 6 HP/s na 3 s.'}],
+  [{k:'master',name:'Mistr zbraně',desc:'Základní útok dává o 10 % víc a živel o 25 % víc poškození.'},{k:'storm',name:'Bouře',desc:'Každý 10. zásah vyšle výboj do 3 soupeřů do 6 m od cíle (50 % poškození útoku).'}]
 ];
 // mastery keys: "striker:c0" for class skills, "striker:ult" for ultimates, the plain id for profession skills
 export const masteryKey=(cls,id)=>id==='ult'||id==='basic'?cls+':'+id:id&&id[0]==='c'&&id.length===2?cls+':'+id:id;
