@@ -69,7 +69,8 @@ export const CHANGELOG=[
     'Mistrovství schopností, ultimátek i základního útoku teď roste až do úrovně 100.',
     'Nové milníky na mistrovství 30, 40, 50, 60, 70, 80, 90 a 100, každý s výběrem ze dvou větví (24 nových voleb na každou schopnost).',
     'Mezi nimi Legenda (každé 4. použití bez čekání), Poslední vzdor (jednou za zápas přežiješ na 1 HP) nebo Bouře (výboj do tří soupeřů).',
-    'Značka M u milníku je úroveň mistrovství schopnosti, ne úroveň postavy. Bonus za úroveň roste do 20, výš sílí jen milníky.']},
+    'Značka M u milníku je úroveň mistrovství schopnosti, ne úroveň postavy. Bonus za úroveň roste do 20, výš sílí jen milníky.',
+    'Úspornější vykreslování neonových částí hrdinů a efektů (méně práce pro procesor každý snímek).']},
   {id:'2026-11c',title:'Úskok na mezerníku',items:[
     'Každé povolání má na mezerníku vlastní úskok ve směru pohybu, bez energie a s krátkým čekáním.',
     'Lovec: Přískok (kotoul 6,5 m s nezranitelností). Strážce: Štítový náraz (výpad 4,5 m za štítem, odhodí soupeře).',

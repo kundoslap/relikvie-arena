@@ -63,7 +63,7 @@ function applyTeamColors(){
 }
 
 let arena=null;
-function setMap(key){if(!MAPS[key])key='core';if(arena&&arena.mapKey===key)return;arena?.dispose();arena=buildArena(scene,key,hiQ)}
+function setMap(key){if(!MAPS[key])key='core';if(arena&&arena.mapKey===key)return;arena?.dispose();arena=buildArena(scene,key,hiQ);singlePass(arena.group)}
 const relicMesh=new THREE.Group(),relicLight=new THREE.PointLight(0xffc66d,0,16,1.3);
 relicMesh.add(new THREE.Mesh(new THREE.IcosahedronGeometry(.55,0),new THREE.MeshBasicMaterial({color:HDR(0xffc66d,2.6)})));
 relicMesh.add(new THREE.Mesh(new THREE.IcosahedronGeometry(.95,1),new THREE.MeshBasicMaterial({color:HDR(0xffc66d,1.4),wireframe:true,transparent:true,opacity:.5})));
@@ -91,7 +91,12 @@ const BOX_Z=new THREE.BoxGeometry(1,1,1).translate(0,0,.5);
 const matPool={a:[],w:[]};
 const addMat=(color,k=2.4,extra={})=>{const key=extra.wireframe?'w':'a',m=matPool[key].pop();
   if(m){m.color.copy(HDR(color,k));m.opacity=1;return m}
-  return new THREE.MeshBasicMaterial({color:HDR(color,k),transparent:true,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide,...extra})};
+  return new THREE.MeshBasicMaterial({color:HDR(color,k),transparent:true,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide,forceSinglePass:true,...extra})};
+// three.js draws a transparent double-sided material twice a frame (back faces, then front faces) and re-checks its shader
+// both times; for glowing neon parts one pass looks the same. Models and maps get the flag when they are built and
+// a sweep once a second catches anything added later.
+function singlePass(root){root.traverse(o=>{const ms=o.material?(Array.isArray(o.material)?o.material:[o.material]):null;
+  if(ms)for(const m of ms)if(m.transparent&&m.side===THREE.DoubleSide&&!m.forceSinglePass)m.forceSinglePass=true})}
 // a finished effect or object gives its material back: shared ones stay, effect materials go to the pool
 function releaseMat(m){if(!m||m.userData.shared)return;if(m.transparent&&m.blending===THREE.AdditiveBlending){const P=matPool[m.wireframe?'w':'a'];if(P.length<200){P.push(m);return}}m.dispose()}
 // projectiles: one sphere and one material per colour for all of them, instead of new ones for every shot
@@ -147,7 +152,7 @@ function ensureView(info){
   if(v&&(v.k!==info.k||v.t!==info.t||v.sk!==info.sk)){dropView(v);v=null}
   if(!v){
     const el=document.createElement('div');el.innerHTML=`<span class="n"></span><div class="hb"><i class="h"></i><i class="s"></i></div><em></em>`;$('#bars').appendChild(el);
-    const model=info.kind==='b'?buildBoss(info.k):info.kind==='n'?buildNpc(info.k,info.t):buildHero(info.k,info.t,info.sk);
+    const model=info.kind==='b'?buildBoss(info.k):info.kind==='n'?buildNpc(info.k,info.t):buildHero(info.k,info.t,info.sk);singlePass(model.root);
     scene.add(model.root);
     v={id:info.i,k:info.k,t:info.t,sk:info.sk,kind:info.kind,model,bar:{el,n:el.querySelector('.n'),h:el.querySelector('.h'),s:el.querySelector('.s'),em:el.querySelector('em')},
       phase:0,attackAnim:0,flash:0,x:0,z:0,f:0,vx:0,vz:0,h:info.mh,s:0,fl:0,dead:false,hid:false,placed:false};
@@ -1118,6 +1123,7 @@ function frame(now=performance.now()){
     camera.position.set(camPos.x+sx,26*far*boss,camPos.z+17*far*boss+sz);camera.lookAt(camPos.x+sx*.5,0,camPos.z-1+sz*.5)}
   ray.setFromCamera(ndc,camera);ray.ray.intersectPlane(groundPlane,mouseWorld);
   updParts(dt);updFx(dt);updFloaters(dt);
+  if(t-(G.spT||0)>1){G.spT=t;singlePass(scene)}
   composer.render();
   drawPreview(dt,t);
   drawHUD();

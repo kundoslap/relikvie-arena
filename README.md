@@ -205,6 +205,7 @@ Kdo už měl schopnost na úrovni 20 a hrál dál, má nasbírané body započí
 - **Záře (bloom)** se počítá v polovičním rozlišení.
 - **Střely** sdílejí jednu geometrii a materiál podle barvy a krátké efekty (kruhy, záblesky, paprsky) vracejí materiály do zásobníku, místo aby se pro každý zásah tvořily nové.
 - **Automatické snížení rozlišení** se nespouští, když hra jen drží limit 30 FPS.
+- **Průhledné oboustranné materiály** (neonové části hrdinů, záře, efekty) se kreslí jedním průchodem (`forceSinglePass`). Three.js je jinak kreslí dvakrát za snímek, zadní a přední stranu zvlášť, a pokaždé znovu ověřuje jejich shader; v profilu to byla největší jednotlivá položka.
 
 Změřeno v Edge bez okna (softwarové vykreslování, procesorové sekundy za 10 s):
 - hub z 11,5 na zhruba 7, s vypnutým pozadím na 0,75;
