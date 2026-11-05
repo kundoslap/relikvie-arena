@@ -51,6 +51,8 @@ Proměnné prostředí:
 
 **Vyváženost povolání** (listopad 2026): Strážce jako jediný hrdina na blízko v soubojích 1 na 1 prohrával (kolem 25 % výher) a Lovec vyhrával dvě třetiny. Proto má Strážce 385 HP místo 360 a rychlost 7,9 místo 7,6, Žhář 290 HP místo 275 a Lovec 222 HP místo 230. V soubojích botů na těžkou obtížnost (všechny dvojice, obě strany) teď vycházejí všechna čtyři povolání zhruba mezi 41 a 50 % výher (zbytek tvoří remízy).
 
+Druhé kolo (po zavedení úskoku): boti začali úskok používat i v PvP, Strážce tím doskočí na střelce a v soubojích vyhrával 65 %, zatímco Žhář v týmech 3 na 3 jen 34–36 %. Proto má Štítový náraz čekání 6,5 s místo 5 s a Žhář TECH 40 místo 36, 305 HP místo 290 a základní útok 21 místo 19. V 200 týmových zápasech 3 na 3 (Aréna a Ovládnutí, náhodná složení týmů) teď vychází Lovec 48 %, Strážce 53 %, Technik 56 % a Žhář 43 % výher; souboje 1 na 1 kolísají mezi běhy zhruba o ±7 %.
+
 **Sledování zápasů přátel:** když přítel hraje (kromě hodnocené hry), v seznamu přátel je tlačítko Sledovat. Divák vidí zápas živě pohledem sledovaného hráče (jeho zdraví, schopnosti, mlhu války i týmové pingy), klávesami Q/E nebo šipkami v liště přepíná mezi hrdiny a na konci uvidí výsledek. Divák nemůže hrát ani pingovat, nepočítá se mezi hráče a místnost jich unese nejvýš 8. Sledovat můžou jen přihlášení přátelé.
 
 **Série a vícenásobná zničení** (PvP):
@@ -75,11 +77,11 @@ Rozbor dostane jen padlý hráč (případně divák, který ho sleduje), ostatn
 | Povolání | Úskok | Čekání | Co dělá |
 |---|---|---|---|
 | Lovec | Přískok | 4 s | kotoul o 6,5 m, 0,3 s nezranitelnost |
-| Strážce | Štítový náraz | 5 s | výpad o 4,5 m za štítem: 0,8 s poloviční poškození, soupeře v cestě zasáhne (60 % útoku) a odhodí |
+| Strážce | Štítový náraz | 6,5 s | výpad o 4,5 m za štítem: 0,8 s poloviční poškození, soupeře v cestě zasáhne (60 % útoku) a odhodí |
 | Technik | Fázový skok | 5 s | okamžitý přesun o 7 m, projde mezi nepřáteli, zastaví se o zeď, mžik nezranitelnosti |
 | Žhář | Ohnivý kotoul | 4,5 s | kotoul o 5,5 m s 0,25 s nezranitelností, na výchozím místě vzplane oheň 2,2 m na 2 s |
 
-Úskok nejde použít v omráčení, zeď ho zastaví a teleportní brány se během něj nepoužijí. Boti uskakují z varovaných oblastí (útoky bossů, výbuchy), na těžké obtížnosti spolehlivěji. Klávesa jde změnit v Nastavení → Ovládání. Starší uložené ovládání, které už mezerník používá pro jinou akci, nechá úskok bez klávesy, aby se akce nepletly. Ultimátka je jen na F (dřív na ni fungoval i mezerník).
+Úskok nejde použít v omráčení, zeď ho zastaví a teleportní brány se během něj nepoužijí. Boti uskakují z varovaných oblastí (útoky bossů, výbuchy), na těžké obtížnosti spolehlivěji. V PvP boji s málem životů uskočí od blízkého soupeře a bot Strážce Štítovým nárazem doskočí na střelce, který je mimo dosah jeho útoku. Klávesa jde změnit v Nastavení → Ovládání. Starší uložené ovládání, které už mezerník používá pro jinou akci, nechá úskok bez klávesy, aby se akce nepletly. Ultimátka je jen na F (dřív na ni fungoval i mezerník).
 
 **Taktické akce** (klávesa T, pro všechna povolání, volí se v Postavě): Úhyb (skok a krátká nezranitelnost), Dekontaminace (odstraní mor nanitů, krvácení, zpomalení a umlčení, 4 s ochrana), Nouzové přebití (+45 energie), Signální maják (soupeři v oblasti dostávají o 25 % víc a nemůžou se maskovat) a Polní bariéra (štít 22 % HP). Odemykají se na úrovních 1–12, boti je používají taky.
 

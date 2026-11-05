@@ -26,9 +26,9 @@ export const CLASSES={
             {name:'EMP',cost:30,cd:9,icon:'emp',desc:'Výboj v místě: 110 % TECH, −40 energie, umlčení 1,6 s.'}],
     ult:{name:'Řetězový výboj',icon:'chain',desc:'Blesk přeskočí až na 5 cílů, každý zásah 160 % TECH.'},
     relic:'Relikvie ozvěny: energie ×1,8 a čekání −30 % na 20 s.',bars:[.55,.45,1,.75]},
-  pyro:{name:'Žhář',role:'Oheň a kontrola prostoru',color:0xff6a1a,css:'#ff6a1a',hp:290,speed:8.8,def:.12,atk:28,tech:36,pref:9,
+  pyro:{name:'Žhář',role:'Oheň a kontrola prostoru',color:0xff6a1a,css:'#ff6a1a',hp:305,speed:8.8,def:.12,atk:28,tech:40,pref:9,
     talent:'Popel',talentDesc:'Základní útok zapálí cíl: hoření 5 HP/s na 3 s. Ohnivé oblasti zapalují každého, kdo v nich stojí.',
-    basic:{type:'shot',name:'Žhavý projektil',dmg:19,rate:.4,speed:36,range:19,size:1.6,dot:{kind:'burn',dps:10,t:3}},
+    basic:{type:'shot',name:'Žhavý projektil',dmg:21,rate:.4,speed:36,range:19,size:1.6,dot:{kind:'burn',dps:10,t:3}},
     skills:[{name:'Plamenná vlna',cost:30,cd:7,icon:'flame',desc:'Vlna ohně do 6 m před tebou: 110 % TECH a hoření 8 HP/s na 3 s.'},
             {name:'Žhnoucí půda',cost:30,cd:10,icon:'firezone',desc:'Hořící oblast 3,5 m na 4 s: 45 % TECH za sekundu.'},
             {name:'Fázový plamen',cost:25,cd:9,icon:'blink',desc:'Přesun až o 7 m. Na výchozím místě zůstane hořící oblast 2,5 m na 3 s.'}],
@@ -60,11 +60,15 @@ export const CUSTOM_FULL=240,CUSTOM_GOAL=.6;
 // It goes in the direction you move (standing still: where you face) and a dash ends early at a wall.
 export const EVADES={
   striker:{name:'Přískok',cd:4,icon:'dodge',desc:'Bleskový kotoul o 6,5 m s krátkou nezranitelností (0,3 s).'},
-  guardian:{name:'Štítový náraz',cd:5,icon:'bulwark',desc:'Výpad o 4,5 m za štítem: po dobu 0,8 s dostáváš polovinu poškození a odhodíš soupeře v cestě (60 % útoku).'},
+  guardian:{name:'Štítový náraz',cd:6.5,icon:'bulwark',desc:'Výpad o 4,5 m za štítem: po dobu 0,8 s dostáváš polovinu poškození a odhodíš soupeře v cestě (60 % útoku).'},
   technician:{name:'Fázový skok',cd:5,icon:'blink',desc:'Okamžitý přesun o 7 m (projde mezi nepřáteli, zastaví se o zeď) s mžikem nezranitelnosti.'},
   pyro:{name:'Ohnivý kotoul',cd:4.5,icon:'firezone',desc:'Kotoul o 5,5 m s nezranitelností 0,25 s. Na výchozím místě vzplane oheň 2,2 m na 2 s.'}};
 // "Novinky" in the hub, newest first; id marks what a player has already seen
 export const CHANGELOG=[
+  {id:'2026-11e',title:'Ladění povolání a botů',items:[
+    'Boti používají úskok i v PvP: s málem životů uskočí a Strážce doskočí Štítovým nárazem na střelce.',
+    'Žhář: TECH 40, 305 HP, základní útok 21 (byl v týmových zápasech nejslabší).',
+    'Štítový náraz Strážce má čekání 6,5 s místo 5 s.']},
   {id:'2026-11d',title:'Mistrovství až do 100',items:[
     'Mistrovství schopností, ultimátek i základního útoku teď roste až do úrovně 100.',
     'Nové milníky na mistrovství 30, 40, 50, 60, 70, 80, 90 a 100, každý s výběrem ze dvou větví (24 nových voleb na každou schopnost).',

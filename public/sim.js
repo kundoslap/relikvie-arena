@@ -854,7 +854,12 @@ function botUpdate(M,u,dt){
   const play=M.state==='play';
   // evade out of a warned area (boss telegraphs, blasts), more reliably on higher difficulty
   if(thinkNow&&play&&!(u.ecd>0)&&!u.dash){const g=M.danger.find(g=>g.own!==u&&d2(u,g)<g.r+.5);
-    if(g&&Math.random()<({easy:.25,normal:.5,hard:.8}[M.diffKey]??.5)){let ex=u.x-g.x,ez=u.z-g.z;if(Math.hypot(ex,ez)<.5){ex=Math.cos(u.face);ez=-Math.sin(u.face)}evade(M,u,{x:ex,z:ez})}}
+    const will=Math.random()<({easy:.25,normal:.5,hard:.8}[M.diffKey]??.5);
+    if(g&&will){let ex=u.x-g.x,ez=u.z-g.z;if(Math.hypot(ex,ez)<.5){ex=Math.cos(u.face);ez=-Math.sin(u.face)}evade(M,u,{x:ex,z:ez})}
+    // in a fight: with little health and an enemy close, evade away; the Strážce bashes in to reach a shooter out of reach
+    else if(will&&t){const dt2=d2(u,t),dx=t.x-u.x,dz=t.z-u.z;
+      if(u.hp<u.maxHp*.35&&dt2<7&&t.kind!=='boss'&&Math.random()<.6)evade(M,u,{x:-dx+(Math.random()-.5)*dz,z:-dz+(Math.random()-.5)*dx});
+      else if(u.clsKey==='guardian'&&dt2>4.5&&dt2<9&&!blocked(M.map,u,t,.3)&&Math.random()<.5)evade(M,u,{x:dx,z:dz})}}
   if(t){
     const B=u.C.basic,lead=B.speed?d/B.speed:0;
     const aim={x:t.x+t.vx*lead+ai.err.x,z:t.z+t.vz*lead+ai.err.z};
