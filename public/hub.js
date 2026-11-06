@@ -141,11 +141,14 @@ function bindAppBtn(){const b=$('#appBtn');if(!b)return;b.onclick=async()=>{
 // the latest changes; a dot until the newest entry was opened, shown once by itself to players who played before
 const newsUnseen=()=>store.get('news',null)!==D.CHANGELOG[0].id;
 function newsDialog(){
+  // everything above the entry seen last time is new (several updates may arrive at once); unknown id = all new
+  const seen=store.get('news',null),si=D.CHANGELOG.findIndex(c=>c.id===seen),nNew=seen===null?0:si<0?D.CHANGELOG.length:si;
   store.set('news',D.CHANGELOG[0].id);
   document.querySelector('#newsDlg')?.remove();
   const d=document.createElement('div');d.id='newsDlg';d.className='overlay';
   d.innerHTML=`<div class="center"><div class="card news" role="dialog" aria-label="Novinky"><div class="row"><h2 class="sec" style="margin:0">Novinky</h2><button class="ghost sm" type="button" data-x aria-label="Zavřít">×</button></div>
-    ${D.CHANGELOG.map(c=>`<section><div class="lbl">${esc(c.title)}</div><ul>${c.items.map(i=>`<li>${esc(i)}</li>`).join('')}</ul></section>`).join('')}
+    ${nNew>1?`<p class="help" style="margin:0">Od tvé poslední návštěvy ${nNew<5?`přibyly ${nNew} aktualizace`:`přibylo ${nNew} aktualizací`}.</p>`:''}
+    ${D.CHANGELOG.map((c,i)=>`<section class="${i<nNew?'new':'old'}">${i===nNew&&nNew>0?'<div class="newsSep">Starší</div>':''}<div class="lbl">${esc(c.title)}${i<nNew?' <span class="newTag">NOVÉ</span>':''}</div><ul>${c.items.map(i=>`<li>${esc(i)}</li>`).join('')}</ul></section>`).join('')}
     <p class="help">Podrobnosti najdeš v nápovědě u jednotlivých karet a režimů.</p></div></div>`;
   document.body.appendChild(d);
   const close=()=>{d.remove();renderHub()};

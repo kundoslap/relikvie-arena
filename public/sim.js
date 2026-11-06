@@ -368,9 +368,10 @@ const SK={
         for(const e of near(foes(M,u),tp,R)){damage(M,e,tech(M,u)*1.1*(ov?1.4:1),u,{color:0x6acbff});e.energy=Math.max(0,(e.energy||0)-40);e.st.silence=Math.max(e.st.silence,1.6+(ov?1:0))}})},
     (M,u)=>{const pool=foes(M,u).filter(e=>visibleTo(u,e)&&d2(u,e)<15).sort((a,b)=>d2(u,a)-d2(u,b));
       if(!pool.length)return false;
-      const hit=new Set(),n=5+m(u,'chain');let from=[u.x,1.6,u.z],cur=pool[0];
+      // the first target takes the full bolt, each jump is weaker: strong in a duel without dominating team fights
+      const hit=new Set(),n=4+m(u,'chain');let from=[u.x,1.6,u.z],cur=pool[0];
       for(let k=0;k<n&&cur;k++){const c=cur,f=from;hit.add(c);
-        later(M,k*.09,()=>{if(c.dead)return;fx(M,{t:'bolt',a:f,b:[r2(c.x),1.2,r2(c.z)],c:0x9fd8ff});damage(M,c,tech(M,u)*1.4,u,{color:0x9fd8ff,ult:true});if(u.prof.ultMod)c.st.silence=Math.max(c.st.silence,1)});
+        later(M,k*.09,()=>{if(c.dead)return;fx(M,{t:'bolt',a:f,b:[r2(c.x),1.2,r2(c.z)],c:0x9fd8ff});damage(M,c,tech(M,u)*(k?.9:1.6),u,{color:0x9fd8ff,ult:true});if(u.prof.ultMod)c.st.silence=Math.max(c.st.silence,1)});
         from=[r2(c.x),1.2,r2(c.z)];cur=foes(M,u).filter(e=>!hit.has(e)&&d2(e,c)<9).sort((a,b)=>d2(a,c)-d2(b,c))[0]}
       fx(M,{t:'ban',ti:'Řetězový výboj',col:'var(--cyan)',d:1.2,i:u.id})}
   ]
@@ -448,11 +449,11 @@ SK.pyro=[
     fireZone(M,u,from,2.5,3,.35);u.st.inv=Math.max(u.st.inv,.2);
     u.dash={dx:dir.x,dz:dir.z,spd:42,t:dist/42,end:()=>{fx(M,{t:'burst',x:r2(u.x),z:r2(u.z),y:1,c:0xffa64d,n:26,s:5,u:3,l:.5});const sh=m(u,'blinkSh');if(sh)addShield(u,sh,u)}}},
   // Inferno: pulses of fire around the caster
-  (M,u)=>{const um=u.prof.ultMod,R=7+(um?2:0),n=3+(um?1:0);
+  (M,u)=>{const um=u.prof.ultMod,R=8.5+(um?2:0),n=3+(um?1:0);
     for(let k=0;k<n;k++)later(M,.45*k,()=>{if(u.dead)return;fx(M,{t:'blast',x:r2(u.x),z:r2(u.z),r:R,c:0xff6a1a});
       for(const e of near(foes(M,u),u,R)){
         if(k===0&&m(u,'infernoPull')&&e.kind!=='boss'){const kx=u.x-e.x,kz=u.z-e.z,l=Math.hypot(kx,kz)||1,s=Math.min(2,Math.max(0,l-u.radius-e.radius));e.x+=kx/l*s;e.z+=kz/l*s;collide(e,M.map)}
-        damage(M,e,tech(M,u)*.9,u,{color:0xff6a1a,ult:true});burn(e,u,BURN.ult)}});
+        damage(M,e,tech(M,u)*1.15,u,{color:0xff6a1a,ult:true});burn(e,u,BURN.ult)}});
     fx(M,{t:'ban',ti:'Inferno',col:'#ff6a1a',d:1.2,i:u.id})}
 ];
 
@@ -794,8 +795,9 @@ function botSkills(M,u,t,d,aim,seen){
     if(t&&d<5.5&&u.hp<u.maxHp*.85)cast(M,u,0,u);
   }else if(k==='pyro'){
     if(!t)return;
-    const n=near(foes(M,u),u,7).length;
-    if(u.ult>=100&&(n>=2||d<6)){cast(M,u,3,u);return}
+    // Inferno reaches 8.5 m: with allies close one enemy in range is worth it, alone (a duel) only up close
+    const n=near(foes(M,u),u,8.5).length;
+    if(u.ult>=100&&(n>=2||d<6||(n>=1&&near(friends(M,u).filter(x=>x.kind==='hero'&&x!==u),u,12).length))){cast(M,u,3,u);return}
     if(d<6.5&&seen&&cast(M,u,0,aim))return;
     // the blink closes in on a target out of wave range; when low on health it escapes instead
     const l=d||1;

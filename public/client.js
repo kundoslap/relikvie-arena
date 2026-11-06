@@ -947,7 +947,8 @@ function updSignals(t){
     if(p.tg){const v=views.get(p.tg);if(v&&!v.dead){p.x=v.x;p.z=v.z;p.g.position.set(v.x,.12,v.z)}}
     const k=(p.until-now)/3500;p.g.children[0].scale.setScalar(1.2+Math.sin(t*8)*.25);p.g.children[0].material.opacity=Math.min(1,k*2);p.g.children[1].material.opacity=Math.min(1,k*2)*.7;return true});
   for(const [id,b] of bubbles){const v=views.get(id);if(now>b.until||!v||v.dead){b.el.remove();bubbles.delete(id);continue}
-    const s=toScreen(v,(v.model.height||2.3)+1.3);b.el.style.display=s.off?'none':'';b.el.style.transform=`translate(${s.x}px,${s.y}px) translate(-50%,-100%)`;b.el.style.opacity=Math.min(1,(b.until-now)/400)}
+    // anchored like the name plate (which sits 30 px above this point) and lifted just above it
+    const s=toScreen(v,(v.model.height||2.3)+.8);b.el.style.display=s.off?'none':'';b.el.style.transform=`translate(${s.x}px,${s.y-34}px) translate(-50%,-100%)`;b.el.style.opacity=Math.min(1,(b.until-now)/400)}
 }
 function clearSignals(){for(const p of pingMarks)scene.remove(p.g);pingMarks=[];for(const b of bubbles.values())b.el.remove();bubbles.clear();$('#wheel').hidden=true}
 function sendSignal(k,p){
@@ -1136,4 +1137,5 @@ applyTouch();startAttract();frame();
 Hub.init(hubCallbacks).then(resumeAfterReload);
 // installable app: the service worker keeps a copy of the game for offline training
 if('serviceWorker' in navigator&&(location.protocol==='https:'||location.hostname==='localhost'))navigator.serviceWorker.register('/sw.js').catch(e=>console.warn('Service worker:',e.message));
-window.__arena=G;
+// local test harnesses read the game state; the live site does not expose it
+if(location.hostname==='localhost')window.__arena=G;

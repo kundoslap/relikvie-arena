@@ -2,7 +2,7 @@
 // Imported by the simulation, the server and the client, so every rule has one source.
 
 export const CLASSES={
-  striker:{name:'Lovec',role:'Nápor a přesnost',color:0xffb347,css:'#ffb347',hp:222,speed:9.2,def:.08,atk:40,tech:12,pref:11,
+  striker:{name:'Lovec',role:'Nápor a přesnost',color:0xffb347,css:'#ffb347',hp:235,speed:9.2,def:.08,atk:40,tech:12,pref:11,
     talent:'Kombinátor',talentDesc:'Zásah základním útokem zkrátí čekání schopností o 0,35 s.',
     basic:{type:'shot',name:'Pulzní střela',dmg:16,rate:.3,speed:46,range:22,size:1,dot:{kind:'bleed',dps:4,t:4}},
     skills:[{name:'Průrazný výpad',cost:30,cd:6,icon:'slash',desc:'Výpad vpřed a dva seky po 90 % útoku.'},
@@ -24,15 +24,15 @@ export const CLASSES={
     skills:[{name:'Mor nanitů',cost:30,cd:9,icon:'nano',desc:'Zóna 4 m na 5 s, 50 % TECH za sekundu.'},
             {name:'Obnova',cost:30,cd:10,icon:'heal',desc:'Spojenci do 7,5 m léčí 22 HP/s po 3 s a zbaví se krvácení.'},
             {name:'EMP',cost:30,cd:9,icon:'emp',desc:'Výboj v místě: 110 % TECH, −40 energie, umlčení 1,6 s.'}],
-    ult:{name:'Řetězový výboj',icon:'chain',desc:'Blesk přeskočí až na 5 cílů, každý zásah 140 % TECH.'},
+    ult:{name:'Řetězový výboj',icon:'chain',desc:'Blesk zasáhne cíl za 160 % TECH a přeskočí až na 3 další, každý za 90 % TECH.'},
     relic:'Relikvie ozvěny: energie ×1,8 a čekání −30 % na 20 s.',bars:[.55,.45,1,.75]},
   pyro:{name:'Žhář',role:'Oheň a kontrola prostoru',color:0xff6a1a,css:'#ff6a1a',hp:305,speed:8.8,def:.12,atk:28,tech:40,pref:9,
     talent:'Popel',talentDesc:'Základní útok zapálí cíl: hoření 5 HP/s na 3 s. Ohnivé oblasti zapalují každého, kdo v nich stojí.',
-    basic:{type:'shot',name:'Žhavý projektil',dmg:21,rate:.4,speed:36,range:19,size:1.6,dot:{kind:'burn',dps:10,t:3}},
+    basic:{type:'shot',name:'Žhavý projektil',dmg:18,rate:.4,speed:36,range:19,size:1.6,dot:{kind:'burn',dps:10,t:3}},
     skills:[{name:'Plamenná vlna',cost:30,cd:7,icon:'flame',desc:'Vlna ohně do 6 m před tebou: 110 % TECH a hoření 8 HP/s na 3 s.'},
             {name:'Žhnoucí půda',cost:30,cd:10,icon:'firezone',desc:'Hořící oblast 3,5 m na 4 s: 45 % TECH za sekundu.'},
             {name:'Fázový plamen',cost:25,cd:9,icon:'blink',desc:'Přesun až o 7 m. Na výchozím místě zůstane hořící oblast 2,5 m na 3 s.'}],
-    ult:{name:'Inferno',icon:'inferno',desc:'Tři výbuchy ohně kolem tebe do 7 m, každý 90 % TECH, a hoření 12 HP/s na 4 s.'},
+    ult:{name:'Inferno',icon:'inferno',desc:'Tři výbuchy ohně kolem tebe do 8,5 m, každý 115 % TECH, a hoření 12 HP/s na 4 s.'},
     relic:'Relikvie výhně: hoření dává dvojnásobné poškození a ohnivé oblasti jsou o polovinu větší na 20 s.',bars:[.6,.55,.85,.7]}
 };
 // damage over time from basic attacks: each class has its own kind. A new application refreshes the duration and keeps
@@ -65,6 +65,18 @@ export const EVADES={
   pyro:{name:'Ohnivý kotoul',cd:4.5,icon:'firezone',desc:'Kotoul o 5,5 m s nezranitelností 0,25 s. Na výchozím místě vzplane oheň 2,2 m na 2 s.'}};
 // "Novinky" in the hub, newest first; id marks what a player has already seen
 export const CHANGELOG=[
+  {id:'2026-11j',title:'Odolnější Lovec',items:[
+    'Lovec: 235 HP místo 222. V soubojích 1 na 1 vyhrával nejméně ze všech, v týmech se tím skoro nic nemění.']},
+  {id:'2026-11i',title:'Řetězový výboj',items:[
+    'Technik: Řetězový výboj zasáhne první cíl za 160 % TECH (dřív 120 %), další skoky za 90 % a přeskočí nejvýš na 3 další cíle místo 4.',
+    'Technik tak lépe obstojí v soubojích 1 na 1 a v týmových bitvách zůstává stejně silný.']},
+  {id:'2026-11h',title:'Chytřejší boti Žháře',items:[
+    'Boti Žháře lépe používají Inferno: počítají s jeho dosahem 8,5 m a se spoluhráčem poblíž ho odpálí i na jednoho soupeře.',
+    'Bublina rychlé zprávy nebo emotu je nad jménem hrdiny a nezakrývá jeho životy.']},
+  {id:'2026-11g',title:'Vyváženost Žháře',items:[
+    'Žhář: Žhavý projektil 18 místo 21 (souboje 1 na 1 vyhrával moc často).',
+    'Inferno: dosah 8,5 m místo 7 m a 115 % TECH místo 90 % na výbuch, aby Žhář víc pomohl v týmových bitvách.',
+    'Technik: Řetězový výboj 120 % TECH místo 140 %.']},
   {id:'2026-11f',title:'Vyváženost Technika',items:[
     'Technik: TECH 35 místo 40 a Řetězový výboj 140 % TECH místo 160 % (v týmových zápasech vyhrával nejčastěji).',
     'Výbojový šíp Technika dává 25 místo 22, aby neprohrával souboje 1 na 1.']},
