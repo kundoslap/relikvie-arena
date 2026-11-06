@@ -22,7 +22,7 @@ export const CLASSES={
     talent:'Inženýr',talentDesc:'Zásah základním útokem vrátí 5 energie.',
     basic:{type:'shot',name:'Výbojový šíp',dmg:25,rate:.48,speed:34,range:20,size:1.5,dot:{kind:'shock',dps:4,t:2}},
     skills:[{name:'Mor nanitů',cost:30,cd:9,icon:'nano',desc:'Zóna 4 m na 5 s, 50 % TECH za sekundu.'},
-            {name:'Obnova',cost:30,cd:10,icon:'heal',desc:'Spojenci do 7,5 m léčí 22 HP/s po 3 s a zbaví se krvácení.'},
+            {name:'Obnova',cost:30,cd:10,icon:'heal',desc:'Spojenci do 7,5 m léčí 22 HP/s po 3 s a zbaví se krvácení a zpomalení.'},
             {name:'EMP',cost:30,cd:9,icon:'emp',desc:'Výboj v místě: 110 % TECH, −40 energie, umlčení 1,6 s.'}],
     ult:{name:'Řetězový výboj',icon:'chain',desc:'Blesk zasáhne cíl za 160 % TECH a přeskočí až na 3 další, každý za 90 % TECH.'},
     relic:'Relikvie ozvěny: energie ×1,8 a čekání −30 % na 20 s.',bars:[.55,.45,1,.75]},
@@ -65,8 +65,20 @@ export const EVADES={
   pyro:{name:'Ohnivý kotoul',cd:4.5,icon:'firezone',desc:'Kotoul o 5,5 m s nezranitelností 0,25 s. Na výchozím místě vzplane oheň 2,2 m na 2 s.'}};
 // "Novinky" in the hub, newest first; id marks what a player has already seen
 export const CHANGELOG=[
+  {id:'2026-11m',title:'Obnova a hoření',items:[
+    'Technik: Obnova už neuhasí hoření. Dál léčí, zbaví spojence krvácení a nově je v popisu i to, že ruší zpomalení.',
+    'Hoření Žháře tak platí stejně proti všem. Souboje se nemění, v týmech Žhář o něco málo posílí.']},
+  {id:'2026-11l',title:'Míření na dotyku',items:[
+    'Automatické míření na dotykovém ovládání míří s předstihem podle pohybu soupeře, jako to dělají boti. Uhýbajícího soupeře trefíš zhruba třikrát častěji.',
+    'Automatické míření hledá cíl v celém dostřelu útoku (Lovec 22 m, dřív jen 20 m).']},
+  {id:'2026-11k',title:'Hraní na mobilu',items:[
+    'Na telefonu drženém na výšku je kamera dál, takže vidíš asi 11 m do stran místo 9 m a dřív si všimneš soupeře, který střílí z boku.',
+    'Při prvních třech zápasech na výšku hra poradí otočit telefon na šířku, kde je vidět nejvíc.',
+    'Velký nápis uprostřed obrazovky (série, ultimátky, varování) je na nízkých obrazovkách menší a nezakrývá tvého hrdinu.']},
   {id:'2026-11j',title:'Odolnější Lovec',items:[
-    'Lovec: 235 HP místo 222. V soubojích 1 na 1 vyhrával nejméně ze všech, v týmech se tím skoro nic nemění.']},
+    'Lovec: 235 HP místo 222. V soubojích 1 na 1 vyhrával nejméně ze všech, v týmech se tím skoro nic nemění.',
+    'Nápis o tvé sérii nebo o tom, že tě někdo zničil, už nepřekryje oznámení cizí ultimátky. Varování bosse má dál přednost.',
+    'Opravena čeština: „5 soupeřů rychle po sobě“.']},
   {id:'2026-11i',title:'Řetězový výboj',items:[
     'Technik: Řetězový výboj zasáhne první cíl za 160 % TECH (dřív 120 %), další skoky za 90 % a přeskočí nejvýš na 3 další cíle místo 4.',
     'Technik tak lépe obstojí v soubojích 1 na 1 a v týmových bitvách zůstává stejně silný.']},

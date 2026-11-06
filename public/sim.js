@@ -362,7 +362,7 @@ const SK={
         M.zones.push({id:M.nextId++,x:p.x,z:p.z,r:R,t:5+(long?3:0),acc:0,dps:T*.5*(1+m(u,'zoneDps')/100),src:u,team:u.team,color:0x7dff9a,slow:!!long});
         fx(M,{t:'ring',x:r2(p.x),z:r2(p.z),c:0x7dff9a,a:.5,b:R,d:.4})}})},
     (M,u)=>{const hps=22+m(u,'restore'),sh=m(u,'restoreSh');fx(M,{t:'ring',x:r2(u.x),z:r2(u.z),c:0x6affd8,a:.5,b:7.5,d:.6});
-      for(const a of near(friends(M,u).filter(x=>x.kind==='hero'),u,7.5)){a.st.hot={hps,t:3,acc:0,src:u};a.st.bleed=null;a.st.burn=null;a.st.slow=0;if(sh)addShield(a,sh,u);fx(M,{t:'burst',x:r2(a.x),z:r2(a.z),y:1.2,c:0x6affd8,n:14,s:1.5,u:4,l:.8})}},
+      for(const a of near(friends(M,u).filter(x=>x.kind==='hero'),u,7.5)){a.st.hot={hps,t:3,acc:0,src:u};a.st.bleed=null;a.st.slow=0;if(sh)addShield(a,sh,u);fx(M,{t:'burst',x:r2(a.x),z:r2(a.z),y:1.2,c:0x6affd8,n:14,s:1.5,u:4,l:.8})}},
     (M,u,pt)=>{const tp=clampReach(M,u,pt,13),R=4.5+m(u,'empR'),ov=m(u,'overload');aimDir(u,tp);fx(M,{t:'beam',a:[r2(u.x),1.3,r2(u.z)],b:[r2(tp.x),.4,r2(tp.z)],c:0x6acbff,w:.06,d:.25});
       later(M,.2,()=>{fx(M,{t:'emp',x:r2(tp.x),z:r2(tp.z),r:R});
         for(const e of near(foes(M,u),tp,R)){damage(M,e,tech(M,u)*1.1*(ov?1.4:1),u,{color:0x6acbff});e.energy=Math.max(0,(e.energy||0)-40);e.st.silence=Math.max(e.st.silence,1.6+(ov?1:0))}})},

@@ -40,6 +40,8 @@ const bloomPass=new UnrealBloomPass(new THREE.Vector2(1,1),hiQ?.65:.5,.4,.7);com
 // the glow is soft anyway: computing it at half resolution looks the same and costs about a quarter
 {const set=bloomPass.setSize.bind(bloomPass);bloomPass.setSize=(w,h)=>set(Math.max(1,Math.round(w/2)),Math.max(1,Math.round(h/2)))}
 composer.addPass(new OutputPass());
+// a phone held upright sees little to the sides: pull the camera back so about 11 m stay visible left and right (a shot reaches ~20 m)
+const portraitZoom=()=>camera.aspect<1?Math.min(2,Math.max(1,.85/camera.aspect)):1;
 function resize(){const w=innerWidth,h=innerHeight;renderer.setSize(w,h);composer.setSize(w,h);camera.aspect=w/h;camera.updateProjectionMatrix()}
 addEventListener('resize',resize);resize();
 // settings that apply at once: resolution, bloom, names over units
@@ -132,8 +134,9 @@ function toScreen(p,y){_v.set(p.x,y??p.y??0,p.z).project(camera);return{x:(_v.x*
 function floatText(p,text,cls,color){if(floaters.length>60)return;if(!Cfg.get('dmgNums')&&(cls==='dmg'||cls==='out'||cls==='in'||cls==='dot'))return;const el=document.createElement('div');el.className='fl '+cls;el.textContent=text;if(color)el.style.color=color;$('#floaters').appendChild(el);floaters.push({el,p:{x:p.x+rnd(-.5,.5),y:p.y??2.7,z:p.z+rnd(-.5,.5)},t:0,life:cls==='loot'?1.8:.9})}
 function updFloaters(dt){for(let i=floaters.length-1;i>=0;i--){const f=floaters[i];f.t+=dt;f.p.y+=dt*1.8;if(f.t>f.life){f.el.remove();floaters.splice(i,1);continue}
   const s=toScreen(f.p);f.el.style.transform=`translate(${s.x}px,${s.y}px) translate(-50%,-50%) scale(${1+Math.max(0,.15-f.t)*3})`;f.el.style.opacity=f.t<f.life-.3?1:(f.life-f.t)/.3}}
-let bannerT=0;
-function banner(title,sub='',dur=2.2,color='var(--gold)'){if(G.mode==='menu')return;const b=$('#banner');b.querySelector('b').textContent=title;b.querySelector('b').style.color=color;b.querySelector('small').textContent=sub;b.classList.add('on');bannerT=dur}
+let bannerT=0,bannerP=0;
+// p: 0 a hero's ultimate, 1 your own news (series, being destroyed), 2 boss warnings; a lower one never covers a higher one still on screen
+function banner(title,sub='',dur=2.2,color='var(--gold)',p=1){if(G.mode==='menu')return;if(bannerT>0&&p<bannerP)return;bannerP=p;const b=$('#banner');b.querySelector('b').textContent=title;b.querySelector('b').style.color=color;b.querySelector('small').textContent=sub;b.classList.add('on');bannerT=dur}
 function feed(html){if(G.mode==='menu')return;const el=document.createElement('div');el.innerHTML=html;const f=$('#feed');f.prepend(el);while(f.children.length>5)f.lastChild.remove();setTimeout(()=>el.remove(),6000)}
 const nameOf=id=>G.roster.get(id)?.n||'?';
 const mutNames=mods=>(mods||[]).map(k=>S.MUTATORS[k]?.name).filter(Boolean).join(' + ');
@@ -343,7 +346,7 @@ const EV={
     // streaks, multi-kills and shutdowns: a line in the feed for everyone, a banner and a sound for the one who did it
     else if(e.k==='multi'||e.k==='streak'){const name=e.k==='multi'?S.MULTI_NAME(e.n):S.STREAKS[e.n];
       feed(`${tag(e.a)} · <span class="g">${esc(name)}</span>${e.k==='streak'?` (${e.n} v řadě)`:''}`);
-      if(e.a===G.you){banner(name,e.k==='multi'?`${e.n} soupeři rychle po sobě`:`${e.n} zničení bez pádu`,2,'var(--gold)');ui('streak',{n:e.n,dur:1.2})}}
+      if(e.a===G.you){banner(name,e.k==='multi'?`${e.n} ${e.n<5?'soupeři':'soupeřů'} rychle po sobě`:`${e.n} zničení bez pádu`,2,'var(--gold)');ui('streak',{n:e.n,dur:1.2})}}
     else if(e.k==='shut'){feed(`${tag(e.a)} ukončil sérii ${tag(e.b)} (${e.n})`);
       if(e.a===G.you){banner('Konec série',`Zastavil jsi ${nameOf(e.b)} po ${e.n} zničeních`,2,'var(--gold)');ui('streak',{n:2,dur:1})}}
     else if(e.k==='relic'){const r=G.roster.get(e.a),mine=G.roster.get(G.you);feed(`${tag(e.a)} získal <span class="g">relikvii</span>`);
@@ -367,7 +370,7 @@ const EV={
   emp:e=>{const r=e.r||4.5;ringFx(e,0x6acbff,.4,r,.45);ringFx(e,0xc9a0ff,.4,r*.66,.35);burst(e,0x9fd8ff,30,8,3,.5,0);sfx('zap',e,{gap:.06})},
   tele:e=>{teleFx(e);sfx('warn',e,{gap:.4,range:60})},
   rupture:e=>{ringFx(e,0xff9c5b,1,60,1.2);ringFx(e,0xff3355,1,40,.9);columnFx(e,0xff9c5b);burst(e,0xffb38a,150,22,8,1.2,1);G.shake=1;screenFlash(.9);ui('boom',{s:3})},
-  ban:e=>{banner(e.ti,e.sub||G.roster.get(e.i)?.n||'',e.d,e.col);ui('warn',{gap:.5,vol:.8})},
+  ban:e=>{banner(e.ti,e.sub||G.roster.get(e.i)?.n||'',e.d,e.col,e.i!=null?0:2);ui('warn',{gap:.5,vol:.8})},
   wave:e=>{banner(e.b?`Vlna ${e.w} · boss`:`Vlna ${e.w}`,e.b?'Přichází boss s doprovodem':'Nepřátelé přicházejí z okraje arény',2.2,e.b?'var(--red)':'var(--gold)');ui('wave',{b:e.b,dur:1.2})},
   waveClear:e=>{banner(`Vlna ${e.w} zvládnuta`,e.w%5===0?'Bonusový život pro tým':'Krátká pauza, doplň síly na základně',2,'var(--green)');ui('clear',{dur:1})},
   point:e=>{const L='ABC'[e.i];feed(e.o<0?`Bod ${L} je neutrální`:`<span class="t${e.o}">${TEAM_NAME[e.o]}</span> obsadili bod ${L}`);if(e.o>=0)ui('point',{mine:e.o===(G.roster.get(G.you)?.t??0)})},
@@ -435,9 +438,11 @@ function camFocus(){
   if(!v||v.dead||v.t!==me.t){v=[...views.values()].find(x=>x.kind==='h'&&x.t===me.t&&!x.dead&&x.id!==G.you);G.watchMate=v?.id||0}
   return v||myPos();
 }
-function autoAim(){const me=myPos(),mine=G.roster.get(G.you);let best=null,bd=20;
+// touch aim: the nearest enemy within shooting range, led by its movement the way bots lead (a moving target is missed otherwise)
+function autoAim(){const me=myPos(),mine=G.roster.get(G.you),B=mine&&CLASSES[mine.k]?.basic;let best=null,bd=Math.max(20,(B?.range||0)+1);
   for(const v of views.values()){if(!mine||v.t===mine.t||v.dead||v.hid)continue;const d=Math.hypot(v.x-me.x,v.z-me.z);if(d<bd){bd=d;best=v}}
-  const f=views.get(G.you)?.f||0;return best?{x:best.x,z:best.z}:{x:me.x+Math.sin(f)*6,z:me.z+Math.cos(f)*6}}
+  const f=views.get(G.you)?.f||0;if(!best)return {x:me.x+Math.sin(f)*6,z:me.z+Math.cos(f)*6};
+  const lead=B?.speed?Math.min(.8,bd/B.speed):0;return {x:best.x+(best.vx||0)*lead,z:best.z+(best.vz||0)*lead}}
 const aimPoint=()=>isTouch?autoAim():{x:mouseWorld.x,z:mouseWorld.z};
 function inputTick(){
   if(!G.you||G.spec)return;
@@ -771,7 +776,9 @@ $('#copyBtn').onclick=async()=>{const url=location.origin+location.pathname+'?ro
   setTimeout(()=>$('#copyBtn').textContent='Kopírovat pozvánku',2500)};
 
 // ---------- screens ----------
-function showOnly(id){for(const k of ['auth','hub','lobby','hud','end','pause'])$('#'+k).hidden=k!==id;$('#board').hidden=true;if(id!=='hub')setPreview(null);Social.screen(id)}
+function showOnly(id){for(const k of ['auth','hub','lobby','hud','end','pause'])$('#'+k).hidden=k!==id;$('#board').hidden=true;if(id!=='hub')setPreview(null);Social.screen(id);
+  // an upright phone: suggest turning it, the first three matches only
+  if(id==='hud'&&isTouch&&innerWidth<innerHeight){const n=store.get('portraitHint',0);if(n<3){store.set('portraitHint',n+1);setTimeout(()=>banner('Otoč telefon na šířku','Uvidíš dál do stran',2.6,'var(--cyan)',0),1500)}}}
 // ---------- spectating ----------
 function renderSpecBar(){
   const el=$('#specBar'),S2=G.spec;if(!S2){el.hidden=true;$('#hud').classList.remove('spec');return}
@@ -1119,7 +1126,7 @@ function frame(now=performance.now()){
   if(!$('#fps').hidden){fpsN++;fpsT+=dt;if(fpsT>=.5){$('#fps').textContent=`${Math.round(fpsN/fpsT)} FPS`;fpsN=0;fpsT=0}}
   autoQuality(dt);
   if(G.mode==='menu'){if(!still)menuAngle+=dt*.06;camera.position.set(Math.cos(menuAngle)*46,30,Math.sin(menuAngle)*46);camera.lookAt(-6,0,0)}
-  else{const p=camFocus();camPos.lerp(new V3(p.x,0,p.z),1-Math.exp(-dt*6));const far=(camera.aspect<1?1.45:1)*Cfg.get('zoom'),boss=G.info.mode==='boss'||G.last?.bs?1.12:1;
+  else{const p=camFocus();camPos.lerp(new V3(p.x,0,p.z),1-Math.exp(-dt*6));const far=portraitZoom()*Cfg.get('zoom'),boss=G.info.mode==='boss'||G.last?.bs?1.12:1;
     const sx=(Math.random()-.5)*G.shake*.9,sz=(Math.random()-.5)*G.shake*.9;
     camera.position.set(camPos.x+sx,26*far*boss,camPos.z+17*far*boss+sz);camera.lookAt(camPos.x+sx*.5,0,camPos.z-1+sz*.5)}
   ray.setFromCamera(ndc,camera);ray.ray.intersectPlane(groundPlane,mouseWorld);
