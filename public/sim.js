@@ -370,7 +370,7 @@ const SK={
       if(!pool.length)return false;
       const hit=new Set(),n=5+m(u,'chain');let from=[u.x,1.6,u.z],cur=pool[0];
       for(let k=0;k<n&&cur;k++){const c=cur,f=from;hit.add(c);
-        later(M,k*.09,()=>{if(c.dead)return;fx(M,{t:'bolt',a:f,b:[r2(c.x),1.2,r2(c.z)],c:0x9fd8ff});damage(M,c,tech(M,u)*1.6,u,{color:0x9fd8ff,ult:true});if(u.prof.ultMod)c.st.silence=Math.max(c.st.silence,1)});
+        later(M,k*.09,()=>{if(c.dead)return;fx(M,{t:'bolt',a:f,b:[r2(c.x),1.2,r2(c.z)],c:0x9fd8ff});damage(M,c,tech(M,u)*1.4,u,{color:0x9fd8ff,ult:true});if(u.prof.ultMod)c.st.silence=Math.max(c.st.silence,1)});
         from=[r2(c.x),1.2,r2(c.z)];cur=foes(M,u).filter(e=>!hit.has(e)&&d2(e,c)<9).sort((a,b)=>d2(a,c)-d2(b,c))[0]}
       fx(M,{t:'ban',ti:'Řetězový výboj',col:'var(--cyan)',d:1.2,i:u.id})}
   ]

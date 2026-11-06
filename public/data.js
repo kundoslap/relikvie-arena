@@ -18,13 +18,13 @@ export const CLASSES={
             {name:'Štítová kupole',cost:35,cd:14,icon:'dome',desc:'Ty a spojenci do 7 m získáte štít 55.'}],
     ult:{name:'Titánův val',icon:'slam',desc:'Úder do země do 8 m: 200 % útoku, omráčení 1,4 s, štít 120.'},
     relic:'Titánova relikvie: štít 150 a −20 % přijatého poškození na 20 s.',bars:[1,.6,.35,.55]},
-  technician:{name:'Technik',role:'Energie a obnova',color:0x6acbff,css:'#6acbff',hp:245,speed:8.4,def:.1,atk:24,tech:40,pref:12,
+  technician:{name:'Technik',role:'Energie a obnova',color:0x6acbff,css:'#6acbff',hp:245,speed:8.4,def:.1,atk:24,tech:35,pref:12,
     talent:'Inženýr',talentDesc:'Zásah základním útokem vrátí 5 energie.',
-    basic:{type:'shot',name:'Výbojový šíp',dmg:22,rate:.48,speed:34,range:20,size:1.5,dot:{kind:'shock',dps:4,t:2}},
+    basic:{type:'shot',name:'Výbojový šíp',dmg:25,rate:.48,speed:34,range:20,size:1.5,dot:{kind:'shock',dps:4,t:2}},
     skills:[{name:'Mor nanitů',cost:30,cd:9,icon:'nano',desc:'Zóna 4 m na 5 s, 50 % TECH za sekundu.'},
             {name:'Obnova',cost:30,cd:10,icon:'heal',desc:'Spojenci do 7,5 m léčí 22 HP/s po 3 s a zbaví se krvácení.'},
             {name:'EMP',cost:30,cd:9,icon:'emp',desc:'Výboj v místě: 110 % TECH, −40 energie, umlčení 1,6 s.'}],
-    ult:{name:'Řetězový výboj',icon:'chain',desc:'Blesk přeskočí až na 5 cílů, každý zásah 160 % TECH.'},
+    ult:{name:'Řetězový výboj',icon:'chain',desc:'Blesk přeskočí až na 5 cílů, každý zásah 140 % TECH.'},
     relic:'Relikvie ozvěny: energie ×1,8 a čekání −30 % na 20 s.',bars:[.55,.45,1,.75]},
   pyro:{name:'Žhář',role:'Oheň a kontrola prostoru',color:0xff6a1a,css:'#ff6a1a',hp:305,speed:8.8,def:.12,atk:28,tech:40,pref:9,
     talent:'Popel',talentDesc:'Základní útok zapálí cíl: hoření 5 HP/s na 3 s. Ohnivé oblasti zapalují každého, kdo v nich stojí.',
@@ -65,6 +65,9 @@ export const EVADES={
   pyro:{name:'Ohnivý kotoul',cd:4.5,icon:'firezone',desc:'Kotoul o 5,5 m s nezranitelností 0,25 s. Na výchozím místě vzplane oheň 2,2 m na 2 s.'}};
 // "Novinky" in the hub, newest first; id marks what a player has already seen
 export const CHANGELOG=[
+  {id:'2026-11f',title:'Vyváženost Technika',items:[
+    'Technik: TECH 35 místo 40 a Řetězový výboj 140 % TECH místo 160 % (v týmových zápasech vyhrával nejčastěji).',
+    'Výbojový šíp Technika dává 25 místo 22, aby neprohrával souboje 1 na 1.']},
   {id:'2026-11e',title:'Ladění povolání a botů',items:[
     'Boti používají úskok i v PvP: s málem životů uskočí a Strážce doskočí Štítovým nárazem na střelce.',
     'Žhář: TECH 40, 305 HP, základní útok 21 (byl v týmových zápasech nejslabší).',
