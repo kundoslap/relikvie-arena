@@ -325,6 +325,9 @@ function basic(M,u,pt){
       razor(e);basicHit(M,s,e);
       if(s.clsKey==='striker'){const c=.35+m(s,'comboCdr');s.cds=s.cds.map(x=>Math.max(0,x-c))}
       else if(s.clsKey==='technician')s.energy=Math.min(100,s.energy+5);
+      // Podchlazení: every third hit on the same enemy slows it (with the relic every hit)
+      else if(s.clsKey==='cryo'&&!e.dead){const c=s.chillHit?.id===e.id?s.chillHit:(s.chillHit={id:e.id,n:0});
+        if(++c.n>=3||s.st.relic>0){c.n=0;e.st.slow=Math.max(e.st.slow,1)}}
     }});
   }
 }
@@ -455,6 +458,37 @@ SK.pyro=[
         if(k===0&&m(u,'infernoPull')&&e.kind!=='boss'){const kx=u.x-e.x,kz=u.z-e.z,l=Math.hypot(kx,kz)||1,s=Math.min(2,Math.max(0,l-u.radius-e.radius));e.x+=kx/l*s;e.z+=kz/l*s;collide(e,M.map)}
         damage(M,e,tech(M,u)*1.15,u,{color:0xff6a1a,ult:true});burn(e,u,BURN.ult)}});
     fx(M,{t:'ban',ti:'Inferno',col:'#ff6a1a',d:1.2,i:u.id})}
+];
+
+// ---------- Kryonik: slowing and freezing ----------
+// a freeze is a stun; bosses are only slowed
+function freeze(M,e,src,t){if(e.dead)return;if(e.kind==='boss'){e.st.slow=Math.max(e.st.slow,t+1);return}
+  e.st.stun=Math.max(e.st.stun,t+m(src,'freezeT'));fx(M,{t:'burst',x:r2(e.x),z:r2(e.z),y:1.2,c:0xe9f8ff,n:12,s:2,u:2,l:.5})}
+const chill=(e,t)=>{if(!e.dead)e.st.slow=Math.max(e.st.slow,t)};
+SK.cryo=[
+  // Mrazivý kužel: a cone of frost that slows
+  (M,u,pt)=>{const dir=aimDir(u,pt),R=7+m(u,'coneR');fx(M,{t:'arc',x:r2(u.x),z:r2(u.z),f:r2(u.face),c:0xc3b5ff,r:R});
+    for(let k=1;k<=3;k++)fx(M,{t:'burst',x:r2(u.x+dir.x*R*k/3),z:r2(u.z+dir.z*R*k/3),y:1,c:k%2?0xc3b5ff:0xe9f8ff,n:14,s:4,u:2,l:.5});
+    const lag=u.ctrl==='human'?u.lag:0;
+    for(const e of foes(M,u)){const q=posAt(M,e,lag),dx=q.x-u.x,dz=q.z-u.z,d=Math.hypot(dx,dz);
+      if(d<R+e.radius&&(dx*dir.x+dz*dir.z)/(d||1)>.5&&!blocked(M.map,u,q)){damage(M,e,tech(M,u),u,{color:0xc3b5ff});chill(e,1.5);if(m(u,'coneFreeze'))freeze(M,e,u,.6)}}},
+  // Ledový krunýř: a shield for you and a smaller one for allies close by
+  (M,u)=>{const sh=70+m(u,'shellSh');addShield(u,sh,u);if(m(u,'shellHeal'))heal(M,u,u.maxHp*.1,u);
+    fx(M,{t:'dome',x:r2(u.x),z:r2(u.z),c:0xc3b5ff,r:1.8,d:.7});fx(M,{t:'ring',x:r2(u.x),z:r2(u.z),c:0xe9f8ff,a:.5,b:6,d:.5});
+    for(const a of near(friends(M,u).filter(x=>x.kind==='hero'&&x!==u),u,6)){addShield(a,60+m(u,'shellSh')/2,u);fx(M,{t:'dome',x:r2(a.x),z:r2(a.z),c:0xc3b5ff,r:1.5,d:.5})}},
+  // Kryomina: lands at the aimed point and bursts a moment later
+  (M,u,pt)=>{const tp=clampReach(M,u,pt,14),dir=aimDir(u,tp),dist=Math.max(1,d2(u,tp)),R=3+m(u,'mineR');
+    const burst=(p,mul,hard)=>{if(M.state!=='play')return;fx(M,{t:'blast',x:r2(p.x),z:r2(p.z),r:R,c:0xc3b5ff});
+      for(const e of near(foes(M,u),p,R)){damage(M,e,tech(M,u)*mul,u,{color:0xc3b5ff});if(hard)freeze(M,e,u,.7);else chill(e,2)}};
+    shoot(M,u,dir,{dmg:0,speed:26,range:dist,color:0xc3b5ff,size:1.6,noHit:true,onEnd:p=>{const at={x:p.x,z:p.z};
+      fx(M,{t:'ring',x:r2(at.x),z:r2(at.z),c:0xe9f8ff,a:.3,b:R,d:.7});
+      later(M,.7,()=>burst(at,.9,true));if(m(u,'mineDouble'))later(M,2.2,()=>burst(at,.6,false))}})},
+  // Absolutní nula: a frost storm at the aimed point, telegraphed, then a freeze
+  (M,u,pt)=>{const um=u.prof.ultMod,tp=clampReach(M,u,pt,14),R=7.5+(um?1.5:0),T=1.2+(um?.5:0);aimDir(u,tp);
+    fx(M,{t:'ring',x:r2(tp.x),z:r2(tp.z),c:0xe9f8ff,a:.5,b:R,d:.55});fx(M,{t:'ring',x:r2(tp.x),z:r2(tp.z),c:0xc3b5ff,a:R*.9,b:.5,d:.55});
+    later(M,.55,()=>{if(M.state!=='play')return;fx(M,{t:'blast',x:r2(tp.x),z:r2(tp.z),r:R,c:0xc3b5ff});fx(M,{t:'dome',x:r2(tp.x),z:r2(tp.z),c:0xe9f8ff,r:R*.6,d:.8});
+      for(const e of near(foes(M,u),tp,R)){damage(M,e,tech(M,u)*1.65,u,{color:0xc3b5ff,ult:true});freeze(M,e,u,T)}});
+    fx(M,{t:'ban',ti:'Absolutní nula',col:'#c3b5ff',d:1.2,i:u.id})}
 ];
 
 // ---------- profession skills ----------
@@ -595,6 +629,8 @@ function evade(M,u,dir){
     case 'technician':s.inv=Math.max(s.inv,.15);fx(M,{t:'burst',...at,y:1,c:0x6acbff,n:22,s:3,u:2,l:.4});
       u.dash={dx,dz,spd:80,t:7/80,after:0,end:()=>fx(M,{t:'burst',x:r2(u.x),z:r2(u.z),y:1,c:0x6acbff,n:26,s:4,u:2,l:.45})};break;
     case 'pyro':s.inv=Math.max(s.inv,.25);fireZone(M,u,{x:u.x,z:u.z},2.2,2,.25);u.dash={dx,dz,spd:28,t:5.5/28,after:.1};break;
+    case 'cryo':s.inv=Math.max(s.inv,.25);for(const e of near(foes(M,u),u,3))chill(e,1.5);
+      fx(M,{t:'ring',...at,c:0xc3b5ff,a:.4,b:3,d:.4});fx(M,{t:'burst',...at,y:.4,c:0xe9f8ff,n:20,s:3,u:1,l:.5});u.dash={dx,dz,spd:30,t:6/30,after:.1};break;
   }
   u.face=Math.atan2(dx,dz);u.ecd=E.cd;fx(M,{t:'atk',i:u.id,s:5});return true;
 }
@@ -618,7 +654,7 @@ export function cast(M,u,i,pt){
   if(res===false)return false;
   if(i===3)u.ult=0;
   else{u.energy-=s.cost*costMul;
-    let cd=s.cd*(1-Math.min(45,m(u,'cdr'))/100)*(u.st.relic>0&&u.clsKey==='technician'?.7:1)*(u.prof.branch===id?.85:1);
+    let cd=s.cd*(1-Math.min(45,m(u,'cdr'))/100)*(u.st.relic>0&&u.clsKey==='technician'?.7:u.st.relic>0&&u.clsKey==='cryo'?.8:1)*(u.prof.branch===id?.85:1);
     if(id==='c1'&&u.clsKey==='technician'&&m(u,'restoreCd'))cd=Math.max(2,cd-4);
     if(id==='c2'&&u.clsKey==='pyro'&&m(u,'blinkCd'))cd=Math.max(2,cd-3);
     if(id==='feint'&&pa)cd=Math.max(2,cd-4);
@@ -804,6 +840,14 @@ function botSkills(M,u,t,d,aim,seen){
     if(u.hp<u.maxHp*.3&&d<6){if(cast(M,u,2,{x:u.x-(t.x-u.x)/l*7,z:u.z-(t.z-u.z)/l*7}))return}
     else if(d>8&&d<15&&seen&&u.energy>=55){if(cast(M,u,2,{x:t.x-(t.x-u.x)/l*3,z:t.z-(t.z-u.z)/l*3}))return}
     if(d<14&&cast(M,u,1,aim))return;
+  }else if(k==='cryo'){
+    if(!t)return;
+    // Absolutní nula lands after 0.55 s: aim where the target will be; worth it on a group or a hurt target
+    const n=near(foes(M,u),t,6).length,ahead={x:t.x+t.vx*.55,z:t.z+t.vz*.55};
+    if(u.ult>=100&&d<14&&seen&&(n>=2||t.hp<t.maxHp*.6||d<8)){cast(M,u,3,ahead);return}
+    if((u.hp<u.maxHp*.55&&d<14)||hurt.some(a=>a!==u)){if(cast(M,u,1,u))return}
+    if(d<7.5&&seen&&cast(M,u,0,aim))return;
+    if(d<14&&seen&&cast(M,u,2,{x:t.x+t.vx*.9,z:t.z+t.vz*.9}))return;
   }else{
     if(hurt.length&&cast(M,u,1,u))return;
     if(u.st.bleed&&cast(M,u,1,u))return;

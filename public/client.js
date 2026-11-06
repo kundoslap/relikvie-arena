@@ -315,7 +315,7 @@ const nearMe=(e,r=12)=>{const p=myPos();return Math.hypot(e.x-p.x,e.z-p.z)<r};
 const sfx=(name,pos,o)=>{if(G.mode!=='menu')Snd.play(name,pos,o)};
 const ui=(name,o={})=>sfx(name,null,{...o,ui:true});
 // basic attacks and casts: pitch by class, melee swings, heavier shots for NPCs and bosses; your own are louder
-const CLS_F={striker:900,guardian:520,technician:1250,pyro:620};
+const CLS_F={striker:900,guardian:520,technician:1250,pyro:620,cryo:1500};
 function atkSound(e,v){
   const mine=e.i===G.you,o={key:e.i,gap:.05,vol:mine?1:.55};
   if(e.s===3)return sfx('ult',v,{...o,f:(CLS_F[v.k]||700)/4,gap:.3,vol:mine?1:.8});

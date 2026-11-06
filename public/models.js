@@ -71,6 +71,17 @@ export function buildHero(k,team,skinKey){
     mesh(armR,new THREE.CylinderGeometry(.07,.11,.5,10),dark,0,-.8,.28).rotation.x=Math.PI/2;
     mesh(armR,new THREE.TorusGeometry(.09,.025,6,16),glow,0,-.8,.54);
     box(armR,.22,.14,.28,armor,0,-.72,.05);
+  }else if(k==='cryo'){
+    // Kryonik: a slim coat of ice plates, crystal shards over the shoulders, a frost core in the chest and an ice staff
+    box(body,.56,.7,.36,armor,0,1.4,0);box(body,.5,.04,.38,glow,0,1.12,0);
+    const core=mesh(body,new THREE.OctahedronGeometry(.11),glow,0,1.48,.2);core.scale.set(1,1.4,.6);
+    for(const s of [-1,1]){const sh=mesh(body,new THREE.OctahedronGeometry(.16),armor,s*.36,1.82,0);sh.scale.set(1,1.6,1);sh.rotation.z=s*-.4;
+      const tip=mesh(body,new THREE.ConeGeometry(.05,.34,5),glow,s*.44,2.04,-.02);tip.rotation.z=s*-.45}
+    box(body,.32,.34,.34,armor,0,1.95,0);box(body,.26,.06,.04,glow,0,1.97,.18);
+    const crest=mesh(body,new THREE.ConeGeometry(.07,.3,4),glow,0,2.22,-.04);crest.rotation.x=-.25;
+    box(body,.5,.55,.06,dark,0,1.32,-.21);
+    const staff=mesh(armR,new THREE.CylinderGeometry(.03,.03,1.5,6),dark,0,-.45,.2);staff.rotation.x=.15;
+    const gem=mesh(armR,new THREE.OctahedronGeometry(.12),glow,0,.32,.31);gem.scale.set(.8,1.5,.8);
   }else{
     mesh(body,new THREE.CylinderGeometry(.34,.26,.72,8),armor,0,1.4,0);
     mesh(body,new THREE.CylinderGeometry(.36,.28,.36,8,1,true),dark,0,1.9,0);
@@ -82,7 +93,7 @@ export function buildHero(k,team,skinKey){
   }
   let cape=null,halo=null,wings=null;
   // chest front and height per class, so emblems and reactors sit on the armour
-  const chestZ={striker:.19,guardian:.29,technician:.31,pyro:.21}[k]||.2,chestY=k==='guardian'?1.5:1.45;
+  const chestZ={striker:.19,guardian:.29,technician:.31,pyro:.21,cryo:.19}[k]||.2,chestY=k==='guardian'?1.5:1.45;
   const accs=Array.isArray(skin.acc)?skin.acc:skin.acc?[skin.acc]:[];
   const capeMat=skin.cape!=null?new THREE.MeshStandardMaterial({color:skin.cape,metalness:.2,roughness:.75,transparent:true,side:THREE.DoubleSide}):dark;
   if(capeMat!==dark)K.mats.push(capeMat);

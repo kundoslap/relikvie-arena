@@ -33,7 +33,15 @@ export const CLASSES={
             {name:'Žhnoucí půda',cost:30,cd:10,icon:'firezone',desc:'Hořící oblast 3,5 m na 4 s: 45 % TECH za sekundu.'},
             {name:'Fázový plamen',cost:25,cd:9,icon:'blink',desc:'Přesun až o 7 m. Na výchozím místě zůstane hořící oblast 2,5 m na 3 s.'}],
     ult:{name:'Inferno',icon:'inferno',desc:'Tři výbuchy ohně kolem tebe do 8,5 m, každý 115 % TECH, a hoření 12 HP/s na 4 s.'},
-    relic:'Relikvie výhně: hoření dává dvojnásobné poškození a ohnivé oblasti jsou o polovinu větší na 20 s.',bars:[.6,.55,.85,.7]}
+    relic:'Relikvie výhně: hoření dává dvojnásobné poškození a ohnivé oblasti jsou o polovinu větší na 20 s.',bars:[.6,.55,.85,.7]},
+  cryo:{name:'Kryonik',role:'Mráz a zastavení',color:0xc3b5ff,css:'#c3b5ff',hp:250,speed:8.6,def:.14,atk:26,tech:30,pref:10,
+    talent:'Podchlazení',talentDesc:'Každý třetí zásah základním útokem do stejného soupeře ho zpomalí o 40 % na 1 s.',
+    basic:{type:'shot',name:'Ledová střepina',dmg:16,rate:.44,speed:40,range:19,size:1.3,dot:{kind:'shock',dps:4,t:2}},
+    skills:[{name:'Mrazivý kužel',cost:30,cd:7,icon:'frostcone',desc:'Kužel mrazu do 7 m před tebou: 100 % TECH a zpomalení o 40 % na 1,5 s.'},
+            {name:'Ledový krunýř',cost:30,cd:12,icon:'iceshield',desc:'Štít 70 pro tebe a štít 60 pro spojence do 6 m.'},
+            {name:'Kryomina',cost:30,cd:10,icon:'icemine',desc:'Mina dopadne až 14 m daleko a po 0,7 s vybuchne do 3 m: 90 % TECH a zmrazení na 0,7 s.'}],
+    ult:{name:'Absolutní nula',icon:'freeze',desc:'Mrazivá bouře v místě až 14 m daleko: po 0,55 s zasáhne vše do 7,5 m za 165 % TECH a zmrazí na 1,2 s.'},
+    relic:'Relikvie mrazu: každý zásah základním útokem zpomalí a čekání schopností je o 20 % kratší na 20 s.',bars:[.65,.5,.75,.9]}
 };
 // damage over time from basic attacks: each class has its own kind. A new application refreshes the duration and keeps
 // the stronger one; they do not stack. Decontamination removes all of them, Restore only bleeding and burning.
@@ -62,9 +70,16 @@ export const EVADES={
   striker:{name:'Přískok',cd:4,icon:'dodge',desc:'Bleskový kotoul o 6,5 m s krátkou nezranitelností (0,3 s).'},
   guardian:{name:'Štítový náraz',cd:6.5,icon:'bulwark',desc:'Výpad o 4,5 m za štítem: po dobu 0,8 s dostáváš polovinu poškození a odhodíš soupeře v cestě (60 % útoku).'},
   technician:{name:'Fázový skok',cd:5,icon:'blink',desc:'Okamžitý přesun o 7 m (projde mezi nepřáteli, zastaví se o zeď) s mžikem nezranitelnosti.'},
-  pyro:{name:'Ohnivý kotoul',cd:4.5,icon:'firezone',desc:'Kotoul o 5,5 m s nezranitelností 0,25 s. Na výchozím místě vzplane oheň 2,2 m na 2 s.'}};
+  pyro:{name:'Ohnivý kotoul',cd:4.5,icon:'firezone',desc:'Kotoul o 5,5 m s nezranitelností 0,25 s. Na výchozím místě vzplane oheň 2,2 m na 2 s.'},
+  cryo:{name:'Ledový skluz',cd:4.5,icon:'iceslide',desc:'Skluz o 6 m s nezranitelností 0,25 s. Soupeře do 3 m od výchozího místa zpomalí na 1,5 s.'}};
 // "Novinky" in the hub, newest first; id marks what a player has already seen
 export const CHANGELOG=[
+  {id:'2026-11n',title:'Nový hrdina: Kryonik',items:[
+    'Pátý hrdina Kryonik ovládá mráz: zpomaluje soupeře a zmrazí je na místě.',
+    'Q Mrazivý kužel zpomalí všechny před tebou. E Ledový krunýř dá štít tobě i spojencům. R Kryomina po chvilce vybuchne a zmrazí.',
+    'Ultimátka Absolutní nula: mrazivá bouře na místě, kam míříš, zmrazí všechny soupeře v okruhu 7,5 m. Kdo uvidí kruh, má 0,55 s na útěk.',
+    'Talent Podchlazení: každý třetí zásah do stejného soupeře ho zpomalí. Na mezerníku je Ledový skluz.',
+    'Kryonik má vlastní strom dovedností, úpravu ultimátky Věčný led a 8 vzhledů včetně tří legendárních.']},
   {id:'2026-11m',title:'Obnova a hoření',items:[
     'Technik: Obnova už neuhasí hoření. Dál léčí, zbaví spojence krvácení a nově je v popisu i to, že ruší zpomalení.',
     'Hoření Žháře tak platí stejně proti všem. Souboje se nemění, v týmech Žhář o něco málo posílí.']},
@@ -246,7 +261,13 @@ export const SKINS={
     {k:'ember',name:'Uhlíková maska',armor:0x1c1416,glow:0xff3355,acc:'horns',req:{level:5}},
     {k:'blue',name:'Modrý plamen',armor:0x1e2a40,glow:0x4fb4ff,acc:'hood',req:{credits:900}},
     {k:'relic',name:'Relikviový žhář',armor:0x2a2410,glow:0xffe08a,acc:'crown',req:{drop:true}},
-    {k:'pass',name:'Neonová výheň',armor:0x0c1222,glow:0xffe14f,acc:'crest',req:{pass:true}}]
+    {k:'pass',name:'Neonová výheň',armor:0x0c1222,glow:0xffe14f,acc:'crest',req:{pass:true}}],
+  cryo:[
+    {k:'default',name:'Základní',armor:0x2c2a4a,glow:0xc3b5ff,acc:null},
+    {k:'glacier',name:'Ledovec',armor:0xb8d4e8,glow:0x6ad8ff,acc:'hood',req:{level:5}},
+    {k:'aurora',name:'Polární záře',armor:0x14283a,glow:0x5dffa8,acc:'antenna',req:{credits:900}},
+    {k:'relic',name:'Relikviový kryonik',armor:0x2a2410,glow:0xffe08a,acc:'crown',req:{drop:true}},
+    {k:'pass',name:'Neonový mráz',armor:0x0c1222,glow:0xff7de9,acc:'crest',req:{pass:true}}]
 };
 // Legendary skins: hero archetypes from comics and films with our own names and emblems. Several accessories each,
 // a metal finish, a suit (dark) and second armour colour (accent), a cape colour and a particle trail (fx).
@@ -275,7 +296,11 @@ const LEGEND_SKINS={
     {k:'rider',name:'Pekelný jezdec',desc:'Hořící lebka, řetězy a kožená bunda.',armor:0x24201c,glow:0xff7a1a,dark:0x0c0a08,accent:0xe8e0cc,acc:['skull','shoulders','belt'],metal:.4,fx:'embers',req:{level:35}},
     {k:'phoenix',name:'Fénix',desc:'Zrozená z ohně, s ohnivými křídly.',armor:0xd4401c,glow:0xffd23f,dark:0x5a1408,accent:0xff8a2a,acc:['wings','emblem','tiara'],emblem:'wing',fx:'embers',req:{ach:'endless',tier:1}},
     {k:'frost',name:'Mrazivý doktor',desc:'Ohnivý žhář naruby: brnění z ledu a mrazivá stopa.',armor:0x8fd6ff,glow:0xe9f8ff,dark:0x1c3a5a,accent:0x5ab0e0,acc:['helm','reactor'],metal:.9,fx:'frost',req:{credits:2000}},
-    {k:'demon',name:'Démon výhně',desc:'Obr z lávy s rohy a ohnivými křídly.',armor:0x2a0e0a,glow:0xff3a1a,dark:0x120604,accent:0x5a1a10,acc:['horns','wings','shoulders'],fx:'embers',req:{credits:1800}}]
+    {k:'demon',name:'Démon výhně',desc:'Obr z lávy s rohy a ohnivými křídly.',armor:0x2a0e0a,glow:0xff3a1a,dark:0x120604,accent:0x5a1a10,acc:['horns','wings','shoulders'],fx:'embers',req:{credits:1800}}],
+  cryo:[
+    {k:'winterqueen',name:'Zimní vladařka',desc:'Vládkyně věčné zimy s ledovou čelenkou a třpytivým pláštěm.',armor:0xa8d8f0,glow:0xe9f8ff,dark:0x1c3a5a,accent:0x6ab8e0,cape:0x2a5a8a,acc:['tiara','cape','amulet'],metal:.6,fx:'frost',req:{credits:2500}},
+    {k:'titan',name:'Sněžný titán',desc:'Obr z ledovcových plátů s rohy z rampouchů.',armor:0xdfeefa,glow:0x9ffcff,dark:0x3a4a5a,accent:0x8fb4d0,acc:['horns','shoulders','belt'],metal:.3,fx:'frost',req:{level:30}},
+    {k:'void',name:'Hvězdný led',desc:'Poutník z mrazivé prázdnoty vesmíru, kolem něj se třpytí hvězdy.',armor:0x1a1838,glow:0xc3b5ff,dark:0x08081a,accent:0x4a3a8a,cape:0x14123a,acc:['helm','cape','halo'],metal:.5,fx:'stars',req:{ach:'wins',tier:1}}]
 };
 for(const [k,list] of Object.entries(LEGEND_SKINS))SKINS[k].push(...list.map(s=>({...s,legend:true})));
 export const SKIN_FX={shadow:0x6a3aff,sparks:0xffd23f,leaves:0x7dff6a,lightning:0xffe14f,stars:0xe9f4ff,quake:0x9dff5d,runes:0xffc66d,hex:0xff3f6c,embers:0xff7a1a,frost:0xbfeaff};
@@ -368,6 +393,26 @@ export const TREES={
       {id:'i3',name:'Palivo',max:3,fx:{fireDps:15},desc:'Ohnivé oblasti dávají o 15 % víc poškození.'},
       {id:'i4',name:'Rozdmýchání',max:3,fx:{ult:7},desc:'Ultimátka se nabíjí o 7 % rychleji.'},
       {id:'i5',name:'Ohnivá smršť',max:1,fx:{infernoPull:1},desc:'Inferno si první výbuch přitáhne soupeře o 2 m k sobě.'}]}
+  ],
+  cryo:[
+    {k:'frost',name:'Mráz',desc:'Kužel a zpomalení.',nodes:[
+      {id:'k1',name:'Chladná mysl',max:3,fx:{tech:3},desc:'+3 % TECH.'},
+      {id:'k2',name:'Široký kužel',max:3,fx:{coneR:.7},desc:'Mrazivý kužel dosáhne o 0,7 m dál.'},
+      {id:'k3',name:'Rychlé chlazení',max:3,fx:{cdr:3},desc:'Čekání schopností −3 %.'},
+      {id:'k4',name:'Zimní dech',max:3,fx:{ult:6},desc:'Ultimátka se nabíjí o 6 % rychleji.'},
+      {id:'k5',name:'Ledové sevření',max:1,fx:{coneFreeze:1},desc:'Mrazivý kužel zasažené na 0,6 s zmrazí.'}]},
+    {k:'ice',name:'Led',desc:'Krunýř a výdrž.',nodes:[
+      {id:'l1',name:'Ledová kůže',max:3,fx:{hp:4},desc:'+4 % maximálního HP.'},
+      {id:'l2',name:'Tvrdý led',max:3,fx:{def:1.5},desc:'+1,5 bodu obrany.'},
+      {id:'l3',name:'Silný krunýř',max:3,fx:{shellSh:15},desc:'Ledový krunýř dá tobě o 15 štítu víc a spojencům o 7,5 víc.'},
+      {id:'l4',name:'Klid zimy',max:3,fx:{regen:5},desc:'Energie se obnovuje o 5 % rychleji.'},
+      {id:'l5',name:'Hojivý led',max:1,fx:{shellHeal:1},desc:'Ledový krunýř tě také vyléčí o 10 % HP.'}]},
+    {k:'zero',name:'Nula',desc:'Miny a ultimátka.',nodes:[
+      {id:'z1',name:'Tříštivý led',max:3,fx:{atk:3,tech:2},desc:'+3 % útok a +2 % TECH.'},
+      {id:'z2',name:'Velká mina',max:3,fx:{mineR:.4},desc:'Kryomina vybuchne o 0,4 m dál.'},
+      {id:'z3',name:'Hluboký mráz',max:3,fx:{freezeT:.15},desc:'Tvá zmrazení trvají o 0,15 s déle.'},
+      {id:'z4',name:'Krystalizace',max:3,fx:{ult:7},desc:'Ultimátka se nabíjí o 7 % rychleji.'},
+      {id:'z5',name:'Dvojitá mina',max:1,fx:{mineDouble:1},desc:'Kryomina po 1,5 s vybuchne podruhé (60 % TECH a zpomalení).'}]}
   ]
 };
 export function treeSpent(alloc){return Object.values(alloc||{}).reduce((a,b)=>a+(b|0),0)}
@@ -448,7 +493,8 @@ export const ULT_MODS={
   striker:{name:'Bouřkové oko',desc:'Blesky Bouřového průrazu zpomalí zasažené o 40 % na 2 s.'},
   guardian:{name:'Otřesová vlna',desc:'Titánův val si před omráčením přitáhne soupeře o 2 m blíž a má dosah +1 m.'},
   technician:{name:'Statický řetěz',desc:'Každý zásah Řetězového výboje umlčí cíl na 1 s.'},
-  pyro:{name:'Spalující jádro',desc:'Inferno má o 2 m větší dosah a vybuchne čtyřikrát.'}
+  pyro:{name:'Spalující jádro',desc:'Inferno má o 2 m větší dosah a vybuchne čtyřikrát.'},
+  cryo:{name:'Věčný led',desc:'Absolutní nula má o 1,5 m větší dosah a zmrazí o 0,5 s déle.'}
 };
 // Taktické akce: one universal action on T for every class, chosen in the profile
 export const TACTICS={
@@ -459,7 +505,7 @@ export const TACTICS={
   barrier:{name:'Polní bariéra',lvl:12,cd:26,icon:'bulwark',desc:'Štít ve výši 22 % tvého maximálního HP.'}
 };
 export const TACTIC_KEYS=Object.keys(TACTICS);
-export const BOT_TACTIC={striker:'dodge',guardian:'barrier',technician:'decon',pyro:'dodge'};
+export const BOT_TACTIC={striker:'dodge',guardian:'barrier',technician:'decon',pyro:'dodge',cryo:'barrier'};
 const classSkillIds=['c0','c1','c2'];
 // All skills a player may slot for a class at a given profession state.
 export function availableSkills(p,k){
@@ -742,7 +788,7 @@ export const MASTERY_ULT_BRANCHES=[
 ];
 // basic attack mastery: rank 5 unlocks the class element (Lovec bleed, Strážce poison, Technik shock, Žhář a stronger
 // burn); every rank adds 0.5 % basic attack damage; one XP per four hits
-export const MASTERY_BASIC={dmgPerRank:.005,hitsPerXp:4,elementRank:5,second:{striker:'shock',guardian:'burn',technician:'burn',pyro:'shock'}};
+export const MASTERY_BASIC={dmgPerRank:.005,hitsPerXp:4,elementRank:5,second:{striker:'shock',guardian:'burn',technician:'burn',pyro:'shock',cryo:'poison'}};
 export const MASTERY_BASIC_BRANCHES=[
   [{k:'potent',name:'Síla živlu',desc:'Efekt živlu dává o 50 % víc poškození.'},{k:'lasting',name:'Trvalost',desc:'Efekt živlu trvá o 2 s déle.'}],
   [{k:'spark',name:'Jiskra',desc:'Každý 5. zásah přeskočí na dalšího soupeře do 6 m (25 % síly) a přenese živel.'},{k:'expose',name:'Rozklad',desc:'Soupeři pod tvým živlem dostávají od tebe o 6 % víc.'}],

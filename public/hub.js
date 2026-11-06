@@ -30,7 +30,14 @@ const ICONS={
   flame:'<path d="M4 16c4-1 6-5 9-5M4 16c4 1 6 5 9 5M13 11c5 0 9 2 15 5-6 3-10 5-15 5"/><path d="M18 14l3 2-3 2"/>',
   firezone:'<ellipse cx="16" cy="23" rx="12" ry="4"/><path d="M11 21c0-4 2-5 2-9 2 2 3 4 3 6 1-2 1-4 0-7 3 3 5 6 5 10"/>',
   blink:'<path d="M4 24h7M6 19h5" stroke-dasharray="2 2"/><path d="M14 22 26 10M20 9h7v7"/><circle cx="12" cy="24" r="2"/>',
-  inferno:'<circle cx="16" cy="16" r="4"/><path d="M16 2c1 3 3 4 3 7M30 16c-3 1-4 3-7 3M16 30c-1-3-3-4-3-7M2 16c3-1 4-3 7-3M6 6c3 1 4 3 5 5M26 26c-3-1-4-3-5-5M26 6c-1 3-3 4-5 5M6 26c1-3 3-4 5-5"/>'
+  inferno:'<circle cx="16" cy="16" r="4"/><path d="M16 2c1 3 3 4 3 7M30 16c-3 1-4 3-7 3M16 30c-1-3-3-4-3-7M2 16c3-1 4-3 7-3M6 6c3 1 4 3 5 5M26 26c-3-1-4-3-5-5M26 6c-1 3-3 4-5 5M6 26c1-3 3-4 5-5"/>',
+  // Kryonik: a snowflake, a frost cone, an ice shield, a mine and a frozen burst
+  cryo:'<path d="M16 3v26M5 9.5l22 13M5 22.5l22-13M13 5l3 3 3-3M13 27l3-3 3 3M5 13l4 1-1 4M27 19l-4-1 1-4M5 19l4-1-1-4M27 13l-4 1 1 4"/>',
+  frostcone:'<path d="M4 16 27 7M4 16l23 9"/><path d="M14 13v6M20 11v10M12 16h10M17 13l3 3-3 3"/>',
+  iceshield:'<path d="M16 4 26 8v8c0 6-5 10-10 12-5-2-10-6-10-12V8Z"/><path d="M16 10v12M11 13l10 6M11 19l10-6"/>',
+  icemine:'<circle cx="16" cy="18" r="7"/><path d="M16 4v4M16 11v14M10 15l12 6M10 21l12-6M8 6l3 3M24 6l-3 3"/>',
+  freeze:'<path d="M16 2v28M3 9l26 14M3 23 29 9"/><circle cx="16" cy="16" r="5"/><path d="M12 4l4 3 4-3M12 28l4-3 4 3"/>',
+  iceslide:'<path d="M4 24h22" /><path d="M6 20c5 0 8-9 15-9M18 7l4 4-4 4"/><path d="M8 28l2-4M14 28l2-4M20 28l2-4"/>'
 };
 export const svg=k=>`<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[k]}</svg>`;
 const hex=c=>'#'+c.toString(16).padStart(6,'0');
