@@ -179,7 +179,7 @@ Social.onChange(()=>{
   const b=document.querySelector('#hubNav [data-t="friends"]');if(b)b.innerHTML='Přátelé'+navBadge();
   if(H.tab==='friends'&&!$('#hub').hidden&&$('#frList'))friendList();
 });
-function setCls(k){H.cls=k;store.set('cls',k);if(H.profile&&H.profile.cls!==k)act('cls',{cls:k});else renderHub()}
+function setCls(k){H.cls=k;store.set('cls',k);const tried=store.get('tried',[]);if(!tried.includes(k))store.set('tried',[...tried,k]);if(H.profile&&H.profile.cls!==k)act('cls',{cls:k});else renderHub()}
 
 // ---------- shared pieces ----------
 function derived(k){
@@ -196,7 +196,9 @@ function classDetail(k){
     ${c.skills.map((s,i)=>`<div class="sk"><kbd>${'QER'[i]}</kbd><div><b>${s.name}</b>${s.desc} <small>${s.cost} en · ${s.cd} s</small></div></div>`).join('')}
     <div class="sk"><kbd class="u">F</kbd><div><b>${c.ult.name}</b>${c.ult.desc}</div></div></div></div>`;
 }
-const classCards=()=>`<div class="classes">${Object.entries(D.CLASSES).map(([k,c])=>`<button type="button" class="cc" data-k="${k}" style="--c:${c.css}" aria-pressed="${k===H.cls}">${svg(k)}<b>${c.name}</b><small>${c.role}</small></button>`).join('')}</div>`;
+// a hero added lately carries a NOVÝ badge until you pick it once or its date passes
+const isNewCls=k=>{const d=D.NEW_CLASSES?.[k];return!!d&&Date.now()<Date.parse(d)&&!store.get('tried',[]).includes(k)};
+const classCards=()=>`<div class="classes">${Object.entries(D.CLASSES).map(([k,c])=>`<button type="button" class="cc" data-k="${k}" style="--c:${c.css}" aria-pressed="${k===H.cls}">${svg(k)}<b>${c.name}${isNewCls(k)?'<span class="newTag">NOVÝ</span>':''}</b><small>${c.role}</small></button>`).join('')}</div>`;
 const bindClassCards=()=>document.querySelectorAll('#hubBody .cc').forEach(b=>b.onclick=()=>setCls(b.dataset.k));
 export function itemCard(it,o={}){
   if(!it)return`<div class="item empty"><b>${o.slot?D.SLOTS[o.slot].name:'Prázdné'}</b><small>Prázdný slot</small></div>`;

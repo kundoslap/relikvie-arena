@@ -368,7 +368,7 @@ const SK={
       for(const a of near(friends(M,u).filter(x=>x.kind==='hero'),u,7.5)){a.st.hot={hps,t:3,acc:0,src:u};a.st.bleed=null;a.st.slow=0;if(sh)addShield(a,sh,u);fx(M,{t:'burst',x:r2(a.x),z:r2(a.z),y:1.2,c:0x6affd8,n:14,s:1.5,u:4,l:.8})}},
     (M,u,pt)=>{const tp=clampReach(M,u,pt,13),R=4.5+m(u,'empR'),ov=m(u,'overload');aimDir(u,tp);fx(M,{t:'beam',a:[r2(u.x),1.3,r2(u.z)],b:[r2(tp.x),.4,r2(tp.z)],c:0x6acbff,w:.06,d:.25});
       later(M,.2,()=>{fx(M,{t:'emp',x:r2(tp.x),z:r2(tp.z),r:R});
-        for(const e of near(foes(M,u),tp,R)){damage(M,e,tech(M,u)*1.1*(ov?1.4:1),u,{color:0x6acbff});e.energy=Math.max(0,(e.energy||0)-40);e.st.silence=Math.max(e.st.silence,1.6+(ov?1:0))}})},
+        for(const e of near(foes(M,u),tp,R)){damage(M,e,tech(M,u)*1.1*(ov?1.4:1),u,{color:0x6acbff});e.energy=Math.max(0,(e.energy||0)-40);e.st.silence=Math.max(e.st.silence,1.1+(ov?1:0))}})},
     (M,u)=>{const pool=foes(M,u).filter(e=>visibleTo(u,e)&&d2(u,e)<15).sort((a,b)=>d2(u,a)-d2(u,b));
       if(!pool.length)return false;
       // the first target takes the full bolt, each jump is weaker: strong in a duel without dominating team fights
@@ -463,7 +463,7 @@ SK.pyro=[
 // ---------- Kryonik: slowing and freezing ----------
 // a freeze is a stun; bosses are only slowed
 function freeze(M,e,src,t){if(e.dead)return;if(e.kind==='boss'){e.st.slow=Math.max(e.st.slow,t+1);return}
-  e.st.stun=Math.max(e.st.stun,t+m(src,'freezeT'));fx(M,{t:'burst',x:r2(e.x),z:r2(e.z),y:1.2,c:0xe9f8ff,n:12,s:2,u:2,l:.5})}
+  const T=t+m(src,'freezeT');e.st.stun=Math.max(e.st.stun,T);e.st.frozen=Math.max(e.st.frozen||0,T);fx(M,{t:'burst',x:r2(e.x),z:r2(e.z),y:1.2,c:0xe9f8ff,n:12,s:2,u:2,l:.5})}
 const chill=(e,t)=>{if(!e.dead)e.st.slow=Math.max(e.st.slow,t)};
 SK.cryo=[
   // Mrazivý kužel: a cone of frost that slows
@@ -767,7 +767,7 @@ function steer(M,u,wx,wz){
 // ---------- status ----------
 function updStatus(M,u,dt){
   const s=u.st;
-  for(const k of ['stun','slow','silence','cloak','inv','relic','haste','bulwark','decon','marked'])if(s[k]>0)s[k]=Math.max(0,s[k]-dt);
+  for(const k of ['stun','slow','silence','cloak','inv','relic','haste','bulwark','decon','marked','frozen'])if(s[k]>0)s[k]=Math.max(0,s[k]-dt);
   if(s.decon>0){s.bleed=null;s.nanite=null;s.burn=null;s.poison=null;s.shock=null}
   if(s.marked>0)s.cloak=0;
   if(s.nanite)updNanite(M,u,s.nanite,dt);
@@ -1289,7 +1289,7 @@ export function step(M,dt=TICK){
 export function roster(M){return M.units.map(u=>({i:u.id,n:u.name,k:u.key,kind:u.kind[0],t:u.team,mh:u.maxHp,b:u.ctrl==='human'?0:1,sk:u.skin,lv:u.level}))}
 export function stats(M){return M.units.filter(u=>u.kind==='hero').map(u=>({i:u.id,n:u.name,k:u.clsKey,t:u.team,b:u.ctrl==='bot'?1:0,ki:u.kills,de:u.deaths,dm:Math.round(u.dmgDealt),he:Math.round(u.healDone),re:u.relics,nk:u.npcKills,tk:Math.round(u.dmgTaken||0),cp:u.caps||0,nd:Math.round(u.naniteDmg||0),bs:u.bestStreak|0,bm:u.bestMulti|0}))}
 export function matchInfo(M){return{mode:M.mode,map:M.mapKey,boss:M.bossKey,diff:M.diffKey,mission:M.mission,mods:[...M.emod],last:M.last,win:M.D.win||0,custom:M.custom}}
-function flags(u){const s=u.st;return (s.stun>0?1:0)|(s.silence>0?2:0)|(s.bleed?4:0)|(s.slow>0?8:0)|(s.relic>0?16:0)|(s.cloak>0?32:0)|(s.inv>0?64:0)|(u.dash?128:0)|(u.invuln?256:0)|(u.air?512:0)|(u.bomb?1024:0)|(s.nanite?2048:0)|(s.decon>0?4096:0)|(s.marked>0?8192:0)|(s.burn?16384:0)|(s.poison?32768:0)|(s.shock?65536:0)}
+function flags(u){const s=u.st;return (s.stun>0?1:0)|(s.silence>0?2:0)|(s.bleed?4:0)|(s.slow>0?8:0)|(s.relic>0?16:0)|(s.cloak>0?32:0)|(s.inv>0?64:0)|(u.dash?128:0)|(u.invuln?256:0)|(u.air?512:0)|(u.bomb?1024:0)|(s.nanite?2048:0)|(s.decon>0?4096:0)|(s.marked>0?8192:0)|(s.burn?16384:0)|(s.poison?32768:0)|(s.shock?65536:0)|(s.frozen>0&&s.stun>0?131072:0)}
 // Per-viewer snapshot: hides cloaked enemies far from the viewer and loot that belongs to someone else.
 export function snapshotFor(M,uid,events){
   const me=M.units.find(u=>u.id===uid);

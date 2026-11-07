@@ -23,7 +23,7 @@ export const CLASSES={
     basic:{type:'shot',name:'Výbojový šíp',dmg:25,rate:.48,speed:34,range:20,size:1.5,dot:{kind:'shock',dps:4,t:2}},
     skills:[{name:'Mor nanitů',cost:30,cd:9,icon:'nano',desc:'Zóna 4 m na 5 s, 50 % TECH za sekundu.'},
             {name:'Obnova',cost:30,cd:10,icon:'heal',desc:'Spojenci do 7,5 m léčí 22 HP/s po 3 s a zbaví se krvácení a zpomalení.'},
-            {name:'EMP',cost:30,cd:9,icon:'emp',desc:'Výboj v místě: 110 % TECH, −40 energie, umlčení 1,6 s.'}],
+            {name:'EMP',cost:30,cd:9,icon:'emp',desc:'Výboj v místě: 110 % TECH, −40 energie, umlčení 1,1 s.'}],
     ult:{name:'Řetězový výboj',icon:'chain',desc:'Blesk zasáhne cíl za 160 % TECH a přeskočí až na 3 další, každý za 90 % TECH.'},
     relic:'Relikvie ozvěny: energie ×1,8 a čekání −30 % na 20 s.',bars:[.55,.45,1,.75]},
   pyro:{name:'Žhář',role:'Oheň a kontrola prostoru',color:0xff6a1a,css:'#ff6a1a',hp:305,speed:8.8,def:.12,atk:28,tech:40,pref:9,
@@ -34,7 +34,7 @@ export const CLASSES={
             {name:'Fázový plamen',cost:25,cd:9,icon:'blink',desc:'Přesun až o 7 m. Na výchozím místě zůstane hořící oblast 2,5 m na 3 s.'}],
     ult:{name:'Inferno',icon:'inferno',desc:'Tři výbuchy ohně kolem tebe do 8,5 m, každý 115 % TECH, a hoření 12 HP/s na 4 s.'},
     relic:'Relikvie výhně: hoření dává dvojnásobné poškození a ohnivé oblasti jsou o polovinu větší na 20 s.',bars:[.6,.55,.85,.7]},
-  cryo:{name:'Kryonik',role:'Mráz a zastavení',color:0xc3b5ff,css:'#c3b5ff',hp:250,speed:8.6,def:.14,atk:26,tech:30,pref:10,
+  cryo:{name:'Kryonik',role:'Mráz a zastavení',color:0xc3b5ff,css:'#c3b5ff',hp:258,speed:8.6,def:.14,atk:26,tech:30,pref:10,
     talent:'Podchlazení',talentDesc:'Každý třetí zásah základním útokem do stejného soupeře ho zpomalí o 40 % na 1 s.',
     basic:{type:'shot',name:'Ledová střepina',dmg:16,rate:.44,speed:40,range:19,size:1.3,dot:{kind:'shock',dps:4,t:2}},
     skills:[{name:'Mrazivý kužel',cost:30,cd:7,icon:'frostcone',desc:'Kužel mrazu do 7 m před tebou: 100 % TECH a zpomalení o 40 % na 1,5 s.'},
@@ -57,6 +57,8 @@ export const basicFxText=k=>{const d=CLASSES[k]?.basic?.dot;if(!d)return'';retur
 // burning (from the Žhář): damage over time, removed by Decontamination and Restore like bleeding
 export const BURN={talent:{kind:'burn',dps:5,t:3},wave:{dps:10,t:3},ult:{dps:12,t:4}};
 export const CLASS_KEYS=Object.keys(CLASSES);
+// heroes added lately: the hub shows a NOVÝ badge on them until this date
+export const NEW_CLASSES={cryo:'2026-12-15'};
 
 // ---------- progression ----------
 export const MAX_LEVEL=50;
@@ -74,6 +76,14 @@ export const EVADES={
   cryo:{name:'Ledový skluz',cd:4.5,icon:'iceslide',desc:'Skluz o 6 m s nezranitelností 0,25 s. Soupeře do 3 m od výchozího místa zpomalí na 1,5 s.'}};
 // "Novinky" in the hub, newest first; id marks what a player has already seen
 export const CHANGELOG=[
+  {id:'2026-11q',title:'Viditelný mráz',items:[
+    'Kryonik má v menu u své karty značku NOVÝ, dokud ho jednou nevybereš.',
+    'Zmrazeného hrdinu obalí průsvitný ledový krystal a nad jménem má nápis ZMRAŽEN.',
+    'Zpomalenému hrdinovi padá jinovatka a jeho zbroj dostane chladný modrý nádech.']},
+  {id:'2026-11p',title:'Kratší umlčení z EMP',items:[
+    'Technik: EMP umlčí na 1,1 s místo 1,6 s. V týmových bitvách vyhrával Technik nejčastěji (57 %), teď kolem 53 %. Souboje 1 na 1 se nemění.']},
+  {id:'2026-11o',title:'Odolnější Kryonik',items:[
+    'Kryonik: 258 HP místo 250. V soubojích i týmových bitvách vyhrával o něco méně než ostatní.']},
   {id:'2026-11n',title:'Nový hrdina: Kryonik',items:[
     'Pátý hrdina Kryonik ovládá mráz: zpomaluje soupeře a zmrazí je na místě.',
     'Q Mrazivý kužel zpomalí všechny před tebou. E Ledový krunýř dá štít tobě i spojencům. R Kryomina po chvilce vybuchne a zmrazí.',

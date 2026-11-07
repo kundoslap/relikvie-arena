@@ -19,6 +19,8 @@ const rnd=(a,b)=>a+Math.random()*(b-a);
 const lerpAng=(a,b,k)=>{let d=b-a;d=Math.atan2(Math.sin(d),Math.cos(d));return a+d*k};
 const store={get(k,d){try{const v=localStorage.getItem('rel.'+k);return v==null?d:JSON.parse(v)}catch{return d}},set(k,v){try{localStorage.setItem('rel.'+k,JSON.stringify(v))}catch{}}};
 let isTouch=matchMedia('(pointer: coarse)').matches;
+// the ice crystal shown around a frozen unit (shared by all units)
+const ICE_GEO=new THREE.IcosahedronGeometry(1.05,0),ICE_MAT=new THREE.MeshStandardMaterial({color:0xcfefff,emissive:0x2a5a7a,metalness:.1,roughness:.05,transparent:true,opacity:.42,depthWrite:false});
 
 // ---------- renderer ----------
 const hiQ=Cfg.quality()==='high';
@@ -164,7 +166,7 @@ function ensureView(info){
   v.name=info.n;v.mh=info.mh;v.bot=info.b;v.bar.n.textContent=info.n;
   v.bar.el.className=`ub t${info.t}${info.kind!=='h'?' npc':info.b?'':' human'}${info.i===G.you?' mine':''}`;
 }
-function dropView(v){if(v.bombMesh){scene.remove(v.bombMesh);v.bombMesh.material.dispose()}scene.remove(v.model.root);v.model.root.traverse(o=>{if(o.geometry&&o.geometry!==DISC_GEO)o.geometry.dispose();o.material&&o.material.dispose()});v.bar.el.remove();views.delete(v.id)}
+function dropView(v){if(v.bombMesh){scene.remove(v.bombMesh);v.bombMesh.material.dispose()}scene.remove(v.model.root);v.model.root.traverse(o=>{if(o===v.model.ice)return;if(o.geometry&&o.geometry!==DISC_GEO)o.geometry.dispose();o.material&&o.material.dispose()});v.bar.el.remove();views.delete(v.id)}
 function onRoster(list){
   G.roster=new Map(list.map(u=>[u.i,u]));
   for(const u of list)ensureView(u);
@@ -1025,7 +1027,12 @@ function unitVisual(v,st,dt,t){
   if(M.fx)skinTrail(v,M.fx,sp,dt);
   if(M.drone){M.drone.position.set(Math.sin(t*2+v.id)*.85,2.3+Math.sin(t*3)*.12,Math.cos(t*2+v.id)*.85);M.drone.rotation.y=t*3}
   const op=st.fl&32?.25:st.fl&64?.55+.45*Math.sin(t*22):1;for(const m of M.mats)m.opacity=op;
-  v.flash=Math.max(0,v.flash-dt);const fl=v.flash>0?v.flash*7:0;for(const m of M.flash)m.emissive.setRGB(fl,fl*.9,fl*.85);
+  // a hit flashes white; slowed by frost the armour takes a cold blue tint
+  v.flash=Math.max(0,v.flash-dt);const fl=v.flash>0?v.flash*7:0,cold=st.fl&8?1:0;for(const m of M.flash)m.emissive.setRGB(fl+cold*.03,fl*.9+cold*.1,fl*.85+cold*.2);
+  // frozen by the Kryonik: a translucent ice crystal around the unit
+  if(st.fl&131072){if(!M.ice){M.ice=new THREE.Mesh(ICE_GEO,ICE_MAT);M.ice.position.y=(M.height||2.3)*.48;M.ice.scale.set(1,(M.height||2.3)/2.3*1.25,1);M.root.add(M.ice)}
+    if(!M.ice.visible){M.ice.visible=true;M.ice.rotation.y=Math.random()*6}}else if(M.ice)M.ice.visible=false;
+  if(st.fl&8&&!(st.fl&131072)&&Math.random()<dt*7)burst({x:v.x+rnd(-.5,.5),z:v.z+rnd(-.5,.5)},0xdff6ff,2,.6,-1.2,.7,2.4);
   M.bubble.visible=st.s>1||!!(st.fl&256);M.bubble.material.opacity=st.fl&256?.45:Math.min(.38,.06+st.s/250);M.bubble.rotation.y=t*.8;
   M.halo.visible=!!(st.fl&16);M.stun.visible=!!(st.fl&1);M.stun.rotation.z=t*6;M.meRing.visible=v.id===G.you;
   if(st.fl&2048&&Math.random()<dt*8)burst({x:v.x,z:v.z},0x7dff9a,2,1.5,2,.6,1.4);
@@ -1038,7 +1045,7 @@ function unitVisual(v,st,dt,t){
   const s=toScreen(v,M.height+.8);if(s.off){b.el.style.display='none';return}
   b.el.style.display='';b.el.style.transform=`translate(${s.x-38}px,${s.y-30}px)`;
   b.h.style.width=Math.max(0,st.h/v.mh*100)+'%';b.s.style.width=Math.min(100,st.s/v.mh*100)+'%';
-  const f=st.fl;b.em.textContent=G.last?.fg?.some(x=>x[0]===1&&x[3]===v.id)?'NESE RELIKVII':f&1024?'BŘEMENO':f&2048?'NAKAŽEN':f&8192?'OZNAČEN':f&1?'OMRÁČEN':f&2?'UMLČEN':f&4?'KRVÁCÍ':f&16384?'HOŘÍ':f&32768?'OTRÁVEN':f&65536?'ŠOK':f&8?'ZPOMALEN':f&16?'RELIKVIE':'';
+  const f=st.fl;b.em.textContent=G.last?.fg?.some(x=>x[0]===1&&x[3]===v.id)?'NESE RELIKVII':f&1024?'BŘEMENO':f&2048?'NAKAŽEN':f&8192?'OZNAČEN':f&131072?'ZMRAŽEN':f&1?'OMRÁČEN':f&2?'UMLČEN':f&4?'KRVÁCÍ':f&16384?'HOŘÍ':f&32768?'OTRÁVEN':f&65536?'ŠOK':f&8?'ZPOMALEN':f&16?'RELIKVIE':'';
 }
 
 // ---------- hero preview for the hub ----------
