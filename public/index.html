@@ -5,6 +5,18 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Relikvie Aréna</title>
 <meta name="description" content="Neonová aréna 3 proti 3, kooperace proti bossům, hodnocená hra, klany a sezónní průkaz.">
+<!-- the share preview (Discord, Facebook, X, messengers); the server fills in %ORIGIN% with the site's address -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Relikvie Aréna">
+<meta property="og:title" content="Relikvie Aréna · neonová aréna 3 proti 3 zdarma v prohlížeči">
+<meta property="og:description" content="Pět hrdinů, arény s patry, bossové a hodnocená hra. Hraj hned jako host, bez instalace, i na mobilu.">
+<meta property="og:url" content="%ORIGIN%/">
+<meta property="og:image" content="%ORIGIN%/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Relikvie Aréna: neonová aréna s relikvií na vrcholu">
+<meta property="og:locale" content="cs_CZ">
+<meta name="twitter:card" content="summary_large_image">
 <meta name="theme-color" content="#04060c">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -577,6 +589,10 @@ body.touch #tut p{font-size:12.5px}
 #lobby .center{padding-bottom:calc(var(--gb) + 64px)}
 .hubbody{padding-bottom:calc(var(--gb) + 64px)}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+/* trailer mode (?trailer): only the 3D scene, for recording videos */
+body.trailer>*:not(#stage):not(#trailerTip){display:none!important}
+#trailerTip{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:50;padding:10px 16px;border-radius:10px;background:rgba(4,6,12,.82);border:1px solid rgba(143,166,255,.35);color:#dfe6ff;font:500 14px/1.5 'Chakra Petch',sans-serif;text-align:center;transition:opacity .6s}
+#trailerTip kbd{padding:1px 6px;border-radius:4px;background:rgba(143,166,255,.18);font:inherit}
 </style>
 </head>
 <body>
@@ -622,8 +638,8 @@ body.touch #tut p{font-size:12.5px}
 
 <div id="auth" class="overlay" hidden>
   <div class="awrap">
-    <div class="brand">◇ RELIKVIE · ARÉNA</div>
-    <h1>Relikvie<em>Aréna signálu</em></h1>
+    <div class="brand" translate="no">◇ RELIKVIE · ARÉNA</div>
+    <h1><span translate="no">Relikvie</span><em>Aréna signálu</em></h1>
     <p class="lede">Arény 3 proti 3, kooperace proti bossům a vlnám dronů. Sbírej implantáty, rozvíjej strom dovedností a obchoduj s ostatními na tržišti.</p>
     <div id="authBody"></div>
   </div>

@@ -9,6 +9,7 @@ import {WebSocketServer} from 'ws';
 import * as S from './public/sim.js';
 import {openDB} from './db.js';
 import {createMeta,HttpError} from './meta.js';
+import {createStats} from './stats.js';
 
 const PORT=Number(process.env.PORT)||8080;
 const PUB=path.join(path.dirname(fileURLToPath(import.meta.url)),'public');
@@ -18,6 +19,7 @@ const MATCH_SECONDS=Number(process.env.MATCH_SECONDS)||0; // optional override o
 
 const db=await openDB();
 const meta=createMeta(db,{admins:process.env.ADMIN_NICKS||''});
+const stats=createStats(db);
 console.log('Úložiště:',db.kind);
 
 // ---------- HTTP ----------
@@ -42,6 +44,8 @@ async function api(req,res,p,url){
     if(limited(ip,'auth',12,5*60000))throw new HttpError(429,'Příliš mnoho pokusů o přihlášení. Zkus to za pár minut.');
     return json(res,200,await meta[p.slice(5)](body.nick,body.pass));
   }
+  // Počítadlo hráčů: one anonymous visit per browser and day (see stats.js)
+  if(p==='/api/hello'&&req.method==='POST'){if(!limited(ip,'hello',6,3600000))stats.visit(ip,req.headers['user-agent'],{r:body.r===1?1:0,acc:!!body.acc,mob:!!body.mob});return json(res,200,{ok:true})}
   if(p==='/api/top')return json(res,200,meta.top());
   if(p==='/api/player')return json(res,200,meta.publicProfile(url.searchParams.get('id')||url.searchParams.get('nick')||''));
   if(p==='/api/rooms')return json(res,200,{rooms:publicRooms(),online:wss.clients.size});
@@ -60,11 +64,11 @@ async function api(req,res,p,url){
     return json(res,200,{ok:true});
   }
   if(p==='/api/mod'){
-    if(req.method!=='POST')return json(res,200,meta.modView(prof,Object.fromEntries(url.searchParams)));
+    if(req.method!=='POST')return json(res,200,{...meta.modView(prof,Object.fromEntries(url.searchParams)),stats:stats.view(wss.clients.size)});
     const r=meta.modAction(prof,body);
     if(r.notify)for(const x of socials.get(r.notify.pid)||[])note(x,r.notify.msg,true);
     if(r.kick)kickPlayer(r.kick.pid,r.kick.msg);
-    return json(res,200,meta.modView(prof,{nick:body.lookup||''}));
+    return json(res,200,{...meta.modView(prof,{nick:body.lookup||''}),stats:stats.view(wss.clients.size)});
   }
   const m=p.match(/^\/api\/act\/(\w+)$/);
   if(m&&req.method==='POST'){
@@ -85,7 +89,14 @@ const server=http.createServer(async(req,res)=>{
   const f=path.normalize(path.join(PUB,p));
   if(!f.startsWith(PUB+path.sep)){res.writeHead(403);return res.end()}
   if(p.includes('\0')){res.writeHead(400);return res.end()}
-  try{const data=await readFile(f);res.writeHead(200,{'Content-Type':TYPES[path.extname(f)]||'application/octet-stream','Cache-Control':'no-cache'});res.end(data)}
+  try{let data=await readFile(f);
+    // the share preview needs absolute addresses: PUBLIC_URL when set, otherwise the address this request came to
+    if(p==='/index.html'){const host=String(req.headers['x-forwarded-host']||req.headers.host||''),proto=String(req.headers['x-forwarded-proto']||'').split(',')[0]==='https'||process.env.RENDER?'https':'http';
+      const origin=(process.env.PUBLIC_URL||'').replace(/\/+$/,'')||(/^[a-z0-9.:-]{1,100}$/i.test(host)?`${proto}://${host}`:'');
+      data=data.toString('utf8').replaceAll('%ORIGIN%',origin);
+      // a link with ?lang=en gets the English preview (the page itself switches language in the browser)
+      if(url.searchParams.get('lang')==='en')data=englishMeta(data,origin)}
+    res.writeHead(200,{'Content-Type':TYPES[path.extname(f)]||'application/octet-stream','Cache-Control':'no-cache'});res.end(data)}
   catch{res.writeHead(404,{'Content-Type':'text/plain; charset=utf-8'});res.end('Nenalezeno')}
 });
 
@@ -101,6 +112,16 @@ const humans=room=>[...room.clients.values()];
 const maxPlayers=room=>S.MODES[room.mode].max;
 const QUICK_WAIT=20000; // a quick-play room starts on its own after this, the rest is filled with bots
 const RANKED_WAIT=12000; // a ranked room with an opponent starts this long after the last player joined (at once when full)
+function englishMeta(html,origin){
+  const set=(attr,name,v)=>{html=html.replace(new RegExp(`(<meta ${attr}="${name}" content=")[^"]*(")`),`$1${v}$2`)};
+  html=html.replace('<html lang="cs">','<html lang="en">');
+  set('name','description','Neon 3v3 arena brawler with co-op boss fights, ranked play, clans and a season pass. Free in your browser.');
+  set('property','og:title','Relikvie Aréna · free neon 3v3 arena in your browser');
+  set('property','og:description','Five heroes, multi-level arenas, bosses and ranked play. Play right away as a guest, no install, even on mobile.');
+  set('property','og:url',origin+'/?lang=en');set('property','og:image',origin+'/og-en.png');
+  set('property','og:image:alt','Relikvie Aréna: a neon arena with a relic on top');set('property','og:locale','en_US');
+  return html;
+}
 function publicRooms(){
   return [...rooms.values()].filter(r=>r.pub&&!r.solo&&!r.mission).map(r=>({code:r.code,mode:r.mode,map:r.map,boss:r.boss,diff:r.diff,state:r.state,
     players:r.clients.size,max:maxPlayers(r),host:r.clients.get(r.host)?.name||'',quick:!!r.quick,ranked:!!r.ranked,custom:S.isCustom(r.rules,r.mode)||r.rules?.bots===false})).sort((a,b)=>(a.state==='lobby'?0:1)-(b.state==='lobby'?0:1)||b.players-a.players).slice(0,30);
@@ -273,7 +294,7 @@ function startMatch(room){
     // bots take random classes the team does not have yet (unless the room plays without bots)
     if(rv.bots)for(let i=hs.length;i<size;i++){const free=S.CLASS_KEYS.filter(x=>!used.includes(x)),pool=free.length?free:S.CLASS_KEYS,k=pool[Math.floor(Math.random()*pool.length)];used.push(k);S.addUnit(M,k,team,'bot',names.pop())}
   }
-  S.startMatch(M);
+  S.startMatch(M);stats.match(M.mode,humans(room).length);
   room.match=M;room.state='match';room.endSent=false;room.tick=0;
   broadcastLobby(room);sendRoster(room);
 }
@@ -363,7 +384,7 @@ function finishMatch(room){
 
 wss.on('connection',(ws)=>{
   // a client is dropped after 10 s without a pong, so a short network hiccup on mobile does not kick the player
-  const c={ws,cid:nextCid++,name:'Host',cls:'striker',team:0,room:null,unitId:0,alive:true,missed:0,msgs:0,profile:null};ws.client=c;
+  const c={ws,cid:nextCid++,name:'Host',cls:'striker',team:0,room:null,unitId:0,alive:true,missed:0,msgs:0,profile:null};ws.client=c;stats.online(wss.clients.size);
   ws.on('pong',()=>c.alive=true);
   // an oversized or malformed frame raises an 'error' on the socket; without a handler it would take the whole server down
   ws.on('error',()=>{try{ws.terminate()}catch{}});

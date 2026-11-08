@@ -1,6 +1,7 @@
 // Player settings: key bindings, graphics, interface. Stored per browser; the client reads them through get() and
 // reacts to changes through onChange(). The settings screen is an overlay reachable from the hub and the pause menu.
 import * as Snd from './audio.js';
+import {lang,setLang} from './i18n.js';
 
 const store={get(k,d){try{const v=localStorage.getItem('rel.'+k);return v==null?d:JSON.parse(v)}catch{return d}},set(k,v){try{localStorage.setItem('rel.'+k,JSON.stringify(v))}catch{}}};
 export const ACTIONS=[['up','Pohyb nahoru'],['down','Pohyb dolů'],['left','Pohyb doleva'],['right','Pohyb doprava'],['q','Schopnost 1'],['e','Schopnost 2'],['r','Schopnost 3'],
@@ -80,7 +81,8 @@ function render(){
     ${tog('shake','Otřesy kamery','Při výbuších a zásazích.')}
     ${tog('flash','Záblesky obrazovky','Červený záblesk při silném zásahu. Vypni, pokud ti vadí blikání.')}`;
     el.querySelectorAll('[data-q]').forEach(b=>b.onclick=()=>{store.set('q',b.dataset.q);render();toastSet('Kvalita se změní po obnovení stránky.')})}
-  if(tab==='ui')el.innerHTML=`${tog('dmgNums','Čísla poškození','Létající čísla poškození nad zasaženými.')}
+  if(tab==='ui')el.innerHTML=`<div class="setrow" translate="no"><span>Jazyk · Language</span><div class="seg" id="setLang">${[['cs','Čeština'],['en','English']].map(([k,n])=>`<button type="button" data-lang="${k}" aria-pressed="${k===lang}">${n}</button>`).join('')}</div></div>
+    ${tog('dmgNums','Čísla poškození','Létající čísla poškození nad zasaženými.')}
     ${tog('names','Jména nad postavami')}
     ${rng('zoom','Oddálení kamery',.8,1.3,.05,pct,'Vyšší hodnota ukáže víc z arény.')}
     ${tog('fps','Počítadlo snímků (FPS)')}
@@ -88,6 +90,7 @@ function render(){
       <div class="seg" id="setPal">${Object.entries(TEAM_PALS).map(([k,p])=>`<button type="button" data-pal="${k}" aria-pressed="${k===S.teamPal}"><i class="pal" style="background:${p.c[0]}"></i><i class="pal" style="background:${p.c[1]}"></i> ${p.name}</button>`).join('')}</div></div>`;
   if(tab==='sound'){el.innerHTML=Snd.panelHTML();Snd.bindPanel(el)}
   el.querySelectorAll('[data-fpscap]').forEach(b=>b.onclick=()=>{set('fpsCap',+b.dataset.fpscap);render()});
+  el.querySelectorAll('[data-lang]').forEach(b=>b.onclick=()=>setLang(b.dataset.lang));
   el.querySelectorAll('[data-pal]').forEach(b=>b.onclick=()=>{set('teamPal',b.dataset.pal);render()});
   el.querySelectorAll('[data-tog]').forEach(i=>i.onchange=()=>set(i.dataset.tog,i.checked));
   el.querySelectorAll('[data-rng]').forEach(i=>i.oninput=()=>{set(i.dataset.rng,+i.value);i.nextElementSibling.textContent=pct(+i.value)});

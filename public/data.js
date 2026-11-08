@@ -83,6 +83,15 @@ export const SECONDARY={
   cryo:{name:'Ledový hrot',cd:6,icon:'freeze',desc:'Hrot na 20 m: 60 % TECH a zpomalení na 1,5 s.'}};
 // "Novinky" in the hub, newest first; id marks what a player has already seen
 export const CHANGELOG=[
+  {id:'2026-11w',title:'Anglická verze',items:[
+    'Hra umí anglicky. Hráči z ciziny ji dostanou v angličtině automaticky podle jazyka prohlížeče, přepnout jde v Nastavení → Rozhraní → Jazyk · Language.',
+    'Odkaz s ?lang=en otevře hru rovnou anglicky a při sdílení má anglický náhled.',
+    'Zprávy v chatu se nepřekládají, zůstávají tak, jak je hráč napsal.']},
+  {id:'2026-11v',title:'Sdílení a oprava',items:[
+    'Odkaz na hru má při sdílení na Discordu, Facebooku nebo v Messengeru náhledový obrázek a popis.',
+    'Hra anonymně počítá, kolik lidí ji denně hraje. Neukládá žádné adresy, cookies ani identifikátory, jen souhrnná čísla za den.',
+    'Opraveno: po zápase na Neonové citadele mohl přechod na jinou mapu zaseknout obraz.'
+  ]},
   {id:'2026-11u',title:'Pravé tlačítko: sekundární útok',items:[
     'Každý hrdina má sekundární útok na pravém tlačítku myši (nebo na klávese C, dá se přenastavit). Nestojí energii a má krátké čekání. Najdeš ho jako poslední slot v liště.',
     'Lovec: Průrazná střela na 26 m proletí všemi soupeři v řadě (110 % útoku).',

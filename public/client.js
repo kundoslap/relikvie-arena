@@ -1,4 +1,5 @@
 // Relikvie Aréna — client. Renders snapshots from the simulation (local for training, the server for online play).
+import './i18n.js';
 import * as THREE from 'three';
 import {EffectComposer} from 'three/addons/postprocessing/EffectComposer.js';
 import {RenderPass} from 'three/addons/postprocessing/RenderPass.js';
@@ -482,9 +483,49 @@ function newLocalMatch(o,humanClass){
   return M;
 }
 function startAttract(){
+  if(G.trailer)return startTrailer();
   G.mode='menu';G.solo=false;
   const maps=['core','forge','archive'],M=newLocalMatch({mode:'arena',map:maps[Math.floor(Math.random()*maps.length)]},null);M.state='play';
 }
+// ---------- trailer mode (?trailer) ----------
+// For recording videos: a hard bot match with no interface at all and a camera that cuts between shots like a film:
+// following a hero in the thick of it, a low dramatic orbit, and a wide view of the arena. ?map=… picks the arena,
+// ?mode=control the mode. Keys: Space next shot, N next arena, P pause, Esc back to the game.
+const TRAILER_MAPS=['citadel','core','observ','forge','archive'];
+function startTrailer(){
+  const q=new URLSearchParams(location.search),T=G.trailer||(G.trailer={mi:0,kind:-1,cut:0,ang:0,focus:0,fixed:MAPS[q.get('map')]&&!MAPS[q.get('map')].ctfOnly?q.get('map'):null});
+  G.mode='menu';G.solo=false;G.paused=false;
+  const M=newLocalMatch({mode:q.get('mode')==='control'?'control':'arena',map:T.fixed||TRAILER_MAPS[T.mi%TRAILER_MAPS.length],diff:'hard'},null);M.state='play';
+  document.body.classList.add('trailer');T.cut=0;
+}
+// the hero with the most others close by: where the action is
+function trailerFocus(){
+  const vs=[...views.values()].filter(v=>v.kind==='h'&&!v.dead&&!v.hid);if(!vs.length)return 0;
+  let best=vs[0],bn=-1;for(const v of vs){const n=vs.filter(o=>o!==v&&Math.hypot(o.x-v.x,o.z-v.z)<11).length+Math.random()*.9;if(n>bn){bn=n;best=v}}
+  return best.id;
+}
+function trailerCam(dt){
+  const T=G.trailer,R=MAPS[G.info.map].r;T.cut-=dt;
+  const f=views.get(T.focus),lost=T.kind!==2&&(!f||f.dead||f.hid);
+  if(T.cut<=0||lost){T.kind=(T.kind+1)%4;T.cut=T.kind===2?7:5.5+Math.random()*2.5;T.focus=trailerFocus();T.ang=Math.random()*Math.PI*2;T.snap=true}
+  const v=views.get(T.focus);let p,look;
+  if(T.kind===2||!v){T.ang+=dt*.07;p=new V3(Math.cos(T.ang)*(R+4),30,Math.sin(T.ang)*(R+4));look=new V3(0,0,0)}
+  else{const low=T.kind===3,r=low?8.5:15,h=low?4.2:11,y=v.gy||0;T.ang+=dt*(low?.32:.12);
+    p=new V3(v.x+Math.cos(T.ang)*r,y+h,v.z+Math.sin(T.ang)*r);look=new V3(v.x,y+1.3,v.z)}
+  if(T.snap){camera.position.copy(p);T.look=look.clone();T.snap=false}
+  else{const k=1-Math.exp(-dt*3);camera.position.lerp(p,k);T.look.lerp(look,1-Math.exp(-dt*5))}
+  camera.lookAt(T.look);
+}
+function trailerTip(){
+  const el=document.createElement('div');el.id='trailerTip';
+  el.innerHTML='Trailerový režim · <kbd>Mezerník</kbd> další záběr · <kbd>N</kbd> další aréna · <kbd>P</kbd> pauza · <kbd>Esc</kbd> zpět do hry<br><small>Nápověda za chvíli zmizí. Nahrávej třeba přes Win+G.</small>';
+  document.body.append(el);setTimeout(()=>{el.style.opacity=0;setTimeout(()=>el.remove(),700)},6000);
+}
+addEventListener('keydown',e=>{if(!G.trailer)return;
+  if(e.code==='Space'){e.preventDefault();e.stopImmediatePropagation();G.trailer.cut=0}
+  else if(e.code==='KeyN'){e.stopImmediatePropagation();G.trailer.mi++;G.trailer.fixed=null;startTrailer()}
+  else if(e.code==='KeyP'){e.stopImmediatePropagation();G.paused=!G.paused}
+  else if(e.code==='Escape'){e.stopImmediatePropagation();location.href=location.pathname}},true);
 function startLocal(o){
   G.lastOpts={...o,local:true};G.mode='off';G.paused=false;newLocalMatch(o,o.cls);
   showOnly('hud');applyTouch();buildSlots();$('#netInfo').textContent='Trénink bez serveru';
@@ -616,7 +657,7 @@ function stepLocal(dt){
     if(G.M.rosterVer!==G.rosterVer){G.rosterVer=G.M.rosterVer;onRoster(S.roster(G.M))}
     const ev=G.M.events;G.M.events=[];if(G.tut)tutTick(ev);if(G.range)rangeTick(ev);ingest(S.snapshotFor(G.M,G.you,ev));
     if(G.M.state==='end'){
-      if(G.mode==='menu'){startAttract();return}
+      if(G.mode==='menu'){if(G.trailer){G.trailer.mi++;startTrailer()}else startAttract();return}
       showEnd({winner:G.M.winner,score:G.M.score,stats:S.stats(G.M),wave:G.M.wave,mode:G.M.mode,log:G.M.log});Hub.showRewards({guest:true});return}
   }
 }
@@ -1114,12 +1155,12 @@ const camPos=new V3(),clock=new THREE.Clock();let menuAngle=0,fpsN=0,fpsT=0,last
 // frames per second at most: the setting in a match (0 = every display frame), 30 for the live menu background,
 // one a second when that background is switched off (its demo match then stands still)
 const MENU_FPS=30;
-function frameCap(){if(G.mode!=='menu')return Cfg.get('fpsCap');return Cfg.get('menuBg')?Math.min(MENU_FPS,Cfg.get('fpsCap')||MENU_FPS):1}
+function frameCap(){if(G.mode!=='menu'||G.trailer)return Cfg.get('fpsCap');return Cfg.get('menuBg')?Math.min(MENU_FPS,Cfg.get('fpsCap')||MENU_FPS):1}
 function frame(now=performance.now()){
   requestAnimationFrame(frame);
   const cap=frameCap();if(cap&&now-lastDraw<1000/cap-2)return;lastDraw=now;G.drawn=(G.drawn||0)+1;
   const dt=Math.min(clock.getDelta(),.05),t=clock.elapsedTime;
-  const still=G.mode==='menu'&&!Cfg.get('menuBg');
+  const still=G.mode==='menu'&&!Cfg.get('menuBg')&&!G.trailer;
   arena?.update(still?0:dt,t);
   if(G.mode==='off'||G.mode==='menu'&&!still)stepLocal(dt);
   else if(G.mode==='on'&&!G.ended){G.inAcc+=dt;let n=0;while(G.inAcc>=TICK&&n<4){G.inAcc-=TICK;inputTick();n++}if(G.inAcc>TICK)G.inAcc=0}
@@ -1147,7 +1188,8 @@ function frame(now=performance.now()){
   G.shake=Cfg.get('shake')?Math.max(0,G.shake-dt*2.2):0;
   if(!$('#fps').hidden){fpsN++;fpsT+=dt;if(fpsT>=.5){$('#fps').textContent=`${Math.round(fpsN/fpsT)} FPS`;fpsN=0;fpsT=0}}
   autoQuality(dt);
-  if(G.mode==='menu'){if(!still)menuAngle+=dt*.06;camera.position.set(Math.cos(menuAngle)*46,30,Math.sin(menuAngle)*46);camera.lookAt(-6,0,0)}
+  if(G.trailer)trailerCam(dt);
+  else if(G.mode==='menu'){if(!still)menuAngle+=dt*.06;camera.position.set(Math.cos(menuAngle)*46,30,Math.sin(menuAngle)*46);camera.lookAt(-6,0,0)}
   else{const p=camFocus();camPos.lerp(new V3(p.x,0,p.z),1-Math.exp(-dt*6));const far=portraitZoom()*Cfg.get('zoom'),boss=G.info.mode==='boss'||G.last?.bs?1.12:1;
     const sx=(Math.random()-.5)*G.shake*.9,sz=(Math.random()-.5)*G.shake*.9;
     camera.position.set(camPos.x+sx,26*far*boss,camPos.z+17*far*boss+sz);camera.lookAt(camPos.x+sx*.5,0,camPos.z-1+sz*.5)}
@@ -1162,8 +1204,17 @@ function frame(now=performance.now()){
 Cfg.setup();applyCfg();
 Social.setup({join:code=>Hub.joinRoom(code),sendRoom:(text,team)=>wsSend({type:'say',ch:'room',text,team}),pvp:()=>!!MODES[G.info?.mode||G.lobby?.mode]?.pvp});
 Social.onChange(()=>{if(!$('#lobby').hidden&&G.lobby)Social.lobbyFriends($('#lobbyFriends'),G.lobby)});
-applyTouch();startAttract();frame();
-Hub.init(hubCallbacks).then(resumeAfterReload);
+applyTouch();
+const TRAILER=new URLSearchParams(location.search).has('trailer');
+if(TRAILER){startTrailer();trailerTip()}else startAttract();
+frame();
+// in trailer mode the hub still loads (settings, sounds) but nothing is shown and no match is resumed
+Hub.init(hubCallbacks).then(()=>{if(!TRAILER){resumeAfterReload();hello()}});
+// Počítadlo hráčů: once a day the browser tells the server it was here: new or returning, signed in, touch device.
+// It keeps only the day of its last visit, no identifier (the server side is described in stats.js).
+function hello(){try{
+  const today=S.dayKey(),last=store.get('lastVisit',null);if(last===today)return;store.set('lastVisit',today);
+  fetch('/api/hello',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({r:last?1:0,acc:!!store.get('token',null),mob:matchMedia('(pointer:coarse)').matches})}).catch(()=>{})}catch{}}
 // installable app: the service worker keeps a copy of the game for offline training
 if('serviceWorker' in navigator&&(location.protocol==='https:'||location.hostname==='localhost'))navigator.serviceWorker.register('/sw.js').catch(e=>console.warn('Service worker:',e.message));
 // local test harnesses read the game state; the live site does not expose it

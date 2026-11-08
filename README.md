@@ -288,6 +288,38 @@ Hosté můžou hrát online bez účtu, jen se jim nic neukládá. Když server 
 
 Návod krok za krokem pro Render a databázi Neon (obojí zdarma, bez instalace gitu) je v [DEPLOY.md](DEPLOY.md).
 
+## Propagace
+
+**Náhled odkazu:** `index.html` má značky Open Graph a Twitter Card. Discord, Facebook, Messenger, X a další z nich při sdílení vykreslí obrázek `public/og.png` (1200 × 630, neonová aréna s relikvií a výzvou „Hraj zdarma v prohlížeči“) s názvem a popisem. Tyhle služby chtějí plnou adresu obrázku. Server proto v `index.html` nahradí `%ORIGIN%` adresou webu: vezme proměnnou prostředí `PUBLIC_URL` (třeba `https://relikvie.onrender.com`, jen když se má použít jiná adresa), jinak adresu, na kterou přišel požadavek (na Renderu s https). Obrázek se dá kdykoli vyměnit za jiný se stejným názvem a rozměry (anglická varianta je `public/og-en.png`, viz Anglická verze níže). Po změně si Discord a Facebook drží starý náhled ještě nějakou dobu v mezipaměti.
+
+**Počítadlo hráčů** (Moderace → Návštěvnost, vidí ho jen nicky z `ADMIN_NICKS`): tabulka posledních 14 dní a počet lidí online právě teď. Pro každý den ukazuje:
+- **Návštěvy:** různí návštěvníci za den.
+- **Noví a vracející se:** noví jsou tu poprvé, vracející se tu byli už dřív. Podíl vracejících se je nejdůležitější číslo: ukazuje, jestli se lidem hra líbí.
+- **S účtem a mobil:** kolik návštěvníků bylo přihlášených a kolik hrálo na dotykovém zařízení.
+- **Zápasy:** počet online zápasů a jejich rozdělení podle režimů.
+- **Hráči v zápasech:** součet lidí (bez botů) ve všech zápasech dne.
+- **Max online:** nejvíc lidí připojených najednou.
+
+Jak to funguje (`stats.js`):
+- Prohlížeč jednou denně pošle `POST /api/hello`. Uloží si jen datum poslední návštěvy, podle kterého pozná „nový“ nebo „vracející se“; žádné ID ani cookie.
+- Server rozliší návštěvníky v rámci dne podle otisku adresy a názvu prohlížeče smíchaného s náhodnou solí. Sůl je jen v paměti a každý den se vymění, takže nikoho nejde sledovat mezi dny a do dat se neukládá nic, co by šlo spojit s člověkem.
+- Ukládají se jen souhrnná čísla za den (`doc.stats.days`, posledních 90 dní) ve stejné databázi jako účty.
+- Na jednu adresu se započítá nejvýš 6 hlášení za hodinu. Trénink bez serveru a trailerový režim se nepočítají.
+- Ověřuje to test (návštěvy, noví a vracející se, zápas, max online, přístup jen pro správce, žádné identifikátory v datech).
+
+**Trailerový režim** pro natáčení videí: otevři hru s `?trailer` na konci adresy (třeba `https://…/?trailer`). Hra pustí zápas botů na těžkou obtížnost bez jakéhokoli rozhraní (žádné menu, HUD, jména ani čísla poškození) a kamera střihá mezi záběry jako ve filmu: sledování hrdiny tam, kde se bojuje (vybere toho, kolem kterého je nejvíc dalších), nízký dramatický oblet a celkový pohled na arénu. Záběr trvá 5–8 s, a když sledovaný hrdina padne, střihne se hned. Po konci zápasu začne další na další mapě (citadela, jádro, observatoř, kovárna, archiv).
+- `?trailer&map=citadel` drží jednu arénu, `&mode=control` přepne na Ovládnutí.
+- Klávesy: **mezerník** další záběr, **N** další aréna, **P** pauza, **Esc** zpět do normální hry.
+- Nápověda se ukáže na 6 s a zmizí. Zvuk je v trailerovém režimu vypnutý (jako u zápasu za menu), hudbu nebo komentář přidáš ve střihu.
+- Nahrávat jde bez dalších programů přes Herní panel Windows (Win+G, nebo Win+Alt+R pro start a stop nahrávání), případně v OBS. Na video se hodí okno prohlížeče přes celou obrazovku (F11).
+
+**Anglická verze:** hra má češtinu i angličtinu.
+- Kdo má prohlížeč v češtině nebo slovenštině, dostane češtinu, všichni ostatní angličtinu. Volba se pamatuje a jde změnit v Nastavení → Rozhraní → Jazyk · Language (stránka se obnoví).
+- Odkaz s `?lang=en` (třeba `https://…/?lang=en`) otevře hru anglicky a uloží to. Server pro takový odkaz pošle anglický náhled: anglický titulek a popis a obrázek `public/og-en.png` („Play free in your browser“). Do zahraničních komunit tedy sdílej adresu s `?lang=en`, do českých bez ní. `?lang=cs` vrátí češtinu.
+- Jak to funguje (`public/i18n.js`): čeština zůstává ve zdrojovém kódu a překlad se dělá až na stránce. Modul sleduje stránku (MutationObserver) a každý text, který se objeví, přepíše podle slovníku `public/lang-en.js` (český text → anglický, asi 2 300 položek). Texty s čísly nebo jmény jsou šablony s `{}` („Kolo {}“ → „Round {}“) a doplněná slova se přeloží také. Složené texty (oddělené „ · “, „ + “, dvojtečkou apod.) se překládají po částech, malé počáteční písmeno a tečka na konci se dohledají. Česká verze slovník vůbec nestahuje.
+- Chat, nahlášené zprávy a novinky (changelog) jsou v prvcích s `translate="no"` a nepřekládají se: zprávy hráčů zůstávají, jak je napsali, a novinky jsou česky (v angličtině je u nich poznámka). Název hry „Relikvie Aréna“ zůstává česky jako značka.
+- Nový text ve hře: když ho do slovníku nepřidáš, ukáže se anglickým hráčům česky. Přidáš ho do `public/lang-en.js` jako `"český text":"English text"`, čísla a jména nahraď `{}`. Pořadí částí se dá v angličtině změnit přes `{0}`, `{1}`.
+
 ## Struktura
 
 - `server.js` — HTTP server, API účtů, místnosti, smyčka 30 Hz, posílání snapshotů, odměny po zápase
@@ -302,6 +334,7 @@ Návod krok za krokem pro Render a databázi Neon (obojí zdarma, bez instalace 
 - `public/sw.js`, `public/manifest.webmanifest`, `public/icon-*.png` — instalovatelná aplikace: service worker, manifest a ikony
 - `public/settings.js` — nastavení hráče (klávesy, grafika, rozhraní) a jeho obrazovka
 - `public/audio.js` — syntetizované zvukové efekty, generovaná hudba a nastavení hlasitosti
+- `public/i18n.js`, `public/lang-en.js` — volba jazyka a překlad stránky do angličtiny (slovník český text → anglický)
 
 ## Síťový model a bezpečnost
 

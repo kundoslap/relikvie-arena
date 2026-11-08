@@ -1,8 +1,8 @@
 // Service worker for the installable app. Game code is network-first, so a new deploy reaches players at once;
 // the cached copy is used only when the network is down (then the hub offers offline training against bots).
 // Three.js and fonts from CDNs are versioned and cached first. The API and the WebSocket never go through the cache.
-const CACHE='relikvie-v1';
-const SHELL=['/','/index.html','/client.js','/hub.js','/data.js','/sim.js','/models.js','/social.js','/audio.js','/settings.js','/manifest.webmanifest','/icon-192.png','/icon-512.png','/favicon-32.png'];
+const CACHE='relikvie-v2';
+const SHELL=['/','/index.html','/client.js','/i18n.js','/lang-en.js','/hub.js','/data.js','/sim.js','/models.js','/social.js','/audio.js','/settings.js','/manifest.webmanifest','/icon-192.png','/icon-512.png','/favicon-32.png'];
 
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)).catch(()=>{}).then(()=>self.skipWaiting()))});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim()))});

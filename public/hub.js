@@ -3,6 +3,7 @@ import * as D from './data.js';
 import * as Social from './social.js';
 import * as Snd from './audio.js';
 import * as Cfg from './settings.js';
+import {isEn} from './i18n.js';
 
 const $=s=>document.querySelector(s);
 export const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -155,8 +156,8 @@ function newsDialog(){
   const d=document.createElement('div');d.id='newsDlg';d.className='overlay';
   d.innerHTML=`<div class="center"><div class="card news" role="dialog" aria-label="Novinky"><div class="row"><h2 class="sec" style="margin:0">Novinky</h2><button class="ghost sm" type="button" data-x aria-label="Zavřít">×</button></div>
     ${nNew>1?`<p class="help" style="margin:0">Od tvé poslední návštěvy ${nNew<5?`přibyly ${nNew} aktualizace`:`přibylo ${nNew} aktualizací`}.</p>`:''}
-    ${D.CHANGELOG.map((c,i)=>`<section class="${i<nNew?'new':'old'}">${i===nNew&&nNew>0?'<div class="newsSep">Starší</div>':''}<div class="lbl">${esc(c.title)}${i<nNew?' <span class="newTag">NOVÉ</span>':''}</div><ul>${c.items.map(i=>`<li>${esc(i)}</li>`).join('')}</ul></section>`).join('')}
-    <p class="help">Podrobnosti najdeš v nápovědě u jednotlivých karet a režimů.</p></div></div>`;
+    ${D.CHANGELOG.map((c,i)=>`<section class="${i<nNew?'new':'old'}">${i===nNew&&nNew>0?'<div class="newsSep">Starší</div>':''}<div class="lbl"><span translate="no">${esc(c.title)}</span>${i<nNew?' <span class="newTag">NOVÉ</span>':''}</div><ul translate="no">${c.items.map(i=>`<li>${esc(i)}</li>`).join('')}</ul></section>`).join('')}
+    <p class="help">Podrobnosti najdeš v nápovědě u jednotlivých karet a režimů.</p>${isEn?'<p class="help">The patch notes are written in Czech.</p>':''}</div></div>`;
   document.body.appendChild(d);
   const close=()=>{d.remove();renderHub()};
   d.querySelector('[data-x]').onclick=close;d.querySelector('[data-x]').focus();
@@ -348,7 +349,14 @@ function renderMod(v){
     <button class="ghost sm" type="button" data-m="mute" data-min="60">Chat 1 h</button><button class="ghost sm" type="button" data-m="mute" data-min="1440">Chat 24 h</button><button class="ghost sm" type="button" data-m="mute" data-min="10080">Chat 7 dní</button>
     <button class="ghost sm" type="button" data-m="ban" data-min="10080">Blok 7 dní</button><button class="ghost sm" type="button" data-m="ban" data-min="43200">Blok 30 dní</button><button class="ghost sm bad" type="button" data-m="ban" data-min="0">Blok natrvalo</button></div>`;
   const P=v.player;
-  $('#modBody').innerHTML=`<section class="panel"><div class="row"><h3>Moderace</h3><small class="help">${v.open.length} nevyřízených nahlášení</small></div>
+  // Návštěvnost: anonymous day totals from the server's player counter
+  const ST=v.stats,MODE_N=k=>D.MODES[k]?.name||k,td=ST?.days?.[0];
+  const statsHTML=ST?`<section class="panel"><div class="row"><h3>Návštěvnost</h3><small class="help">teď online ${ST.online}</small></div>
+      ${td?`<p class="help">Dnes: návštěvníci <b>${td.v}</b> (noví ${td.nw}, vracející se ${td.ret}) · online zápasy <b>${td.m}</b>${td.m?` (${Object.entries(td.modes).sort((a,b)=>b[1]-a[1]).map(([k,n])=>`${esc(MODE_N(k))} ${n}`).join(', ')})`:''} · nejvíc najednou ${td.peak}</p>`:''}
+      <div style="overflow-x:auto"><table class="st"><thead><tr><th>Den</th><th title="Různí návštěvníci za den">Návštěvy</th><th>Noví</th><th title="Byli tu už dřív">Vracející</th><th>S účtem</th><th>Mobil</th><th>Zápasy</th><th title="Hráči (bez botů) v online zápasech, součet">Hráči v zápasech</th><th>Max online</th></tr></thead>
+      <tbody>${ST.days.slice(0,14).map(d=>`<tr><td>${new Date(d.day+'T12:00').toLocaleDateString('cs-CZ',{weekday:'short',day:'numeric',month:'numeric'})}</td><td><b>${d.v}</b></td><td>${d.nw}</td><td>${d.ret}${d.v?` <small>(${Math.round(d.ret/d.v*100)} %)</small>`:''}</td><td>${d.acc}</td><td>${d.mob}</td><td>${d.m}</td><td>${d.hm}</td><td>${d.peak}</td></tr>`).join('')||'<tr><td colspan="9">Zatím žádná data.</td></tr>'}</tbody></table></div>
+      <p class="help">Čísla jsou anonymní: server neukládá adresy ani identifikátory, návštěvník se rozlišuje jen v rámci jednoho dne. Trénink bez serveru se do zápasů nepočítá.</p></section>`:'';
+  $('#modBody').innerHTML=statsHTML+`<section class="panel"><div class="row"><h3>Moderace</h3><small class="help">${v.open.length} nevyřízených nahlášení</small></div>
       <form class="inline" id="modFind" autocomplete="off"><label class="field">Najít hráče<input id="modNick" maxlength="16" value="${esc(MOD_UI.nick)}"></label><button class="ghost" type="submit">Hledat</button></form>
       <label class="field">Poznámka k trestu (uvidí ji hráč)<input id="modNote" maxlength="200" placeholder="Např. urážky v chatu"></label>
       ${P?`<div class="rep"><div><b>${esc(P.nick)}</b> <small class="help">úr. ${P.level} · účet od ${new Date(P.created).toLocaleDateString('cs-CZ')}${P.admin?' · moderátor':''}</small></div><small class="help">${state(P)}</small>
@@ -357,7 +365,7 @@ function renderMod(v){
     </section>
     <section class="panel"><h3>Nahlášení</h3>${v.open.map(r=>`<div class="rep"><div class="row"><div><b>${esc(r.targetNick)}</b> · ${esc(D.REPORT_REASONS[r.reason]||r.reason)}<small class="help" style="display:block">nahlásil ${esc(r.fromNick)} · ${tShort(r.at)}${r.targetState?' · '+state(r.targetState):''}</small></div></div>
         ${r.note?`<p class="help">„${esc(r.note)}“</p>`:''}
-        ${r.ctx.length?`<div class="ctx">${r.ctx.map(m=>`<div><small>${tShort(m.t)} · ${m.ch==='world'?'svět':m.ch==='room'?'místnost':m.ch==='guild'?'klan':'soukromě'}</small> ${esc(m.text)}</div>`).join('')}</div>`:'<small class="help">Bez zpráv v chatu.</small>'}
+        ${r.ctx.length?`<div class="ctx">${r.ctx.map(m=>`<div><small>${tShort(m.t)} · ${m.ch==='world'?'svět':m.ch==='room'?'místnost':m.ch==='guild'?'klan':'soukromě'}</small> <span translate="no">${esc(m.text)}</span></div>`).join('')}</div>`:'<small class="help">Bez zpráv v chatu.</small>'}
         ${r.targetState?.admin?'<button class="ghost sm" type="button" data-q="dismiss" data-r="'+r.id+'">Zamítnout</button>':acts(r.target,r.id)}</div>`).join('')||'<p class="help">Žádné nevyřízené nahlášení.</p>'}</section>
     <div class="grid2" style="align-items:start">
       <section class="panel"><h3>Potrestaní</h3><div class="flist">${v.sanctioned.map(s=>`<div class="fr"><span><b>${esc(s.nick)}</b><small>${state(s)}</small></span><div class="btns">${s.muteUntil?`<button class="ghost sm" type="button" data-q="unmute" data-id="${s.id}">Zrušit chat</button>`:''}${s.banUntil?`<button class="ghost sm" type="button" data-q="unban" data-id="${s.id}">Odblokovat</button>`:''}</div></div>`).join('')||'<p class="help">Nikdo.</p>'}</div></section>

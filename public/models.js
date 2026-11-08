@@ -425,5 +425,5 @@ export function buildArena(scene,mapKey,hiQ){
   scene.add(g);
   return{group:g,mapKey,solids,
     update(dt,t){for(const f of updaters)f(dt,t)},
-    dispose(){scene.remove(g);g.traverse(o=>{if(o.geometry&&o.geometry!==DISC_GEO)o.geometry.dispose();if(o.material){o.material.map?.dispose?.();o.material.dispose()}})}};
+    dispose(){scene.remove(g);g.traverse(o=>{if(o.geometry&&o.geometry!==DISC_GEO)o.geometry.dispose();if(o.material){for(const mt of Array.isArray(o.material)?o.material:[o.material]){mt.map?.dispose?.();mt.dispose()}}})}};
 }

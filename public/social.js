@@ -82,7 +82,7 @@ const push=(a,m)=>{a.push(m);if(a.length>KEEP)a.shift()};
 const isFriend=id=>X.fr.friends.some(f=>f.id===id);
 const friendById=id=>X.fr.friends.find(f=>f.id===id);
 const shorten=s=>s.length>60?s.slice(0,57)+'…':s;
-const txt=s=>esc(X.filter?D.maskSwears(s):s);
+const txt=s=>`<span translate="no">${esc(X.filter?D.maskSwears(s):s)}</span>`;
 const hm=t=>{const d=new Date(t);return`${d.getHours()}:${String(d.getMinutes()).padStart(2,'0')}`};
 let toastT;
 function toast(msg,bad){const t=$('#toast');if(!t)return;t.textContent=msg;t.className=bad?'bad':'';t.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>t.hidden=true,3500)}
