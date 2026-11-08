@@ -1,6 +1,6 @@
 // Relikvie Aréna — 3D models (heroes with skins, NPCs, bosses) and map environments.
 import * as THREE from 'three';
-import {CLASSES,NPCS,BOSSES,MAPS,TEAM_COL,skinOf} from './sim.js';
+import {CLASSES,NPCS,BOSSES,MAPS,TEAM_COL,skinOf,heightAt} from './sim.js';
 const PORTAL_COL=[0x7df9ff,0xff7de9];
 
 export const HDR=(c,k=2.4)=>new THREE.Color(c).multiplyScalar(k);
@@ -343,6 +343,36 @@ export function buildArena(scene,mapKey,hiQ){
     const rim=new THREE.Mesh(new THREE.RingGeometry(hz.r,hz.r+.25,40),new THREE.MeshStandardMaterial({color:0x2a1208,metalness:.6,roughness:.5}));rim.rotation.x=-Math.PI/2;rim.position.set(hz.x,.06,hz.z);g.add(rim);
     const l=new THREE.PointLight(0xff6a1a,6,10,1.5);l.position.set(hz.x,1.2,hz.z);g.add(l);
   }
+  // levels (Neonová citadela): solid tops with glowing edges, sloped ramps, jump pads; `solids` are what the mouse aims at
+  const solids=[];
+  if(map.levels){
+    const side=new THREE.MeshStandardMaterial({color:0x111a2e,metalness:.75,roughness:.35,envMapIntensity:.5}),
+      top=new THREE.MeshStandardMaterial({color:0x0d1424,metalness:.55,roughness:.45,emissive:0x061418});
+    const edgeMat=h=>new THREE.LineBasicMaterial({color:HDR(h>=6?0xffc66d:T.accent,1.6)});
+    for(const L of map.levels){let m;
+      if(L.c){const geo=new THREE.CylinderGeometry(L.c[2],L.c[2],L.h,72);m=new THREE.Mesh(geo,[side,top,top]);m.position.set(L.c[0],L.h/2,L.c[1]);
+        const ring=new THREE.Mesh(new THREE.TorusGeometry(L.c[2]-.05,.07,6,96),new THREE.MeshBasicMaterial({color:HDR(L.peak?0xffc66d:T.accent,1.8)}));ring.rotation.x=Math.PI/2;ring.position.set(L.c[0],L.h+.02,L.c[1]);g.add(ring);
+        for(let k=1;k<4;k++){const band=new THREE.Mesh(new THREE.TorusGeometry(L.c[2]+.01,.035,4,96),new THREE.MeshBasicMaterial({color:HDR(T.accent,.7)}));band.rotation.x=Math.PI/2;band.position.set(L.c[0],L.h*k/4,L.c[1]);g.add(band)}
+        if(L.peak){const glow=new THREE.Mesh(new THREE.RingGeometry(L.c[2]*.55,L.c[2]*.62,64),new THREE.MeshBasicMaterial({color:HDR(0xffc66d,1.4),transparent:true,opacity:.6,depthWrite:false,blending:THREE.AdditiveBlending}));
+          glow.rotation.x=-Math.PI/2;glow.position.set(L.c[0],L.h+.03,L.c[1]);g.add(glow);updaters.push((dt,t)=>glow.material.opacity=.35+.25*Math.sin(t*2))}}
+      else{const [x0,z0,x1,z1]=L.b,geo=new THREE.BoxGeometry(x1-x0,L.h,z1-z0);m=new THREE.Mesh(geo,[side,side,top,side,side,side]);m.position.set((x0+x1)/2,L.h/2,(z0+z1)/2);
+        const e=new THREE.LineSegments(new THREE.EdgesGeometry(geo),edgeMat(L.h));e.position.copy(m.position);g.add(e)}
+      m.castShadow=m.receiveShadow=true;g.add(m);solids.push(m)}
+    // a ramp: a box whose top follows the ramp's height
+    for(const R of map.ramps){const [x0,z0,x1,z1]=R.b,geo=new THREE.BoxGeometry(x1-x0,1,z1-z0,1,1,1),pos=geo.attributes.position,cx=(x0+x1)/2,cz=(z0+z1)/2;
+      for(let i=0;i<pos.count;i++){const top=pos.getY(i)>0;pos.setY(i,top?Math.max(.05,heightAt({levels:[],ramps:[R]},cx+pos.getX(i)*.999,cz+pos.getZ(i)*.999)):0)}
+      geo.computeVertexNormals();const m=new THREE.Mesh(geo,[side,side,top,side,side,side]);m.position.set(cx,0,cz);m.castShadow=m.receiveShadow=true;g.add(m);solids.push(m);
+      const e=new THREE.LineSegments(new THREE.EdgesGeometry(geo),new THREE.LineBasicMaterial({color:HDR(T.accent,1.1),transparent:true,opacity:.7}));e.position.copy(m.position);g.add(e);
+      // chevrons pointing up the ramp
+      const up=R.h1>R.h0?1:-1,len=R.a==='x'?x1-x0:z1-z0;
+      for(let k=1;k<4;k++){const f=k/4,px=R.a==='x'?x0+len*f:cx,pz=R.a==='z'?z0+len*f:cz,cv=new THREE.Mesh(new THREE.RingGeometry(.35,.55,3,1,0,Math.PI*2),new THREE.MeshBasicMaterial({color:HDR(T.accent,1.5),transparent:true,opacity:.5,depthWrite:false}));
+        cv.rotation.x=-Math.PI/2;cv.rotation.z=R.a==='x'?(up>0?Math.PI:0):(up>0?-Math.PI/2:Math.PI/2);cv.position.set(px,heightAt(map,px,pz)+.08,pz);g.add(cv)}}
+    for(const P of map.pads||[]){const col=0x5dffd8;
+      const disc=new THREE.Mesh(new THREE.CircleGeometry(P.r,40),new THREE.MeshBasicMaterial({color:HDR(col,1.3),transparent:true,opacity:.4,depthWrite:false,blending:THREE.AdditiveBlending}));disc.rotation.x=-Math.PI/2;disc.position.set(P.x,.06,P.z);g.add(disc);
+      const rings=[0,1,2].map(i=>{const r=new THREE.Mesh(new THREE.TorusGeometry(P.r*.8,.06,6,40),new THREE.MeshBasicMaterial({color:HDR(col,2),transparent:true,opacity:.8}));r.rotation.x=Math.PI/2;r.position.set(P.x,.2,P.z);g.add(r);return r});
+      const l=new THREE.PointLight(col,5,9,1.5);l.position.set(P.x,1.2,P.z);g.add(l);
+      updaters.push((dt,t)=>rings.forEach((r,i)=>{const k=(t*.8+i/3)%1;r.position.y=.2+k*3.2;r.material.opacity=.8*(1-k);r.scale.setScalar(1-k*.4)}))}
+  }
   // teleport gates: each pair has its own colour, a glowing floor disc, an upright spinning ring and a light
   (map.portals||[]).forEach((pair,pi)=>{const col=PORTAL_COL[pi%PORTAL_COL.length];
     for(const p of pair){
@@ -378,8 +408,11 @@ export function buildArena(scene,mapKey,hiQ){
     const star=new THREE.Mesh(new THREE.IcosahedronGeometry(1.4),new THREE.MeshBasicMaterial({color:HDR(0xdff6ff,2.4)}));dome.add(star);
     updaters.push((dt,t)=>{dome.rotation.y=t*.12;dome.children.forEach((c,i)=>{if(i<3)c.rotation.z=t*(.1+i*.05)});star.rotation.x=t*.5})}
   // relic pedestal in the centre
-  const pg=new THREE.CylinderGeometry(1.6,1.9,.3,6),ped=new THREE.Mesh(pg,pm);ped.position.y=.15;ped.receiveShadow=true;g.add(ped);
-  const pe=new THREE.LineSegments(new THREE.EdgesGeometry(pg),new THREE.LineBasicMaterial({color:HDR(T.accent,1.6)}));pe.position.y=.15;g.add(pe);
+  const pg=new THREE.CylinderGeometry(1.6,1.9,.3,6),ped=new THREE.Mesh(pg,pm),py=heightAt(map,0,0)+.15;ped.position.y=py;ped.receiveShadow=true;g.add(ped);
+  const pe=new THREE.LineSegments(new THREE.EdgesGeometry(pg),new THREE.LineBasicMaterial({color:HDR(T.accent,1.6)}));pe.position.y=py;g.add(pe);
+  if(mapKey==='citadel'){const crown=new THREE.Group();crown.position.y=15;g.add(crown);
+    for(let i=0;i<4;i++){const r=new THREE.Mesh(new THREE.TorusGeometry(5+i*2.2,.09,6,96),new THREE.MeshBasicMaterial({color:HDR(i%2?0x5dffd8:0xffc66d,1.4),transparent:true,opacity:.5}));r.rotation.x=Math.PI/2;r.position.y=i*1.2;crown.add(r)}
+    updaters.push((dt,t)=>{crown.rotation.y=t*.15;crown.children.forEach((c,i)=>c.position.y=i*1.2+Math.sin(t*.8+i)*.3)})}
   // ambient particles
   const N=hiQ?500:220,pos=new Float32Array(N*3),seed=[];
   for(let i=0;i<N;i++){const a=rnd(0,Math.PI*2),r=Math.sqrt(Math.random())*(R+8);pos[i*3]=Math.cos(a)*r;pos[i*3+1]=rnd(0,14);pos[i*3+2]=Math.sin(a)*r;seed.push(rnd(.3,1))}
@@ -390,7 +423,7 @@ export function buildArena(scene,mapKey,hiQ){
     else if(T.amb==='embers'){pos[i*3+1]+=dt*s*1.6;pos[i*3]+=Math.sin(t*2+i)*dt*.5;if(pos[i*3+1]>14)pos[i*3+1]=0}
     else{pos[i*3+1]+=dt*s*.35;if(pos[i*3+1]>14)pos[i*3+1]=0}}ag.attributes.position.needsUpdate=true});
   scene.add(g);
-  return{group:g,mapKey,
+  return{group:g,mapKey,solids,
     update(dt,t){for(const f of updaters)f(dt,t)},
     dispose(){scene.remove(g);g.traverse(o=>{if(o.geometry&&o.geometry!==DISC_GEO)o.geometry.dispose();if(o.material){o.material.map?.dispose?.();o.material.dispose()}})}};
 }

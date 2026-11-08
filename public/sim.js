@@ -1,6 +1,6 @@
 // Relikvie Aréna — authoritative simulation. Runs on the server and, for offline matches, in the browser.
 // Pure logic: no rendering. Visual effects leave the simulation as events in M.events.
-import {CLASSES,CLASS_KEYS,MAPS,MODES,NPCS,BOSSES,BOSS_KEYS,ENDLESS_MODS,ECHO_MODS,TACTICS,BOT_TACTIC,rollItem,skillDef,MASTERY,masteryKey,BURN,POISON_HEAL,MASTERY_BASIC,MUTATORS,mutatorsOfWeek,arenaLike,EVADES} from './data.js';
+import {CLASSES,CLASS_KEYS,MAPS,MODES,NPCS,BOSSES,BOSS_KEYS,ENDLESS_MODS,ECHO_MODS,TACTICS,BOT_TACTIC,rollItem,skillDef,MASTERY,masteryKey,BURN,POISON_HEAL,MASTERY_BASIC,MUTATORS,mutatorsOfWeek,arenaLike,EVADES,SECONDARY,heightAt,depthAt,cliffAt,onPeak,LEVEL_STEP,LEVEL_EDGE,LEVEL_DMG,LEVEL_RANGE,PEAK} from './data.js';
 export * from './data.js';
 
 export const MATCH_TIME=360, RELIC_EVERY=40, TICK=1/30, TEAM_SIZE=3;
@@ -82,17 +82,17 @@ function spawnBoss(M,key,scale){
   return u;
 }
 function spawnAt(u,x,z,M){
-  u.x=x;u.z=z;u.vx=u.vz=0;u.hp=u.maxHp;u.shield=0;u.energy=0;u.cds=[0,0,0];u.atkCd=rnd(.2,1);u.dead=false;u.respawn=0;
+  u.x=x;u.z=z;u.lx=null;u.vx=u.vz=0;u.hp=u.maxHp;u.shield=0;u.energy=0;u.cds=[0,0,0];u.atkCd=rnd(.2,1);u.dead=false;u.respawn=0;
   u.st={stun:0,slow:0,silence:0,cloak:0,inv:.5,relic:0,bleed:null,hot:null,fieldAcc:0,hazAcc:0,nanite:null,decon:0,marked:0};u.ambush=0;u.dash=null;u.lastHit=null;u.lastHitT=-99;
   u.face=Math.atan2(-x,-z);collide(u,M.map);u.hist=[];
 }
 export function resetUnit(u,M){
   const b=M.map.bases[u.team],a=rnd(0,Math.PI*2),r=rnd(0,2.4);
   u.x=b.x+Math.cos(a)*r;u.z=b.z+Math.sin(a)*r;u.vx=u.vz=0;u.face=u.team===0?Math.PI/2:-Math.PI/2;
-  u.hp=u.maxHp;u.dlog=[];u.ecd=0;
+  u.hp=u.maxHp;u.dlog=[];u.ecd=0;u.scd=0;
   // Náskok (ultimate mastery 30): at least 15 % ultimate after every respawn
   if(u.mast?.[u.clsKey+':ult']?.b?.[4]===1)u.ult=Math.max(u.ult||0,15);u.shield=u.pass.has('reserve')?60:0;u.energy=u.uniq.has('capacitor')?100:Math.min(100,60+m(u,'start'));u.cds=[0,0,0];u.atkCd=0;u.dead=false;u.respawn=0;
-  u.st={stun:0,slow:0,silence:0,cloak:0,inv:1.5,relic:0,bleed:null,hot:null,fieldAcc:0,hazAcc:0,haste:0,hasteK:1,bulwark:0,nanite:null,decon:0,marked:0};
+  u.lx=null;u.fallH=0;u.st={stun:0,slow:0,silence:0,cloak:0,inv:1.5,relic:0,bleed:null,hot:null,fieldAcc:0,hazAcc:0,haste:0,hasteK:1,bulwark:0,nanite:null,decon:0,marked:0};
   u.ambush=0;u.ambushK=0;u.drive=null;u.bomb=null;u.hurtT=-99;u.dash=null;u.lastHit=null;u.lastHitT=-99;u.ai.retreat=false;u.ai.lane=rnd(-12,12);u.hist=[];
 }
 // Called once all heroes are in: spawns the boss or prepares the first wave.
@@ -103,15 +103,33 @@ const tech=(M,u)=>u.C.tech*(1+m(u,'tech')/100)*(u.ctrl==='bot'?M.diff.dmg:1);
 export const speedOf=u=>u.spd??u.C.speed*(1+(u.mods?.speed||0)/100)*(u.st.slow>0?.6:1)*(u.st.cloak>0?1.12:1)*(u.st.haste>0?u.st.hasteK||1.2:1)*(u.carry!=null?.85:1);
 const pw=(M,u)=>Math.max(atk(M,u),tech(M,u));
 const maxShield=u=>u.maxHp*.7;
-const foes=(M,u)=>M.units.filter(e=>e.team!==u.team&&!e.dead);
+// on a map with levels a unit deep on a higher top cannot be reached from below (see LEVEL_EDGE)
+const reach=(map,a,e)=>!map.levels||heightAt(map,e.x,e.z)<=heightAt(map,a.x,a.z)+1||depthAt(map,e.x,e.z)<=LEVEL_EDGE;
+const foes=(M,u)=>M.units.filter(e=>e.team!==u.team&&!e.dead&&reach(M.map,u,e));
 const friends=(M,u)=>M.units.filter(e=>e.team===u.team&&!e.dead);
 const heroesOf=(M,team)=>M.units.filter(e=>e.kind==='hero'&&e.team===team&&!e.dead);
 const near=(arr,p,r)=>arr.filter(e=>d2(e,p)<r+e.radius);
 const visibleTo=(u,e)=>!e.dead&&(e.st.cloak<=0||d2(u,e)<3.5);
 const later=(M,t,fn)=>M.timers.push({t,fn});
-function blocked(map,a,b,pad=0){
+function pillarBlocked(map,a,b,pad){
   const dx=b.x-a.x,dz=b.z-a.z,L=dx*dx+dz*dz||1;
   for(const [x,z,r] of map.pillars){const t=clamp(((x-a.x)*dx+(z-a.z)*dz)/L,0,1);if(Math.hypot(a.x+dx*t-x,a.z+dz*t-z)<r+pad)return true}
+  return false;
+}
+// line of sight: pillars, and on maps with levels the top of a higher level (its edge does not hide anyone)
+function blocked(map,a,b,pad=0){
+  if(pillarBlocked(map,a,b,pad))return true;
+  if(!map.levels)return false;
+  const dx=b.x-a.x,dz=b.z-a.z,L=Math.hypot(dx,dz),h=heightAt(map,a.x,a.z);
+  for(let s=.7;s<L;s+=.7)if(cliffAt(map,h,a.x+dx*s/L,a.z+dz*s/L))return true;
+  return false;
+}
+// can a unit walk straight from a to b: no pillar in the way and no step up a cliff
+function walkBlocked(map,a,b,pad=0){
+  if(pillarBlocked(map,a,b,pad))return true;
+  if(!map.levels)return false;
+  const dx=b.x-a.x,dz=b.z-a.z,L=Math.hypot(dx,dz);let h=heightAt(map,a.x,a.z);
+  for(let s=.5;s<L+.5;s+=.5){const k=Math.min(1,s/L),v=heightAt(map,a.x+dx*k,a.z+dz*k);if(v>h+LEVEL_STEP)return true;h=v}
   return false;
 }
 function inArena(M,p,mg=1){const R=M.map.r,l=Math.hypot(p.x,p.z);if(l>R-mg){p.x*=(R-mg)/l;p.z*=(R-mg)/l}return p}
@@ -132,6 +150,8 @@ function damage(M,t,amt,src,o={}){
   }
   if(src){if(src.pass.has('fury')&&src.hp<src.maxHp*.5)amt*=1.1;if(src.pass.has('executioner')&&t.hp<t.maxHp*.3)amt*=1.2}
   if(t.st.bulwark>0)amt*=.5;
+  // výhoda výšky: a direct hit from a higher level
+  if(src&&!o.dot&&M.map.levels&&heightAt(M.map,src.x,src.z)>heightAt(M.map,t.x,t.z)+1)amt*=LEVEL_DMG;
   if(o.ult&&src)amt*=(1+m(src,'ultDmg')/100)*(src.uniq.has('reactor')?1.3:1);
   if(src&&src.st.relic>0&&src.clsKey==='striker')amt*=1.25;
   if(t.vuln>M.time)amt*=1.25;
@@ -262,7 +282,9 @@ function recordHist(M){
   for(const u of M.units){if(u.dead)continue;const h=u.hist;h.push([M.time,u.x,u.z]);while(h.length&&h[0][0]<M.time-LAG_MAX-.1)h.shift()}
 }
 function shoot(M,u,dir,o){
-  M.projs.push({id:M.nextId++,x:u.x+dir.x*(u.radius+.2),z:u.z+dir.z*(u.radius+.2),vx:dir.x*o.speed,vz:dir.z*o.speed,life:o.range/o.speed,o,src:u,team:u.team,hit:new Set(),color:o.color,size:o.size||1,lag:u.ctrl==='human'?u.lag:0});
+  // a shot keeps the height it was fired from; from a higher level it flies LEVEL_RANGE further
+  const h=M.map.levels?heightAt(M.map,u.x,u.z):0,range=o.range+(h>=2&&!o.noHit?LEVEL_RANGE:0);
+  M.projs.push({id:M.nextId++,x:u.x+dir.x*(u.radius+.2),z:u.z+dir.z*(u.radius+.2),vx:dir.x*o.speed,vz:dir.z*o.speed,life:range/o.speed,o,src:u,team:u.team,hit:new Set(),color:o.color,size:o.size||1,lag:u.ctrl==='human'?u.lag:0,h});
 }
 function updProjs(M,dt){
   for(let i=M.projs.length-1;i>=0;i--){
@@ -271,6 +293,7 @@ function updProjs(M,dt){
     if(p.life<=0)end=true;
     if(!o.noHit){
       for(const [x,z,r] of M.map.pillars)if(Math.hypot(p.x-x,p.z-z)<r){end=true;break}
+      if(!end&&M.map.levels&&cliffAt(M.map,p.h,p.x,p.z))end=true;
       if(!end)for(const e of M.units){if(e.team===p.team||e.dead||p.hit.has(e))continue;
         const q=posAt(M,e,p.lag);
         if(Math.hypot(p.x-q.x,p.z-q.z)<e.radius+.25*p.size){p.hit.add(e);damage(M,e,o.dmg,p.src,{color:o.color});o.onHit&&o.onHit(e,p.src);if(!o.pierce){end=true;break}}}
@@ -280,7 +303,9 @@ function updProjs(M,dt){
 }
 function updZones(M,dt){
   for(let i=M.zones.length-1;i>=0;i--){const z=M.zones[i];z.t-=dt;z.acc+=dt;
-    while(z.acc>=.5){z.acc-=.5;for(const e of near(M.units.filter(x=>x.team!==z.team&&!x.dead),z,z.r)){damage(M,e,z.dps*.5,z.src&&!z.src.dead?z.src:null,{dot:true,color:z.color});if(z.slow)e.st.slow=Math.max(e.st.slow,.6);if(z.burn&&z.src)burn(e,z.src,BURN.talent)}}
+    // on a map with levels an area hurts only those on its own level
+    const lv=M.map.levels?(z.h??=heightAt(M.map,z.x,z.z)):0,same=e=>!M.map.levels||Math.abs(heightAt(M.map,e.x,e.z)-lv)<1.2;
+    while(z.acc>=.5){z.acc-=.5;for(const e of near(M.units.filter(x=>x.team!==z.team&&!x.dead&&same(x)),z,z.r)){damage(M,e,z.dps*.5,z.src&&!z.src.dead?z.src:null,{dot:true,color:z.color});if(z.slow)e.st.slow=Math.max(e.st.slow,.6);if(z.burn&&z.src)burn(e,z.src,BURN.talent)}}
     if(z.t<=0)M.zones.splice(i,1)}
 }
 function updRings(M,dt){
@@ -351,12 +376,12 @@ const SK={
     (M,u)=>{addShield(u,90+m(u,'anchorSh'),u);fx(M,{t:'ring',x:r2(u.x),z:r2(u.z),c:0x5dffa8,a:.5,b:5.5,d:.6});fx(M,{t:'dome',x:r2(u.x),z:r2(u.z),c:0x5dffa8,r:1.6,d:.5});for(const e of near(foes(M,u),u,5.5))e.st.slow=Math.max(e.st.slow,2)},
     (M,u,pt)=>{const dir=aimDir(u,pt),dist=clamp(d2(u,pt),3,8+m(u,'chargeLen')),stun=.9+m(u,'stunT');
       u.dash={dx:dir.x,dz:dir.z,spd:26,t:dist/26,end:()=>{fx(M,{t:'ring',x:r2(u.x),z:r2(u.z),c:0x5dffa8,a:.5,b:3.2,d:.4});fx(M,{t:'burst',x:r2(u.x),z:r2(u.z),y:0,c:0x5dffa8,n:24,s:8,u:3,l:.5});
-        for(const e of near(foes(M,u),u,2.8)){damage(M,e,atk(M,u)*.9,u,{color:0x5dffa8});if(e.kind!=='boss'){e.st.stun=Math.max(e.st.stun,stun);const kx=e.x-u.x,kz=e.z-u.z,l=Math.hypot(kx,kz)||1;e.x+=kx/l*2.5;e.z+=kz/l*2.5;collide(e,M.map)}}}}},
+        for(const e of near(foes(M,u),u,2.8)){damage(M,e,atk(M,u)*.9,u,{color:0x5dffa8});if(e.kind!=='boss'){e.st.stun=Math.max(e.st.stun,stun);const kx=e.x-u.x,kz=e.z-u.z,l=Math.hypot(kx,kz)||1;e.x+=kx/l*2.5;e.z+=kz/l*2.5;e.kbT=M.time;collide(e,M.map)}}}}},
     (M,u)=>{const sh=55+m(u,'domeSh'),hot=m(u,'domeHeal');fx(M,{t:'dome',x:r2(u.x),z:r2(u.z),c:0x5dffa8,r:7,d:.9});
       for(const a of near(friends(M,u),u,7)){addShield(a,sh,u);if(hot)a.st.hot={hps:20,t:3,acc:0,src:u};fx(M,{t:'burst',x:r2(a.x),z:r2(a.z),y:1.2,c:0x5dffa8,n:10,s:2,u:3,l:.6})}},
     (M,u)=>{const um=u.prof.ultMod,R=8+m(u,'slamR')+(um?1:0),q=m(u,'quake');addShield(u,120,u);fx(M,{t:'slam',x:r2(u.x),z:r2(u.z),r:R});
       for(const e of near(foes(M,u),u,R)){
-        if(um&&e.kind!=='boss'){const kx=u.x-e.x,kz=u.z-e.z,l=Math.hypot(kx,kz)||1,s=Math.min(2,Math.max(0,l-u.radius-e.radius));e.x+=kx/l*s;e.z+=kz/l*s;collide(e,M.map)}damage(M,e,atk(M,u)*2,u,{color:0x5dffa8,ult:true});if(e.kind!=='boss')e.st.stun=Math.max(e.st.stun,1.4+(q?.5:0));if(q)e.st.slow=Math.max(e.st.slow,3)}
+        if(um&&e.kind!=='boss'){const kx=u.x-e.x,kz=u.z-e.z,l=Math.hypot(kx,kz)||1,s=Math.min(2,Math.max(0,l-u.radius-e.radius));e.x+=kx/l*s;e.z+=kz/l*s;e.kbT=M.time;collide(e,M.map)}damage(M,e,atk(M,u)*2,u,{color:0x5dffa8,ult:true});if(e.kind!=='boss')e.st.stun=Math.max(e.st.stun,1.4+(q?.5:0));if(q)e.st.slow=Math.max(e.st.slow,3)}
       fx(M,{t:'ban',ti:'Titánův val',col:'var(--green)',d:1.2,i:u.id})}
   ],
   technician:[
@@ -455,7 +480,7 @@ SK.pyro=[
   (M,u)=>{const um=u.prof.ultMod,R=8.5+(um?2:0),n=3+(um?1:0);
     for(let k=0;k<n;k++)later(M,.45*k,()=>{if(u.dead)return;fx(M,{t:'blast',x:r2(u.x),z:r2(u.z),r:R,c:0xff6a1a});
       for(const e of near(foes(M,u),u,R)){
-        if(k===0&&m(u,'infernoPull')&&e.kind!=='boss'){const kx=u.x-e.x,kz=u.z-e.z,l=Math.hypot(kx,kz)||1,s=Math.min(2,Math.max(0,l-u.radius-e.radius));e.x+=kx/l*s;e.z+=kz/l*s;collide(e,M.map)}
+        if(k===0&&m(u,'infernoPull')&&e.kind!=='boss'){const kx=u.x-e.x,kz=u.z-e.z,l=Math.hypot(kx,kz)||1,s=Math.min(2,Math.max(0,l-u.radius-e.radius));e.x+=kx/l*s;e.z+=kz/l*s;e.kbT=M.time;collide(e,M.map)}
         damage(M,e,tech(M,u)*1.15,u,{color:0xff6a1a,ult:true});burn(e,u,BURN.ult)}});
     fx(M,{t:'ban',ti:'Inferno',col:'#ff6a1a',d:1.2,i:u.id})}
 ];
@@ -475,7 +500,7 @@ SK.cryo=[
   // Ledový krunýř: a shield for you and a smaller one for allies close by
   (M,u)=>{const sh=70+m(u,'shellSh');addShield(u,sh,u);if(m(u,'shellHeal'))heal(M,u,u.maxHp*.1,u);
     fx(M,{t:'dome',x:r2(u.x),z:r2(u.z),c:0xc3b5ff,r:1.8,d:.7});fx(M,{t:'ring',x:r2(u.x),z:r2(u.z),c:0xe9f8ff,a:.5,b:6,d:.5});
-    for(const a of near(friends(M,u).filter(x=>x.kind==='hero'&&x!==u),u,6)){addShield(a,60+m(u,'shellSh')/2,u);fx(M,{t:'dome',x:r2(a.x),z:r2(a.z),c:0xc3b5ff,r:1.5,d:.5})}},
+    for(const a of near(friends(M,u).filter(x=>x.kind==='hero'&&x!==u),u,8)){addShield(a,75+m(u,'shellSh')/2,u);fx(M,{t:'dome',x:r2(a.x),z:r2(a.z),c:0xc3b5ff,r:1.5,d:.5})}},
   // Kryomina: lands at the aimed point and bursts a moment later
   (M,u,pt)=>{const tp=clampReach(M,u,pt,14),dir=aimDir(u,tp),dist=Math.max(1,d2(u,tp)),R=3+m(u,'mineR');
     const burst=(p,mul,hard)=>{if(M.state!=='play')return;fx(M,{t:'blast',x:r2(p.x),z:r2(p.z),r:R,c:0xc3b5ff});
@@ -521,7 +546,7 @@ const SKP={
     got=Math.min(60,got);u.energy=Math.min(100,u.energy+got);if(md&&got)heal(M,u,got,u)},
   pulse(M,u,pt,B,md,pb){const sh=(40+(md?30:0))*B;fx(M,{t:'dome',x:r2(u.x),z:r2(u.z),c:0x6acbff,r:6,d:.7});fx(M,{t:'ring',x:r2(u.x),z:r2(u.z),c:0x6acbff,a:.5,b:5,d:.4});
     for(const a of near(friends(M,u).filter(x=>x.kind==='hero'),u,6))addShield(a,sh,u);
-    for(const e of near(foes(M,u),u,5))if(e.kind!=='boss'){const kx=e.x-u.x,kz=e.z-u.z,l=Math.hypot(kx,kz)||1,k=pb?6:3;e.x+=kx/l*k;e.z+=kz/l*k;collide(e,M.map);if(pb)e.st.stun=Math.max(e.st.stun,.6)}},
+    for(const e of near(foes(M,u),u,5))if(e.kind!=='boss'){const kx=e.x-u.x,kz=e.z-u.z,l=Math.hypot(kx,kz)||1,k=pb?6:3;e.x+=kx/l*k;e.z+=kz/l*k;e.kbT=M.time;collide(e,M.map);if(pb)e.st.stun=Math.max(e.st.stun,.6)}},
   bulwark(M,u,pt,B,md,pb){const T=pb?5:3;u.st.bulwark=T;addShield(u,60*B,u);fx(M,{t:'dome',x:r2(u.x),z:r2(u.z),c:0x5dffa8,r:1.8,d:T})},
   patch(M,u,pt,B,md,pb){const hp=x=>x.maxHp*.25*B*(md?1.5:1)/2;
     const ally=near(friends(M,u).filter(x=>x.kind==='hero'&&x!==u),u,10).sort((a,b)=>a.hp/a.maxHp-b.hp/b.maxHp)[0];
@@ -634,9 +659,33 @@ function evade(M,u,dir){
   }
   u.face=Math.atan2(dx,dz);u.ecd=E.cd;fx(M,{t:'atk',i:u.id,s:5});return true;
 }
+// ---------- sekundární útok (right mouse button) ----------
+function secondary(M,u,pt){
+  if(u.kind!=='hero'||u.dead||(u.scd||0)>0||u.dash||u.st.stun>0||u.st.silence>0||M.state!=='play')return false;
+  const D=SECONDARY[u.clsKey];if(!D)return false;
+  const dir=aimDir(u,pt),lag=u.ctrl==='human'?u.lag:0,C=u.C.color,mul=u.dmgScale;
+  // a cone in front of the hero: every reachable enemy within R and the angle, not behind a pillar
+  const cone=(R,dot,fn)=>{for(const e of foes(M,u)){const q=posAt(M,e,lag),dx=q.x-u.x,dz=q.z-u.z,d=Math.hypot(dx,dz);
+    if(d<R+e.radius&&(dx*dir.x+dz*dir.z)/(d||1)>dot&&!blocked(M.map,u,q))fn(e,dx/(d||1),dz/(d||1))}};
+  switch(u.clsKey){
+    case 'striker':shoot(M,u,dir,{dmg:atk(M,u)*1.1,speed:55,range:26,color:0xffe9a8,size:1.5,pierce:true});break;
+    case 'guardian':fx(M,{t:'arc',x:r2(u.x),z:r2(u.z),f:r2(u.face),c:0x5dffa8,r:3.5});addShield(u,30,u);
+      cone(3.5,.45,(e,nx,nz)=>{damage(M,e,atk(M,u)*1.1,u,{color:0x5dffa8});e.st.slow=Math.max(e.st.slow,1);
+        if(e.kind!=='boss'){e.x+=nx*3.5;e.z+=nz*3.5;e.kbT=M.time;collide(e,M.map)}});break;
+    case 'technician':shoot(M,u,dir,{dmg:tech(M,u)*1.1*mul,speed:42,range:18,color:0x9fe8ff,size:1.3,onHit:(e,s)=>{
+      heal(M,s,tech(M,s)*1.1*.5,s);if(e.kind==='hero'&&!e.dead){const take=Math.min(20,e.energy);e.energy-=take;s.energy=Math.min(100,s.energy+take);if(take)fx(M,{t:'txt',x:r2(s.x),z:r2(s.z),s:'+'+Math.round(take)+' energie',c:'info'})}}});break;
+    case 'pyro':fx(M,{t:'arc',x:r2(u.x),z:r2(u.z),f:r2(u.face),c:0xff6a1a,r:5});
+      for(let k=1;k<=3;k++)fx(M,{t:'burst',x:r2(u.x+dir.x*k*1.6),z:r2(u.z+dir.z*k*1.6),y:1,c:k%2?0xff6a1a:0xffd27a,n:10,s:3,u:2,l:.4});
+      cone(5.5,.6,e=>{damage(M,e,tech(M,u)*.95,u,{color:0xff6a1a});burn(e,u,{dps:10,t:2})});break;
+    case 'cryo':shoot(M,u,dir,{dmg:tech(M,u)*.6*mul,speed:40,range:20,color:0xe9f8ff,size:1.4,onHit:(e,s)=>{
+      if(!e.dead)chill(e,1.5)}});break;
+  }
+  u.scd=D.cd*(1-Math.min(40,m(u,'cdr'))/100);fx(M,{t:'atk',i:u.id,s:6});return true;
+}
 export function cast(M,u,i,pt){
   if(i===4)return tactical(M,u,pt||{x:u.aimX,z:u.aimZ});
   if(i===5)return evade(M,u,pt);
+  if(i===6)return secondary(M,u,pt);
   if(u.kind!=='hero'||u.dead||u.st.stun>0||u.st.silence>0||u.dash||M.state!=='play')return false;
   let s=null,id=null;
   if(i!==3)id=u.prof.skills[i];
@@ -676,6 +725,18 @@ export function cast(M,u,i,pt){
 export function collide(u,map){
   for(const [x,z,r] of map.pillars){const dx=u.x-x,dz=u.z-z,d=Math.hypot(dx,dz),mn=r+u.radius;if(d<mn){const k=(mn-d)/(d||1);u.x+=dx*k;u.z+=dz*k;if(u.dash)u.dash.t=Math.min(u.dash.t,.02)}}
   const l=Math.hypot(u.x,u.z),lim=map.r-u.radius;if(l>lim){u.x*=lim/l;u.z*=lim/l}
+  if(map.levels)levelCollide(u,map);
+}
+// Heights: a step up of more than LEVEL_STEP since the last position is a cliff, so the unit slides along it or stays;
+// a step down is a drop, remembered in fallH for the simulation (landing, being thrown off). A jump pad flight skips it.
+function levelCollide(u,map){
+  let h=heightAt(map,u.x,u.z);
+  if(u.lx==null||u.dash?.jump){u.lx=u.x;u.lz=u.z;u.lh=h;return}
+  if(h>u.lh+LEVEL_STEP){
+    if(heightAt(map,u.x,u.lz)<=u.lh+LEVEL_STEP)u.z=u.lz;else if(heightAt(map,u.lx,u.z)<=u.lh+LEVEL_STEP)u.x=u.lx;else{u.x=u.lx;u.z=u.lz}
+    if(u.dash)u.dash.t=Math.min(u.dash.t,.02);h=heightAt(map,u.x,u.z)}
+  if(h<u.lh-LEVEL_STEP)u.fallH=Math.max(u.fallH||0,u.lh-h);
+  u.lx=u.x;u.lz=u.z;u.lh=h;
 }
 export function walk(u,mx,mz,dt,frozen,map){
   const sp=u.st.stun>0||frozen?0:speedOf(u),k=1-Math.exp(-dt*12);
@@ -686,7 +747,7 @@ function moveUnit(M,u,mx,mz,dt){
   // the last step covers only the time left, so a dash goes exactly its length
   if(u.dash){const D=u.dash,st=Math.min(dt,Math.max(0,D.t));u.x+=D.dx*D.spd*st;u.z+=D.dz*D.spd*st;D.t-=dt;collide(u,M.map);u.vx=D.dx*D.spd;u.vz=D.dz*D.spd;
     if(D.hits)for(const e of foes(M,u))if(!D.hits.set.has(e)&&d2(e,u)<D.hits.r+e.radius){D.hits.set.add(e);damage(M,e,D.hits.dmg,u,{color:u.C.color});
-      const kx=e.x-u.x,kz=e.z-u.z,l=Math.hypot(kx,kz)||1;e.x+=kx/l*D.hits.kb;e.z+=kz/l*D.hits.kb;collide(e,M.map)}
+      const kx=e.x-u.x,kz=e.z-u.z,l=Math.hypot(kx,kz)||1;e.x+=kx/l*D.hits.kb;e.z+=kz/l*D.hits.kb;e.kbT=M.time;collide(e,M.map)}
     if(D.t<=0){u.dash=null;const k=D.after??.2;u.vx*=k;u.vz*=k;D.end&&D.end()}return}
   walk(u,mx,mz,dt,M.state==='countdown',M.map);
 }
@@ -706,6 +767,35 @@ function updPortals(M,dt){
       fx(M,{t:'tp',g:u.id,x0:r2(x0),z0:r2(z0),x:r2(u.x),z:r2(u.z)});continue units}
   }
 }
+// ---------- levels: drops, jump pads, the summit ----------
+function updLevels(M,dt){
+  const map=M.map;
+  for(const u of M.units){
+    if(u.fallH){const f=u.fallH;u.fallH=0;
+      if(!u.dead&&u.kind!=='boss'){fx(M,{t:'land',x:r2(u.x),z:r2(u.z),g:u.id});
+        // thrown off by an enemy: slowed on landing; a jump from the summit down to the ground hits whoever is below
+        if(M.time-(u.kbT??-9)<.6){u.st.slow=Math.max(u.st.slow,1.2);fx(M,{t:'txt',x:r2(u.x),z:r2(u.z),s:'Shozen',c:'info'})}
+        else if(f>=5&&u.kind==='hero'&&M.state==='play'){fx(M,{t:'blast',x:r2(u.x),z:r2(u.z),r:2.8,c:u.C.color});
+          for(const e of near(foes(M,u),u,2.8)){damage(M,e,pw(M,u)*.6,u,{color:u.C.color});e.st.slow=Math.max(e.st.slow,.8)}}}}
+    // jump pads: whoever steps on one (not mid-dash, not stunned) flies up to its landing spot
+    if(u.dead||u.dash||u.kind==='boss'||u.st.stun>0||(u.padT||0)>M.time)continue;
+    for(const P of map.pads||[])if(Math.hypot(u.x-P.x,u.z-P.z)<P.r){const dx=P.to.x-u.x,dz=P.to.z-u.z,l=Math.hypot(dx,dz)||1;
+      u.dash={dx:dx/l,dz:dz/l,spd:16,t:l/16,jump:true,after:.1};u.padT=M.time+1.2;if(u.ai)u.ai.nav=null;
+      fx(M,{t:'jump',g:u.id,x:P.x,z:P.z});break}
+  }
+  // Přetížení vrcholu: standing on the summit charges the ultimate; every PEAK.every seconds a warned discharge
+  // hurts everyone up there and throws them off
+  const pk=map.levels.find(L=>L.peak);if(!pk||M.state!=='play')return;
+  for(const u of M.units)if(u.kind==='hero'&&!u.dead&&onPeak(map,u))u.ult=Math.min(100,u.ult+PEAK.ult*dt*(1+m(u,'ult')/100));
+  M.peakT=(M.peakT??PEAK.every)-dt;
+  if(M.peakT>0)return;
+  M.peakT=PEAK.every;const [cx,cz,R]=pk.c;
+  fx(M,{t:'txt',x:cx,z:cz,s:'Přetížení!',c:'info'});
+  tele(M,{x:cx,z:cz,r:R+.3,sh:'c'},PEAK.warn,()=>{if(M.state!=='play')return;fx(M,{t:'emp',x:cx,z:cz,r:R+1.5});
+    for(const u of M.units){if(u.dead||u.kind==='boss'||!onPeak(map,u))continue;damage(M,u,u.maxHp*PEAK.dmg,null,{color:0x5dffd8});if(u.dead)continue;
+      let dx=u.x-cx,dz=u.z-cz,l=Math.hypot(dx,dz);if(l<.3){const a=Math.random()*Math.PI*2;dx=Math.cos(a);dz=Math.sin(a);l=1}
+      u.dash={dx:dx/l,dz:dz/l,spd:18,t:Math.max(.12,(R+2-Math.hypot(u.x-cx,u.z-cz))/18),after:.2};u.kbT=M.time}});
+}
 function separate(M){
   const U=M.units;
   for(let i=0;i<U.length;i++)for(let j=i+1;j<U.length;j++){const a=U[i],b=U[j];if(a.dead||b.dead)continue;
@@ -716,35 +806,53 @@ function separate(M){
 // ---------- navigation ----------
 // A 2 m grid of free cells per map (built once). When the straight way to a goal is blocked, a bot follows a
 // breadth-first path and heads for the farthest path cell it can see, so it finds its way through walls and mazes.
-const NAV_CELL=2,navCache={};
+const NAV_CELL=2,navCache={},NAV_DIRS=[[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]];
 function navGrid(map){
   const key=map.name;if(navCache[key])return navCache[key];
   const R=map.r,n=Math.ceil(2*R/NAV_CELL)+1,free=new Uint8Array(n*n);
   for(let j=0;j<n;j++)for(let i=0;i<n;i++){const x=-R+i*NAV_CELL,z=-R+j*NAV_CELL;
     free[j*n+i]=Math.hypot(x,z)<R-1&&!map.pillars.some(([px,pz,r])=>Math.hypot(x-px,z-pz)<r+1.1)&&!map.hazards.some(h=>Math.hypot(x-h.x,z-h.z)<h.r+.8)?1:0}
-  return navCache[key]={n,R,free};
+  // maps with levels: the height of every cell (a step to a neighbour may not climb a cliff) and the jump pads,
+  // whose cell leads only to the cell they throw you to
+  let hgt=null,edge=null;const pad=new Map();
+  if(map.levels){hgt=new Float32Array(n*n);edge=new Uint8Array(n*n);
+    for(let j=0;j<n;j++)for(let i=0;i<n;i++)hgt[j*n+i]=heightAt(map,-R+i*NAV_CELL,-R+j*NAV_CELL);
+    // which of the 8 neighbours can be walked to in a straight line (no cliff on the way up, e.g. a ramp's side)
+    for(let j=0;j<n;j++)for(let i=0;i<n;i++){if(!free[j*n+i])continue;const a={x:-R+i*NAV_CELL,z:-R+j*NAV_CELL};
+      NAV_DIRS.forEach(([di,dj],d)=>{const b={x:a.x+di*NAV_CELL,z:a.z+dj*NAV_CELL};if(!walkBlocked({pillars:[],levels:map.levels,ramps:map.ramps},a,b))edge[j*n+i]|=1<<d})}
+    const cell=p=>clamp(Math.round((p.z+R)/NAV_CELL),0,n-1)*n+clamp(Math.round((p.x+R)/NAV_CELL),0,n-1);
+    for(const P of map.pads||[])pad.set(cell(P),cell(P.to))}
+  return navCache[key]={n,R,free,hgt,edge,pad,map};
 }
 function navCell(N,p){let i=Math.round((p.x+N.R)/NAV_CELL),j=Math.round((p.z+N.R)/NAV_CELL);i=clamp(i,0,N.n-1);j=clamp(j,0,N.n-1);
-  if(N.free[j*N.n+i])return j*N.n+i;
+  // with levels the cell must also be on the point's level (a unit at a terrace edge is not on the ground below)
+  const hp=N.hgt?heightAt(N.map,p.x,p.z):0,ok=k=>N.free[k]&&(!N.hgt||Math.abs(N.hgt[k]-hp)<1.3);
+  if(ok(j*N.n+i))return j*N.n+i;
   // a point inside a wall: the nearest free cell around it
-  for(let r=1;r<4;r++)for(let dj=-r;dj<=r;dj++)for(let di=-r;di<=r;di++){const a=i+di,b=j+dj;if(a>=0&&b>=0&&a<N.n&&b<N.n&&N.free[b*N.n+a])return b*N.n+a}
+  for(let r=1;r<4;r++)for(let dj=-r;dj<=r;dj++)for(let di=-r;di<=r;di++){const a=i+di,b=j+dj;if(a>=0&&b>=0&&a<N.n&&b<N.n&&ok(b*N.n+a))return b*N.n+a}
   return j*N.n+i}
 function navPath(M,from,to){
   const N=navGrid(M.map),s=navCell(N,from),g=navCell(N,to);if(s===g)return null;
   const prev=new Int32Array(N.n*N.n).fill(-1);prev[s]=s;const q=[s];let found=false;
   for(let h=0;h<q.length;h++){const c=q[h];if(c===g){found=true;break}const ci=c%N.n,cj=(c/N.n)|0;
-    for(const [di,dj] of [[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]]){const a=ci+di,b=cj+dj;if(a<0||b<0||a>=N.n||b>=N.n)continue;const k=b*N.n+a;
-      if(prev[k]!==-1||!N.free[k])continue;if(di&&dj&&(!N.free[cj*N.n+a]||!N.free[b*N.n+ci]))continue;prev[k]=c;q.push(k)}}
+    if(N.pad.has(c)){const k=N.pad.get(c);if(prev[k]===-1){prev[k]=c;q.push(k)}continue}
+    for(let d=0;d<8;d++){const [di,dj]=NAV_DIRS[d],a=ci+di,b=cj+dj;if(a<0||b<0||a>=N.n||b>=N.n)continue;const k=b*N.n+a;
+      if(prev[k]!==-1||!N.free[k])continue;if(di&&dj&&(!N.free[cj*N.n+a]||!N.free[b*N.n+ci]))continue;
+      if(N.edge&&!(N.edge[c]&1<<d))continue;prev[k]=c;q.push(k)}}
   if(!found)return null;
   const path=[];for(let c=g;c!==s;c=prev[c])path.push({x:-N.R+(c%N.n)*NAV_CELL,z:-N.R+((c/N.n)|0)*NAV_CELL});return path.reverse();
 }
 // where to walk now on the way to goal: the goal itself when it is in sight, otherwise a waypoint on the path
 function navNext(M,u,goal){
-  if(!blocked(M.map,u,goal,.8))return goal;
+  // with levels the goal also has to be on this unit's level or below (the way up is along the path)
+  const lvOk=p=>!M.map.levels||heightAt(M.map,p.x,p.z)<=heightAt(M.map,u.x,u.z)+LEVEL_STEP;
+  if(lvOk(goal)&&!walkBlocked(M.map,u,goal,.8))return goal;
   const P=u.ai.nav;
   if(!P||M.time>P.at+.6||Math.hypot(P.gx-goal.x,P.gz-goal.z)>3){u.ai.nav={at:M.time,gx:goal.x,gz:goal.z,path:navPath(M,u,goal)}}
   const path=u.ai.nav.path;if(!path||!path.length)return goal;
-  let best=path[0];for(let i=Math.min(path.length-1,14);i>=0;i--){if(!blocked(M.map,u,path[i],.8)){best=path[i];break}}
+  // nothing on the path in a straight line (pressed against a ramp's side wall): back to the middle of the own cell first
+  let best=null;for(let i=Math.min(path.length-1,14);i>=0;i--){if(!walkBlocked(M.map,u,path[i],.8)){best=path[i];break}}
+  if(!best){const N=navGrid(M.map),c=navCell(N,u);best=M.map.levels?{x:-N.R+(c%N.n)*NAV_CELL,z:-N.R+((c/N.n)|0)*NAV_CELL}:path[0];if(Math.hypot(best.x-u.x,best.z-u.z)<.4)best=path[0]}
   return best;
 }
 function steer(M,u,wx,wz){
@@ -788,7 +896,7 @@ function updStatus(M,u,dt){
   u.energy=Math.min(100,u.energy+dt*9*(1+m(u,'regen')/100)*(echo?1.8:1)*(M.emod.has('surge')?1.5:1));u.ult=Math.min(100,u.ult+dt*1.2*(1+m(u,'ult')/100));
   if(u.pass.has('recovery')&&M.time-u.hurtT>4&&u.hp<u.maxHp)u.hp=Math.min(u.maxHp,u.hp+u.maxHp*.015*dt);
   for(let i=0;i<3;i++)if(u.cds[i]>0)u.cds[i]=Math.max(0,u.cds[i]-dt);
-  if(u.tcd>0)u.tcd=Math.max(0,u.tcd-dt);if(u.ecd>0)u.ecd=Math.max(0,u.ecd-dt);
+  if(u.tcd>0)u.tcd=Math.max(0,u.tcd-dt);if(u.ecd>0)u.ecd=Math.max(0,u.ecd-dt);if(u.scd>0)u.scd=Math.max(0,u.scd-dt);
   if(u.atkCd>0)u.atkCd-=dt;
   if(d2(u,M.map.bases[u.team])<4.2){if(u.hp<u.maxHp)u.hp=Math.min(u.maxHp,u.hp+dt*45);u.energy=Math.min(100,u.energy+dt*25)}
   if(M.D.pvp&&d2(u,M.map.bases[1-u.team])<5){s.fieldAcc+=dt;while(s.fieldAcc>=.5&&!u.dead){s.fieldAcc-=.5;damage(M,u,30,null,{dot:true,color:TEAM_COL[1-u.team]})}}
@@ -811,7 +919,8 @@ function ctfGoal(M,u,t,d){
 }
 function pickTarget(u,M){
   let best=null,bs=1e9;
-  for(const e of foes(M,u)){if(!visibleTo(u,e))continue;const d=d2(u,e);if(d>(M.D.pvp?32:80))continue;
+  // every enemy, also one out of reach on a higher level: the bot then goes up after it
+  for(const e of M.units){if(e.team===u.team||e.dead||!visibleTo(u,e))continue;const d=d2(u,e);if(d>(M.D.pvp?32:80))continue;
     const s=d+(e.hp/e.maxHp)*8+(blocked(M.map,u,e)?8:0)+(e===u.ai.target?-3:0)+(e.kind==='boss'?4:0)+(e.C.shield?-8:0);if(s<bs){bs=s;best=e}}
   return best;
 }
@@ -896,6 +1005,10 @@ function botUpdate(M,u,dt){
   }else{const h=heroesOf(M,u.team).find(x=>x.ctrl==='human');if(h&&d2(u,h)>6){wx=h.x-u.x;wz=h.z-u.z}}
   if(M.D.pvp){const eb=M.map.bases[1-u.team],ebd=d2(u,eb);if(ebd<8){wx+=(u.x-eb.x)/ebd*(8-ebd)/2;wz+=(u.z-eb.z)/ebd*(8-ebd)/2}}
   [wx,wz]=steer(M,u,wx,wz);
+  // levels: keep off the edge unless the way leads down (a goal or target below); strafing must not throw away high ground
+  if(M.map.levels&&(wx||wz)){const map=M.map,h=heightAt(map,u.x,u.z),aim=goal||t,down=aim&&heightAt(map,aim.x,aim.z)<h-1;
+    const drop=(x,z)=>heightAt(map,u.x+x*1.3,u.z+z*1.3)<h-LEVEL_STEP;
+    if(!down&&drop(wx,wz)){if(!drop(wx,0))wz=0;else if(!drop(0,wz))wx=0;else{wx=-wx*.3;wz=-wz*.3}}}
   moveUnit(M,u,wx,wz,dt);
   const play=M.state==='play';
   // evade out of a warned area (boss telegraphs, blasts), more reliably on higher difficulty
@@ -913,6 +1026,8 @@ function botUpdate(M,u,dt){
     if(seen&&d<B.range+(B.type==='melee'?t.radius:0)&&play)basic(M,u,aim);
     else if(!u.dash)u.face=Math.atan2(t.x-u.x,t.z-u.z);
     if(thinkNow&&Math.random()<diff.skill&&play)botSkills(M,u,t,d,aim,seen);
+    // sekundární útok: in its range and in sight
+    if(thinkNow&&play&&seen&&!(u.scd>0)&&u.kind==='hero'&&Math.random()<diff.skill&&d<({striker:24,guardian:3.8,technician:17,pyro:5,cryo:18}[u.clsKey]||0))cast(M,u,6,aim);
     if(thinkNow&&play&&u.tcd<=0)botTactic(M,u,t,d);
   }else{
     if(!u.dash&&u.vx*u.vx+u.vz*u.vz>.5)u.face=Math.atan2(u.vx,u.vz);
@@ -1146,7 +1261,7 @@ function humanUpdate(M,u,dt){
     else{const dx=u.aimX-u.x,dz=u.aimZ-u.z;if(dx*dx+dz*dz>.01)u.face=Math.atan2(dx,dz)}
   }
   const aim={x:u.aimX,z:u.aimZ};
-  for(const i of (inp.cast||[]))if(i===5)evade(M,u,{x:mx,z:mz});else if(i>=0&&i<=4)cast(M,u,i|0,aim);
+  for(const i of (inp.cast||[]))if(i===5)evade(M,u,{x:mx,z:mz});else if((i>=0&&i<=4)||i===6)cast(M,u,i|0,aim);
   if(inp.atk&&M.state==='play')basic(M,u,aim);
 }
 
@@ -1277,7 +1392,7 @@ export function step(M,dt=TICK){
     updStatus(M,u,dt);if(u.dead)continue;
     if(u.ctrl==='bot')botUpdate(M,u,dt);else if(u.ctrl==='human')humanUpdate(M,u,dt);else if(u.ctrl==='npc')npcUpdate(M,u,dt);else bossUpdate(M,u,dt);
   }
-  separate(M);if(M.map.portals)updPortals(M,dt);recordHist(M);updProjs(M,dt);updZones(M,dt);updRings(M,dt);updBeams(M,dt);updRelic(M,dt);updLoot(M,dt);
+  separate(M);if(M.map.portals)updPortals(M,dt);if(M.map.levels)updLevels(M,dt);recordHist(M);updProjs(M,dt);updZones(M,dt);updRings(M,dt);updBeams(M,dt);updRelic(M,dt);updLoot(M,dt);
   if(M.mode==='control')updPoints(M,dt);
   if(M.flags)updFlags(M,dt);
   if(M.elim)updElim(M,dt);
@@ -1289,7 +1404,7 @@ export function step(M,dt=TICK){
 export function roster(M){return M.units.map(u=>({i:u.id,n:u.name,k:u.key,kind:u.kind[0],t:u.team,mh:u.maxHp,b:u.ctrl==='human'?0:1,sk:u.skin,lv:u.level}))}
 export function stats(M){return M.units.filter(u=>u.kind==='hero').map(u=>({i:u.id,n:u.name,k:u.clsKey,t:u.team,b:u.ctrl==='bot'?1:0,ki:u.kills,de:u.deaths,dm:Math.round(u.dmgDealt),he:Math.round(u.healDone),re:u.relics,nk:u.npcKills,tk:Math.round(u.dmgTaken||0),cp:u.caps||0,nd:Math.round(u.naniteDmg||0),bs:u.bestStreak|0,bm:u.bestMulti|0}))}
 export function matchInfo(M){return{mode:M.mode,map:M.mapKey,boss:M.bossKey,diff:M.diffKey,mission:M.mission,mods:[...M.emod],last:M.last,win:M.D.win||0,custom:M.custom}}
-function flags(u){const s=u.st;return (s.stun>0?1:0)|(s.silence>0?2:0)|(s.bleed?4:0)|(s.slow>0?8:0)|(s.relic>0?16:0)|(s.cloak>0?32:0)|(s.inv>0?64:0)|(u.dash?128:0)|(u.invuln?256:0)|(u.air?512:0)|(u.bomb?1024:0)|(s.nanite?2048:0)|(s.decon>0?4096:0)|(s.marked>0?8192:0)|(s.burn?16384:0)|(s.poison?32768:0)|(s.shock?65536:0)|(s.frozen>0&&s.stun>0?131072:0)}
+function flags(u){const s=u.st;return (s.stun>0?1:0)|(s.silence>0?2:0)|(s.bleed?4:0)|(s.slow>0?8:0)|(s.relic>0?16:0)|(s.cloak>0?32:0)|(s.inv>0?64:0)|(u.dash?128:0)|(u.invuln?256:0)|(u.air?512:0)|(u.bomb?1024:0)|(s.nanite?2048:0)|(s.decon>0?4096:0)|(s.marked>0?8192:0)|(s.burn?16384:0)|(s.poison?32768:0)|(s.shock?65536:0)|(s.frozen>0&&s.stun>0?131072:0)|(u.dash?.jump?262144:0)}
 // Per-viewer snapshot: hides cloaked enemies far from the viewer and loot that belongs to someone else.
 export function snapshotFor(M,uid,events){
   const me=M.units.find(u=>u.id===uid);
@@ -1305,12 +1420,12 @@ export function snapshotFor(M,uid,events){
     wv:M.D.waves?[M.wave,M.waveState==='break'?Math.ceil(M.waveT):0,M.units.filter(u=>u.team===1).length]:null,
     bs:boss?[boss.id,Math.ceil(boss.hp),boss.maxHp,Math.round(boss.shield),boss.invuln?1:0,boss.ai.fortT>0?Math.ceil(boss.ai.fortT):0]:null,
     u:M.units.map(u=>u.dead?{i:u.id,d:Math.ceil(u.respawn)}:vis(u)?{i:u.id,x:r2(u.x),z:r2(u.z),vx:r2(u.vx),vz:r2(u.vz),f:r2(u.face),h:Math.ceil(u.hp),s:Math.round(u.shield),fl:flags(u)}:{i:u.id,hid:1}),
-    p:M.projs.map(p=>[p.id,r2(p.x),r2(p.z),r2(p.vx),r2(p.vz),p.color,p.size]),
+    p:M.projs.map(p=>[p.id,r2(p.x),r2(p.z),r2(p.vx),r2(p.vz),p.color,p.size,r2(p.h||0)]),
     zn:M.zones.map(z=>[z.id,r2(z.x),r2(z.z),z.r,r2(z.t),z.team,z.color]),
     bm:M.beams.map(b=>[b.id,r2(b.x),r2(b.z),r2(b.a),b.len,b.warm>0?1:0]),
     rg:M.rings.map(g=>[g.id,r2(g.x),r2(g.z),r2(g.r),g.color]),
     lt:M.loot.filter(L=>L.owner===uid).map(L=>[L.id,r2(L.x),r2(L.z),L.item.r]),
     me:me?{i:me.id,e:Math.floor(me.energy),u:Math.floor(me.ult),c:me.cds.map(c=>Math.round(c*10)/10),am:me.ambush>0?1:0,rt:Math.ceil(me.st.relic),q:me.lastSeq,
-      x:me.x,z:me.z,vx:me.vx,vz:me.vz,ss:[me.st.slow,me.st.stun,me.st.cloak],spd:r2(speedOf(me)),bag:me.bag.length,sk:me.prof.skills,dr:me.drive?.n||0,tc:[me.tactic,Math.round(me.tcd*10)/10],ev:Math.round((me.ecd||0)*10)/10,nn:me.st.nanite?me.st.nanite.hits:0}:null,
+      x:me.x,z:me.z,vx:me.vx,vz:me.vz,ss:[me.st.slow,me.st.stun,me.st.cloak],spd:r2(speedOf(me)),bag:me.bag.length,sk:me.prof.skills,dr:me.drive?.n||0,tc:[me.tactic,Math.round(me.tcd*10)/10],ev:Math.round((me.ecd||0)*10)/10,sc:Math.round((me.scd||0)*10)/10,nn:me.st.nanite?me.st.nanite.hits:0}:null,
     ev:events.filter(e=>!(e.g&&me&&e.t!=='death'&&e.t!=='spawn'&&e.t!=='loot'&&!vis(M.units.find(u=>u.id===e.g)||me))&&!(e.t==='loot'&&e.g!==uid)&&!(e.only&&e.only!==uid))};
 }

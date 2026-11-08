@@ -4,8 +4,8 @@ import * as Snd from './audio.js';
 
 const store={get(k,d){try{const v=localStorage.getItem('rel.'+k);return v==null?d:JSON.parse(v)}catch{return d}},set(k,v){try{localStorage.setItem('rel.'+k,JSON.stringify(v))}catch{}}};
 export const ACTIONS=[['up','Pohyb nahoru'],['down','Pohyb dolů'],['left','Pohyb doleva'],['right','Pohyb doprava'],['q','Schopnost 1'],['e','Schopnost 2'],['r','Schopnost 3'],
-  ['ult','Ultimátka'],['tac','Taktická akce'],['evade','Úskok'],['ping','Ping (s Alt varování)'],['wheel','Rychlé zprávy'],['score','Skóre (držet)'],['mute','Vypnout zvuk']];
-const DEF_KEYS={up:'KeyW',down:'KeyS',left:'KeyA',right:'KeyD',q:'KeyQ',e:'KeyE',r:'KeyR',ult:'KeyF',tac:'KeyT',evade:'Space',ping:'KeyG',wheel:'KeyV',score:'Tab',mute:'KeyM'};
+  ['ult','Ultimátka'],['tac','Taktická akce'],['evade','Úskok'],['sec','Sekundární útok (i pravé tlačítko)'],['ping','Ping (s Alt varování)'],['wheel','Rychlé zprávy'],['score','Skóre (držet)'],['mute','Vypnout zvuk']];
+const DEF_KEYS={up:'KeyW',down:'KeyS',left:'KeyA',right:'KeyD',q:'KeyQ',e:'KeyE',r:'KeyR',ult:'KeyF',tac:'KeyT',evade:'Space',sec:'KeyC',ping:'KeyG',wheel:'KeyV',score:'Tab',mute:'KeyM'};
 // fpsCap: frames per second at most (0 = as fast as the display); menuBg: the live match behind the menu
 const DEF={scale:1,bloom:true,particles:1,shake:true,flash:true,dmgNums:true,names:true,zoom:1,fps:false,teamPal:'std',fpsCap:60,menuBg:true};
 export const FPS_CAPS=[[30,'30'],[60,'60'],[0,'Bez omezení']];
@@ -22,6 +22,8 @@ const savedKeys=S.keys&&typeof S.keys==='object'?S.keys:{};
 S.keys={...DEF_KEYS,...savedKeys};
 // older saves have no evade key: when another action already uses Space, evade starts unbound instead of clashing
 if(!('evade' in savedKeys)&&Object.entries(savedKeys).some(([a,c])=>a!=='evade'&&c===DEF_KEYS.evade))S.keys.evade='';
+// the same for the secondary attack key added later
+if(!('sec' in savedKeys)&&Object.entries(savedKeys).some(([a,c])=>a!=='sec'&&c===DEF_KEYS.sec))S.keys.sec='';
 for(const k of Object.keys(S.keys))if(!(k in DEF_KEYS)||typeof S.keys[k]!=='string')delete S.keys[k];
 const num=(v,a,b,d)=>Number.isFinite(+v)?Math.max(a,Math.min(b,+v)):d;
 S.scale=num(S.scale,.5,1,1);S.particles=num(S.particles,.25,1,1);S.zoom=num(S.zoom,.8,1.3,1);

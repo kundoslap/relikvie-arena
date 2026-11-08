@@ -38,7 +38,7 @@ export const CLASSES={
     talent:'Podchlazení',talentDesc:'Každý třetí zásah základním útokem do stejného soupeře ho zpomalí o 40 % na 1 s.',
     basic:{type:'shot',name:'Ledová střepina',dmg:16,rate:.44,speed:40,range:19,size:1.3,dot:{kind:'shock',dps:4,t:2}},
     skills:[{name:'Mrazivý kužel',cost:30,cd:7,icon:'frostcone',desc:'Kužel mrazu do 7 m před tebou: 100 % TECH a zpomalení o 40 % na 1,5 s.'},
-            {name:'Ledový krunýř',cost:30,cd:12,icon:'iceshield',desc:'Štít 70 pro tebe a štít 60 pro spojence do 6 m.'},
+            {name:'Ledový krunýř',cost:30,cd:12,icon:'iceshield',desc:'Štít 70 pro tebe a štít 75 pro spojence do 8 m.'},
             {name:'Kryomina',cost:30,cd:10,icon:'icemine',desc:'Mina dopadne až 14 m daleko a po 0,7 s vybuchne do 3 m: 90 % TECH a zmrazení na 0,7 s.'}],
     ult:{name:'Absolutní nula',icon:'freeze',desc:'Mrazivá bouře v místě až 14 m daleko: po 0,55 s zasáhne vše do 7,5 m za 165 % TECH a zmrazí na 1,2 s.'},
     relic:'Relikvie mrazu: každý zásah základním útokem zpomalí a čekání schopností je o 20 % kratší na 20 s.',bars:[.65,.5,.75,.9]}
@@ -74,8 +74,40 @@ export const EVADES={
   technician:{name:'Fázový skok',cd:5,icon:'blink',desc:'Okamžitý přesun o 7 m (projde mezi nepřáteli, zastaví se o zeď) s mžikem nezranitelnosti.'},
   pyro:{name:'Ohnivý kotoul',cd:4.5,icon:'firezone',desc:'Kotoul o 5,5 m s nezranitelností 0,25 s. Na výchozím místě vzplane oheň 2,2 m na 2 s.'},
   cryo:{name:'Ledový skluz',cd:4.5,icon:'iceslide',desc:'Skluz o 6 m s nezranitelností 0,25 s. Soupeře do 3 m od výchozího místa zpomalí na 1,5 s.'}};
+// Sekundární útok (right mouse button): every hero's second attack, no energy, a short cooldown
+export const SECONDARY={
+  striker:{name:'Průrazná střela',cd:7,icon:'arrow',desc:'Rychlá střela na 26 m, která proletí všemi soupeři v řadě: 110 % útoku.'},
+  guardian:{name:'Úder štítem',cd:5,icon:'bulwark',desc:'Úder do 3,5 m před tebou: 110 % útoku, odhození o 3,5 m a zpomalení na 1 s. Dá ti štít 30. Na citadele shodí soupeře z okraje.'},
+  technician:{name:'Odsávač',cd:7,icon:'pulse',desc:'Výboj na 18 m: 110 % TECH a vyléčí tě o polovinu toho. Zasaženému hrdinovi vezme 20 energie a dá ji tobě.'},
+  pyro:{name:'Plamenomet',cd:4,icon:'flame',desc:'Proud ohně do 5,5 m před tebou: 95 % TECH a hoření 10 HP/s na 2 s.'},
+  cryo:{name:'Ledový hrot',cd:6,icon:'freeze',desc:'Hrot na 20 m: 60 % TECH a zpomalení na 1,5 s.'}};
 // "Novinky" in the hub, newest first; id marks what a player has already seen
 export const CHANGELOG=[
+  {id:'2026-11u',title:'Pravé tlačítko: sekundární útok',items:[
+    'Každý hrdina má sekundární útok na pravém tlačítku myši (nebo na klávese C, dá se přenastavit). Nestojí energii a má krátké čekání. Najdeš ho jako poslední slot v liště.',
+    'Lovec: Průrazná střela na 26 m proletí všemi soupeři v řadě (110 % útoku).',
+    'Strážce: Úder štítem zblízka odhodí soupeře o 3,5 m, zpomalí ho a dá ti štít 30. Na citadele s ním shodíš soupeře z okraje.',
+    'Technik: Odsávač zraní, vyléčí tě a ukradne zasaženému hrdinovi 20 energie.',
+    'Žhář: Plamenomet zapálí všechny v kuželu do 5,5 m.',
+    'Kryonik: Ledový hrot na 20 m zpomalí cíl.',
+    'Boti sekundární útoky používají taky.'
+  ]},
+  {id:'2026-11t',title:'Citadela pro všechny',items:[
+    'Na centrální plošinu citadely vedou čtyři nové skokové plošiny, takže nahoru se dá dostat i mimo úzké rampy. Žhář a Strážce už nejsou tak snadný terč při výstupu.',
+    'Boti na citadele nepadají při úhybech z okraje. Dolů seskočí, jen když tam chtějí.'
+  ]},
+  {id:'2026-11s',title:'Nová mapa: Neonová citadela',items:[
+    'První mapa s patry: přízemí, centrální plošina s terasami (3 m) a vrchol uprostřed (6 m). Hraje se v Aréně, Ovládnutí, Mutaci týdne a Eliminaci.',
+    'Nahoru vedou rampy se šipkami. Ze země tě na terasy vystřelí skokové plošiny. Seskočit můžeš z jakéhokoli okraje.',
+    'Výhoda výšky: střely shora dávají o 10 % víc poškození a letí o 2 m dál.',
+    'Kryt hranou: zdola zasáhneš jen toho, kdo stojí do 2,5 m od okraje. Kdo je hlouběji na plošině, je zespodu v bezpečí, ani schopnosti ho nezasáhnou.',
+    'Oblasti jako oheň nebo jed působí jen v patře, kde leží.',
+    'Kdo tě shodí z okraje (odhozením nebo přitažením), ten tě po dopadu na chvíli zpomalí. Seskok z vrcholu až na zem udeří do všech pod tebou.',
+    'Vrchol nabíjí ultimátku o 3 % za sekundu. Každých 30 s ale přijde ohlášené přetížení, které všechny nahoře zraní a shodí dolů.'
+  ]},
+  {id:'2026-11r',title:'Kryonik chrání tým',items:[
+    'Ledový krunýř dává spojencům štít 75 místo 60 a dosáhne na ně do 8 m místo 6 m. Kryonik tak víc pomáhá v týmových bitvách, v duelech se nic nemění.'
+  ]},
   {id:'2026-11q',title:'Viditelný mráz',items:[
     'Kryonik má v menu u své karty značku NOVÝ, dokud ho jednou nevybereš.',
     'Zmrazeného hrdinu obalí průsvitný ledový krystal a nad jménem má nápis ZMRAŽEN.',
@@ -693,17 +725,54 @@ export const MAPS={
   bastion:{name:'Pevnost relikvií',desc:'Bludiště zdí se třemi propojenými cestami a dvě pevnosti s relikviemi. Jen pro Únos relikvie.',r:44,ctfOnly:true,
     pillars:bastionPillars(),
     hazards:[],bases:[{x:-40,z:0},{x:40,z:0}],flags:[{x:-30,z:0},{x:30,z:0}],points:[{x:0,z:0},{x:0,z:-20},{x:0,z:20}],bossAt:{x:0,z:0},
-    theme:{floor:0x0c0a18,gridA:[.35,.5,1],gridB:[1,.3,.6],accent:0xc9a0ff,fog:0x06040e,sky:[0x06040e,0x1c0f3a],pillar:'wall',amb:'motes',ambColor:0xc9a0ff,rim:0xc9a0ff,skyline:[0x3fb8ff,0xff3f8e,0xc9a0ff,0xffc66d]}}
+    theme:{floor:0x0c0a18,gridA:[.35,.5,1],gridB:[1,.3,.6],accent:0xc9a0ff,fog:0x06040e,sky:[0x06040e,0x1c0f3a],pillar:'wall',amb:'motes',ambColor:0xc9a0ff,rim:0xc9a0ff,skyline:[0x3fb8ff,0xff3f8e,0xc9a0ff,0xffc66d]}},
+  // Neonová citadela: three heights. `levels` are flat tops, a circle c:[x,z,r] or a box b:[x0,z0,x1,z1], with height h;
+  // `ramps` are boxes whose height runs along one axis (a) from h0 at the lower coordinate to h1 at the higher one;
+  // `pads` throw whoever steps on them up to `to`. The summit (peak) charges ultimates and every 30 s throws everyone off.
+  citadel:{name:'Neonová citadela',desc:'Tři patra: přízemí, terasy a vrchol. Rampy, skokové plošiny a výhoda výšky.',r:36,
+    levels:[{c:[0,0,10],h:3},{c:[0,0,4.5],h:6,peak:true},{b:[-9,-30,9,-19],h:3},{b:[-9,19,9,30],h:3}],
+    ramps:[{b:[-17,-1.9,-9.6,1.9],a:'x',h0:0,h1:3},{b:[9.6,-1.9,17,1.9],a:'x',h0:3,h1:0},
+      {b:[-1.8,-9.3,1.8,-3.8],a:'z',h0:3,h1:6},{b:[-1.8,3.8,1.8,9.3],a:'z',h0:6,h1:3},
+      {b:[-16.5,-27,-8.6,-23.5],a:'x',h0:0,h1:3},{b:[8.6,-27,16.5,-23.5],a:'x',h0:3,h1:0},
+      {b:[-16.5,23.5,-8.6,27],a:'x',h0:0,h1:3},{b:[8.6,23.5,16.5,27],a:'x',h0:3,h1:0}],
+    pads:[{x:0,z:-14.5,r:1.3,to:{x:0,z:-23.5}},{x:0,z:14.5,r:1.3,to:{x:0,z:23.5}},{x:-11,z:-9,r:1.3,to:{x:-5.6,z:-4.9}},{x:-11,z:9,r:1.3,to:{x:-5.6,z:4.9}},{x:11,z:-9,r:1.3,to:{x:5.6,z:-4.9}},{x:11,z:9,r:1.3,to:{x:5.6,z:4.9}}],
+    pillars:[[-22,-9,1.6],[-22,9,1.6],[22,-9,1.6],[22,9,1.6],[-26,-19,1.4],[-26,19,1.4],[26,-19,1.4],[26,19,1.4],[-13,-13,1.2],[13,13,1.2],[-13,13,1.2],[13,-13,1.2]],
+    hazards:[],bases:[{x:-30,z:0},{x:30,z:0}],points:[{x:0,z:0},{x:0,z:-25},{x:0,z:25}],bossAt:{x:0,z:16},
+    theme:{floor:0x090c18,gridA:[.25,.75,1],gridB:[1,.3,.7],accent:0x5dffd8,fog:0x04060c,sky:[0x04060c,0x0c1a36],pillar:'hex',amb:'motes',ambColor:0x7fffe0,rim:0x5dffd8,skyline:[0x5dffd8,0x3fb8ff,0xff3f8e,0xffc66d]}}
 };
 export const MAP_KEYS=Object.keys(MAPS);
+// ---------- heights (maps with levels) ----------
+// Everything stays on the 2D plane; a point's height comes from the map. A unit cannot step up more than LEVEL_STEP
+// at once (cliffs are walls, ramps are fine) but can drop down anywhere. From below you reach a unit on a higher
+// level only within LEVEL_EDGE of its edge; shooting down gives LEVEL_DMG damage and LEVEL_RANGE more range.
+export const LEVEL_STEP=.8,LEVEL_EDGE=2.5,LEVEL_DMG=1.1,LEVEL_RANGE=2;
+export const PEAK={every:30,warn:2.5,ult:3,dmg:.08};
+const inBox=(b,x,z)=>x>=b[0]&&x<=b[2]&&z>=b[1]&&z<=b[3];
+const onLevel=(L,x,z)=>L.c?Math.hypot(x-L.c[0],z-L.c[1])<=L.c[2]:inBox(L.b,x,z);
+export function heightAt(map,x,z){
+  if(!map.levels)return 0;let h=0;
+  for(const L of map.levels)if(L.h>h&&onLevel(L,x,z))h=L.h;
+  for(const R of map.ramps){if(!inBox(R.b,x,z))continue;const b=R.b,k=R.a==='x'?(x-b[0])/(b[2]-b[0]):(z-b[1])/(b[3]-b[1]),v=R.h0+(R.h1-R.h0)*k;if(v>h)h=v}
+  return h;
+}
+// how deep inside its flat top a point stands (0 on the ground and on ramps)
+export function depthAt(map,x,z){
+  if(!map.levels)return 0;const h=heightAt(map,x,z);if(h<=0)return 0;
+  for(const R of map.ramps)if(inBox(R.b,x,z))return 0;
+  let d=0;for(const L of map.levels){if(L.h!==h||!onLevel(L,x,z))continue;const v=L.c?L.c[2]-Math.hypot(x-L.c[0],z-L.c[1]):Math.min(x-L.b[0],L.b[2]-x,z-L.b[1],L.b[3]-z);if(v>d)d=v}
+  return d;
+}
+// a higher level's top, deep enough to hide a unit, stands between a point at height h and (x,z)
+export const cliffAt=(map,h,x,z)=>heightAt(map,x,z)>h+1&&depthAt(map,x,z)>LEVEL_EDGE;
+export const onPeak=(map,u)=>{const P=map.levels?.find(L=>L.peak);return!!P&&heightAt(map,u.x,u.z)>=P.h-.01&&onLevel(P,u.x,u.z)};
 
 // ---------- modes ----------
 export const MODES={
-  arena:{name:'Aréna',desc:'3 proti 3. Body za zničení soupeřů a za relikvii ve středu. Vyhrává 20 bodů.',pvp:true,maps:['core','forge','archive','observ'],max:6,win:20},
-  control:{name:'Ovládnutí',desc:'3 proti 3 o tři body. Každý držený bod přidává skóre, vyhrává 100.',pvp:true,maps:['core','forge','archive','observ'],max:6,win:100},
+  arena:{name:'Aréna',desc:'3 proti 3. Body za zničení soupeřů a za relikvii ve středu. Vyhrává 20 bodů.',pvp:true,maps:['core','forge','archive','observ','citadel'],max:6,win:20},
+  control:{name:'Ovládnutí',desc:'3 proti 3 o tři body. Každý držený bod přidává skóre, vyhrává 100.',pvp:true,maps:['core','forge','archive','observ','citadel'],max:6,win:100},
   ctf:{name:'Únos relikvie',desc:'3 proti 3 v Pevnosti relikvií. Ukradni soupeřovu relikvii a dones ji ke své, která musí být doma. Vyhrávají 3 únosy.',pvp:true,maps:['bastion'],max:6,win:3},
-  mutant:{name:'Mutace týdne',desc:'3 proti 3 podle pravidel Arény, ale s dvěma mutacemi, které se mění každé pondělí. Vyhrává 20 bodů.',pvp:true,mutators:true,maps:['core','forge','archive','observ'],max:6,win:20},
-  elim:{name:'Eliminace',desc:'3 proti 3 na kola bez oživení. Kolo vyhrává tým, který zůstane stát. Po 40 s se aréna začne zmenšovat a mimo kruh to pálí. Vyhrávají 4 kola.',pvp:true,rounds:true,maps:['core','forge','archive','observ'],max:6,win:4,time:900},
+  mutant:{name:'Mutace týdne',desc:'3 proti 3 podle pravidel Arény, ale s dvěma mutacemi, které se mění každé pondělí. Vyhrává 20 bodů.',pvp:true,mutators:true,maps:['core','forge','archive','observ','citadel'],max:6,win:20},
+  elim:{name:'Eliminace',desc:'3 proti 3 na kola bez oživení. Kolo vyhrává tým, který zůstane stát. Po 40 s se aréna začne zmenšovat a mimo kruh to pálí. Vyhrávají 4 kola.',pvp:true,rounds:true,maps:['core','forge','archive','observ','citadel'],max:6,win:4,time:900},
   duel:{name:'Souboj',desc:'1 proti 1 bez relikvie a bodů. Vyhrává, kdo první pětkrát zničí soupeře.',pvp:true,team:1,maps:['archive','core','sanctum'],max:2,win:5},
   boss:{name:'Lov bosse',desc:'Až 4 hráči proti bossovi s mechanikami. Tým má společné životy.',pvp:false,maps:['sanctum','core','forge','archive','observ'],max:4,lives:8},
   waves:{name:'Vlny',desc:'Až 4 hráči proti vlnám dronů. Každá pátá vlna je boss, cílem je přežít 15 vln.',pvp:false,waves:true,maps:['sanctum','forge','archive','core','observ'],max:4,lives:6,last:15},
