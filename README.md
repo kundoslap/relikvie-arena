@@ -150,7 +150,7 @@ Po sedmém dni řada začne znovu. Když hráč den vynechá, začíná znovu od
 - **Serafín** — kopí světla v liniích. Na 70 % a 35 % vzlétne a z nebe padá světlo.
 - **Archon** — Rozsudek spálí polovinu arény, gravitace přitáhne tým k úderu. V polovině povolá hlídače.
 
-**Mapy:** Neonové jádro, Rezavá kovárna (lávové kanály pálí), Ledový archiv (hustý les sloupů), **Hvězdná observatoř** (kruh obelisků a dva páry teleportních bran), Rudá svatyně (aréna pro bosse), Pevnost relikvií (bludiště jen pro Únos relikvie), **Neonová citadela** (tři patra). Boti hledají cestu po navigační mřížce, takže obejdou i dlouhé zdi. Každá má vlastní vzhled, oblohu, sloupy a částice.
+**Mapy:** Neonové jádro, Rezavá kovárna (lávové kanály pálí), Ledový archiv (hustý les sloupů), **Hvězdná observatoř** (kruh obelisků a dva páry teleportních bran), Rudá svatyně (aréna pro bosse), Pevnost relikvií (bludiště jen pro Únos relikvie), **Neonová citadela** (terasy na dvou patrech). Boti hledají cestu po navigační mřížce, takže obejdou i dlouhé zdi. Každá má vlastní vzhled, oblohu, sloupy a částice.
 
 **Hvězdná observatoř** se hraje v Aréně, Ovládnutí, Eliminaci, Lovu bosse, Vlnách i Nekonečnu:
 - Dva páry teleportních bran propojují protilehlé rohy mapy: azurový pár severozápad–jihovýchod, růžový pár jihozápad–severovýchod.
@@ -159,18 +159,18 @@ Po sedmém dni řada začne znovu. Když hráč den vynechá, začíná znovu od
 - Maskovaný soupeř se teleportem neprozradí.
 - Brány jsou vidět i na minimapě a hra skok ukáže jako skok, ne jako sklouznutí přes mapu.
 
-**Neonová citadela** je první mapa s patry. Hraje se v Aréně, Ovládnutí, Mutaci týdne a Eliminaci:
-- Tři výšky: přízemí, centrální plošina (poloměr 10 m) se dvěma terasami na severu a jihu (3 m) a vrchol uprostřed (poloměr 4,5 m, 6 m). Relikvie i bod B leží na vrcholu, body A a C na terasách.
-- Na plošinu vedou široké rampy ze západu a východu, na vrchol ze severu a jihu, na terasy z obou boků. Ze země u terasy tě na ni vystřelí skoková plošina. Dolů se dá seskočit odkudkoli.
+**Neonová citadela** je mapa s patry. Hraje se v Aréně, Ovládnutí, Mutaci týdne a Eliminaci:
+- Dvě výšky: přízemí a dvě terasy na severu a jihu (3 m). Střed je otevřená plocha s relikvií a bodem B, kryjí ho čtyři sloupy kolem středu a čtyři dál. Body A a C leží na terasách.
+- Na terasy vedou rampy z obou boků a ze země u terasy tě na ni vystřelí skoková plošina. Dolů se dá seskočit odkudkoli.
 - Simulace zůstává ve 2D: výška bodu se počítá z mapy (`heightAt`). Schod vyšší než 0,8 m je zeď (jednotka po ní sklouzne), rampa je v pořádku a pád dolů je vždy možný.
 - **Kryt hranou:** zdola zasáhneš jen toho, kdo stojí do 2,5 m od okraje svého patra. Hlouběji je v bezpečí před střelami (zastaví se o hranu) i před schopnostmi zdola. Hra to řeší jednotně přes viditelnost (`blocked`) a seznam dosažitelných soupeřů (`foes`).
 - **Výhoda výšky:** přímý zásah z vyššího patra dává o 10 % víc poškození a střely shora letí o 2 m dál.
 - Oblasti (oheň, jed, mráz) působí jen ve svém patře.
-- Kdo tě odhodí nebo přitáhne přes okraj, ten tě po dopadu na 1,2 s zpomalí („Shozen“). Seskok z vrcholu až na zem udeří do soupeřů do 2,8 m (60 % síly) a zpomalí je.
-- **Vrchol:** dobíjí ultimátku o 3 % za sekundu. Každých 30 s se ohlásí přetížení (červený kruh na 2,5 s), pak výboj ubere všem nahoře 8 % zdraví a odhodí je přes okraj.
+- Kdo tě odhodí nebo přitáhne přes okraj, ten tě po dopadu na 1,2 s zpomalí („Shozen“).
+- **Bez středu (listopad 2026):** původně měla citadela uprostřed ještě centrální plošinu (3 m) a na ní vrchol (6 m), který dobíjel ultimátku a každých 30 s všechny shodil. Na přání jsem střed zrušil. Kód pro vrchol (`peak:true`) zůstal a žádná mapa ho teď nepoužívá. Na volném středu Žhář vyhrával jen 42 %, proto přibyly čtyři sloupy kolem středu (±7, ±5). Výsledek na 900 zápasech: Lovec 46 %, Strážce 53 %, Technik 56 %, Žhář 46 %, Kryonik 49 %, podobně jako na ostatních mapách.
 - Boti mají navigační mřížku s výškou: z buňky do sousední vedou jen hrany, po kterých se dá projít bez šplhání po útesu, a skoková plošina vede rovnou na terasu. Soupeře v krytu nahoře vidí jako cíl a vyjdou za ním.
 - Ve hře se plošiny kreslí jako pevné bloky se zářícími hranami, rampy mají šipky nahoru a skokové plošiny stoupající kroužky. Hrdinové, střely, efekty i ukazatele leží ve správné výšce, pád má gravitaci a myš míří přímo na povrch pater. Minimapa ukazuje patra, rampy i plošiny.
-- Ověřeno na 240 zápasech botů (Aréna, Ovládnutí, Eliminace): všechny skončily, bez zaseknutí. Boti tráví asi 75 % času na zemi, 20 % na plošinách a 4 % na vrcholu. Ladění citadely: na začátku tu Strážce a Žhář vyhrávali jen 43–47 %, Technik a Lovec 54–58 %. Rozbor ukázal dvě věci: boti při úhybech do stran padali z okraje (asi 14× za zápas) a na plošinu se dalo jen po dvou úzkých rampách, kde byli bojovníci zblízka snadný terč. Boti teď z okraje nesejdou, pokud jejich cíl není níž. Na centrální plošinu navíc vedou čtyři další skokové plošiny ze země (u bodů ±11, ±9). Výsledek na 450 zápasech: Lovec 52,6 %, Technik 51,2 %, Kryonik 51,8 %, Žhář 49,8 %, Strážce 45,6 %. Podobný rozptyl mají i jiné mapy (na Neonovém jádru je to naopak: Lovec 43 %, Strážce 55 %). Zkoušel jsem i jiné úpravy, ale žádná nic průkazně nezměnila: větší kryt hranou (3,5 m), bez výhody výšky, oheň stékající přes okraj.
+- Původní ladění se středem (240 + 450 zápasů botů): Lovec 52,6 %, Technik 51,2 %, Kryonik 51,8 %, Žhář 49,8 %, Strážce 45,6 %.
 
 **Postup (jen s účtem)**
 - Úroveň 1–50. Zkušenosti a kredity za zápasy, víc za vyšší obtížnost.

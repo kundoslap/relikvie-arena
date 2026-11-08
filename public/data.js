@@ -83,6 +83,8 @@ export const SECONDARY={
   cryo:{name:'Ledový hrot',cd:6,icon:'freeze',desc:'Hrot na 20 m: 60 % TECH a zpomalení na 1,5 s.'}};
 // "Novinky" in the hub, newest first; id marks what a player has already seen
 export const CHANGELOG=[
+  {id:'2026-11x',title:'Citadela bez středu',items:[
+    'Neonová citadela už nemá centrální plošinu ani vrchol. Střed je otevřená plocha s relikvií a čtyřmi novými sloupy, terasy na severu a jihu zůstaly i s rampami a skokovými plošinami.']},
   {id:'2026-11w',title:'Anglická verze',items:[
     'Hra umí anglicky. Hráči z ciziny ji dostanou v angličtině automaticky podle jazyka prohlížeče, přepnout jde v Nastavení → Rozhraní → Jazyk · Language.',
     'Odkaz s ?lang=en otevře hru rovnou anglicky a při sdílení má anglický náhled.',
@@ -735,17 +737,17 @@ export const MAPS={
     pillars:bastionPillars(),
     hazards:[],bases:[{x:-40,z:0},{x:40,z:0}],flags:[{x:-30,z:0},{x:30,z:0}],points:[{x:0,z:0},{x:0,z:-20},{x:0,z:20}],bossAt:{x:0,z:0},
     theme:{floor:0x0c0a18,gridA:[.35,.5,1],gridB:[1,.3,.6],accent:0xc9a0ff,fog:0x06040e,sky:[0x06040e,0x1c0f3a],pillar:'wall',amb:'motes',ambColor:0xc9a0ff,rim:0xc9a0ff,skyline:[0x3fb8ff,0xff3f8e,0xc9a0ff,0xffc66d]}},
-  // Neonová citadela: three heights. `levels` are flat tops, a circle c:[x,z,r] or a box b:[x0,z0,x1,z1], with height h;
+  // Neonová citadela: two heights, the ground and a terrace on the north and the south side; the centre is open ground.
+  // `levels` are flat tops, a circle c:[x,z,r] or a box b:[x0,z0,x1,z1], with height h (a level with peak:true would be a
+  // summit that charges ultimates and throws everyone off every 30 s; no map has one now);
   // `ramps` are boxes whose height runs along one axis (a) from h0 at the lower coordinate to h1 at the higher one;
-  // `pads` throw whoever steps on them up to `to`. The summit (peak) charges ultimates and every 30 s throws everyone off.
-  citadel:{name:'Neonová citadela',desc:'Tři patra: přízemí, terasy a vrchol. Rampy, skokové plošiny a výhoda výšky.',r:36,
-    levels:[{c:[0,0,10],h:3},{c:[0,0,4.5],h:6,peak:true},{b:[-9,-30,9,-19],h:3},{b:[-9,19,9,30],h:3}],
-    ramps:[{b:[-17,-1.9,-9.6,1.9],a:'x',h0:0,h1:3},{b:[9.6,-1.9,17,1.9],a:'x',h0:3,h1:0},
-      {b:[-1.8,-9.3,1.8,-3.8],a:'z',h0:3,h1:6},{b:[-1.8,3.8,1.8,9.3],a:'z',h0:6,h1:3},
-      {b:[-16.5,-27,-8.6,-23.5],a:'x',h0:0,h1:3},{b:[8.6,-27,16.5,-23.5],a:'x',h0:3,h1:0},
+  // `pads` throw whoever steps on them up to `to`.
+  citadel:{name:'Neonová citadela',desc:'Dvě patra: přízemí a terasy na severu a jihu. Rampy, skokové plošiny a výhoda výšky.',r:36,
+    levels:[{b:[-9,-30,9,-19],h:3},{b:[-9,19,9,30],h:3}],
+    ramps:[{b:[-16.5,-27,-8.6,-23.5],a:'x',h0:0,h1:3},{b:[8.6,-27,16.5,-23.5],a:'x',h0:3,h1:0},
       {b:[-16.5,23.5,-8.6,27],a:'x',h0:0,h1:3},{b:[8.6,23.5,16.5,27],a:'x',h0:3,h1:0}],
-    pads:[{x:0,z:-14.5,r:1.3,to:{x:0,z:-23.5}},{x:0,z:14.5,r:1.3,to:{x:0,z:23.5}},{x:-11,z:-9,r:1.3,to:{x:-5.6,z:-4.9}},{x:-11,z:9,r:1.3,to:{x:-5.6,z:4.9}},{x:11,z:-9,r:1.3,to:{x:5.6,z:-4.9}},{x:11,z:9,r:1.3,to:{x:5.6,z:4.9}}],
-    pillars:[[-22,-9,1.6],[-22,9,1.6],[22,-9,1.6],[22,9,1.6],[-26,-19,1.4],[-26,19,1.4],[26,-19,1.4],[26,19,1.4],[-13,-13,1.2],[13,13,1.2],[-13,13,1.2],[13,-13,1.2]],
+    pads:[{x:0,z:-14.5,r:1.3,to:{x:0,z:-23.5}},{x:0,z:14.5,r:1.3,to:{x:0,z:23.5}}],
+    pillars:[[-22,-9,1.6],[-22,9,1.6],[22,-9,1.6],[22,9,1.6],[-26,-19,1.4],[-26,19,1.4],[26,-19,1.4],[26,19,1.4],[-13,-13,1.2],[13,13,1.2],[-13,13,1.2],[13,-13,1.2],[-7,-5,1.3],[7,5,1.3],[-7,5,1.3],[7,-5,1.3]],
     hazards:[],bases:[{x:-30,z:0},{x:30,z:0}],points:[{x:0,z:0},{x:0,z:-25},{x:0,z:25}],bossAt:{x:0,z:16},
     theme:{floor:0x090c18,gridA:[.25,.75,1],gridB:[1,.3,.7],accent:0x5dffd8,fog:0x04060c,sky:[0x04060c,0x0c1a36],pillar:'hex',amb:'motes',ambColor:0x7fffe0,rim:0x5dffd8,skyline:[0x5dffd8,0x3fb8ff,0xff3f8e,0xffc66d]}}
 };

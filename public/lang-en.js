@@ -2257,4 +2257,5 @@ export default {"Neonová aréna 3 proti 3, kooperace proti bossům, hodnocená 
 "NESE RELIKVII":"HAS THE RELIC",
 "ZPOMALEN":"SLOWED",
 "RELIKVIE":"RELIC",
-"{} kr.":"{} cr."};
+"{} kr.":"{} cr.",
+"Dvě patra: přízemí a terasy na severu a jihu. Rampy, skokové plošiny a výhoda výšky.":"Two levels: the ground and terraces in the north and south. Ramps, jump pads and the high ground advantage."};
