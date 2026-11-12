@@ -554,7 +554,7 @@ function startTutorial(o){
   const M=S.createMatch({mode:'arena',map:'core',diff:'easy'});M.timeLeft=1e9;M.countdown=.6;M.relic.state='off';
   const you=S.addUnit(M,o.cls,0,'human',o.name||'Ty').id;S.startMatch(M);
   G.M=M;G.acc=0;G.you=you;G.rosterVer=M.rosterVer;setInfo(S.matchInfo(M));onRoster(S.roster(M));
-  G.tut={i:-1,used:new Set(),drones:[],hold:0,acct:!!o.account};
+  G.tut={i:-1,used:new Set(),drones:[],hold:0,acct:!!o.account,cls:o.cls,name:o.name};
   showOnly('hud');$('#hud').classList.add('tut');applyTouch();buildSlots();$('#netInfo').textContent='Výcvik';
   tutNext();
 }
@@ -595,13 +595,15 @@ function tutTick(ev){
   if(done){T.hold+=TICK;if(T.hold>=.6){Snd.play('clear',null,{ui:true,vol:.7,dur:1});tutNext()}}
 }
 function tutFinish(){
-  const T=G.tut;tutMarker(null);G.tut=null;$('#hud').classList.remove('tut');
+  const T=G.tut;tutMarker(null);G.tut=null;$('#hud').classList.remove('tut');store.set('tutDone',true);
   const el=$('#tut');el.hidden=false;
   el.innerHTML=`<small>VÝCVIK DOKONČEN</small><b>Jsi připraven do arény</b><p>${T.acct?'Za dokončení dostáváš 300 kreditů a implantát.':'S účtem bys za dokončení dostal 300 kreditů a implantát.'} Další tipy: <kbd>Tab</kbd> ukáže skóre, implantáty a strom dovedností najdeš v hubu.</p>
-    <div class="btns"><button class="go sm" type="button" id="tutEnd">Do hubu</button></div>`;
+    <div class="btns"><button class="go sm" type="button" id="tutPlay">První zápas s boty</button><button class="ghost sm" type="button" id="tutEnd">Do hubu</button></div>`;
   Snd.play('win',null,{ui:true,dur:2.5});
   if(T.acct)Hub.tutorialDone();
   $('#tutEnd').onclick=()=>{el.hidden=true;toHub()};
+  // straight into a real match against easy bots, the natural next step after the last lesson
+  $('#tutPlay').onclick=()=>{el.hidden=true;hubCallbacks.solo({mode:'arena',map:'core',diff:'easy',cls:T.cls||Hub.playerClass(),name:T.name||'Ty'})};
 }
 
 // ---------- shooting range ----------
@@ -702,7 +704,7 @@ function connect(hello,resuming){
   try{ws=new WebSocket((location.protocol==='https:'?'wss://':'ws://')+location.host+'/ws')}
   catch{Hub.netError('Online hra běží jen ze spuštěného serveru Relikvie Aréna.');return}
   G.ws=ws;
-  ws.onopen=()=>{ws.send(JSON.stringify({...hello,token:Hub.token()}));G.lastMsg=performance.now();
+  ws.onopen=()=>{ws.send(JSON.stringify({...hello,token:Hub.token(),gk:Hub.token()?undefined:Hub.guestKey()}));G.lastMsg=performance.now();
     G.pingT=setInterval(()=>{wsSend({type:'ping',t:performance.now()});
       if(G.ws===ws&&G.mode==='on'&&!G.ended&&performance.now()-G.lastMsg>5000){dropWs();if(!netLost()){toHub();Hub.netError('Spojení se serverem se přerušilo.')}}},2000)};
   ws.onmessage=ev=>{G.lastMsg=performance.now();let m;try{m=JSON.parse(ev.data)}catch{return}onNet(m)};
@@ -754,6 +756,7 @@ const hubCallbacks={
   quick:o=>connect({type:'hello',quick:true,mode:o.mode,diff:o.diff,cls:o.cls,name:o.name}),
   ranked:(mode,o)=>connect({type:'hello',ranked:true,mode,cls:o.cls,name:o.name}),
   tutorial:o=>{closeWs();startTutorial(o)},
+  leave:()=>toHub(),
   // challenge a friend: a private Souboj room without bots; the invite goes out as soon as the room exists
   challenge:(fid,o)=>{G.challenge=fid;connect({type:'hello',create:true,mode:'duel',map:'archive',diff:'normal',cls:o.cls,name:o.name})},
   range:o=>{closeWs();startRange(o)},

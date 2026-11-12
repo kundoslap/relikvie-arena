@@ -83,6 +83,15 @@ export const SECONDARY={
   cryo:{name:'Ledový hrot',cd:6,icon:'freeze',desc:'Hrot na 20 m: 60 % TECH a zpomalení na 1,5 s.'}};
 // "Novinky" in the hub, newest first; id marks what a player has already seen
 export const CHANGELOG=[
+  {id:'2026-12a',title:'Postup hosta se neztratí',items:[
+    'I bez účtu teď za zápasy získáváš zkušenosti, kredity a implantáty. Hra ti je podrží 7 dní od posledního zápasu.',
+    'Když si založíš účet, všechno získané za hosta se do něj přenese. Po zápase i na kartě Hrát uvidíš, co na tebe čeká.']},
+  {id:'2026-11z',title:'Hrát hned',items:[
+    'Na úvodní obrazovce je velké tlačítko Hrát hned: bez registrace tě pošle do krátkého výcviku a po něm do prvního zápasu s boty. Když už výcvik máš, jdeš rovnou do zápasu.',
+    'Kdo přijde přes pozvánku, připojí se jedním kliknutím rovnou do místnosti.',
+    'Na konci výcviku je tlačítko První zápas s boty.']},
+  {id:'2026-11y',title:'Rychlejší načítání',items:[
+    'Hra se stahuje komprimovaná, takže první načtení je asi třikrát menší. Při dalším otevření se stáhne jen to, co se od minula změnilo.']},
   {id:'2026-11x',title:'Citadela bez středu',items:[
     'Neonová citadela už nemá centrální plošinu ani vrchol. Střed je otevřená plocha s relikvií a čtyřmi novými sloupy, terasy na severu a jihu zůstaly i s rampami a skokovými plošinami.']},
   {id:'2026-11w',title:'Anglická verze',items:[
@@ -198,6 +207,8 @@ export const CHANGELOG=[
 ];
 // bonus for the first win of each calendar day (any mode; short custom matches do not count as a win here)
 export const FIRST_WIN={xp:200,cr:120};
+// how long the server keeps what a guest earned (it moves into the account when that browser signs up)
+export const GUEST_DAYS=7;
 
 // ---------- stats (items and skill tree feed the same modifiers) ----------
 export const STATS={

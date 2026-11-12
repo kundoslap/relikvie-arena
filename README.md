@@ -262,7 +262,24 @@ Kdo má slabší počítač nebo notebook, ať nastaví limit 30 FPS a vypne ži
 
 **Nastavení** (tlačítko Nastavení v hubu a v menu zápasu): Ovládání (přemapování všech kláves: pohyb, schopnosti, ultimátka, taktická akce, skóre, vypnutí zvuku; obsazená klávesa se prohodí, šipky fungují vždy), Grafika (kvalita, rozlišení vykreslování 50–100 %, záře, množství částic, otřesy kamery, záblesky obrazovky), Rozhraní (čísla poškození, jména nad postavami, oddálení kamery, počítadlo FPS, **barvy týmů**) a Zvuk. Barvy týmů mají tři palety: modrá a růžová (výchozí), modrá a oranžová (pro protanopii a deuteranopii) a tyrkysová a červená (pro tritanopii). Paleta platí hned pro postavy, základny, sloupy, body Ovládnutí, relikvie Únosu, minimapu, skóre, záznam, chat i lobby. Ukládá se v prohlížeči a kromě kvality platí hned.
 
-**Výcvik** (tlačítko Výcvik na kartě Hrát, novým hráčům se nabídne sám): sedm kroků na mapě Neonové jádro bez serveru, takže jde i offline. Pohyb ke zlatému kruhu, útok na cvičný dron, všechny tři schopnosti, ultimátka, taktická akce, léčení na základně a sebrání relikvie. Hra každý krok sleduje a sama pokračuje, výcvik jde kdykoli ukončit. Hráč s účtem dostane za první dokončení 300 kreditů a implantát.
+**Výcvik** (tlačítko Výcvik na kartě Hrát, novým hráčům se nabídne sám): sedm kroků na mapě Neonové jádro bez serveru, takže jde i offline. Pohyb ke zlatému kruhu, útok na cvičný dron, všechny tři schopnosti, ultimátka, taktická akce, léčení na základně a sebrání relikvie. Hra každý krok sleduje a sama pokračuje, výcvik jde kdykoli ukončit. Hráč s účtem dostane za první dokončení 300 kreditů a implantát. Na konci výcviku je tlačítko **První zápas s boty**: rovnou spustí Arénu na Neonovém jádru s lehkými boty.
+
+**Hrát hned** (velké tlačítko nahoře na přihlašovací obrazovce): cesta do hry bez registrace, hlavně pro hráče z odkazů a herních portálů.
+- Hráč hraje jako host. Přezdívka se vezme z políčka, nebo z minula, nebo se vymyslí (třeba `Pilot4821`).
+- Kdo v tomhle prohlížeči ještě nedokončil výcvik, jde do výcviku. Po něm hraje první zápas s boty.
+- Kdo výcvik už má, jde rovnou do Arény s lehkými boty, bez čekání v místnosti.
+- Kdo přišel přes pozvánku (`?room=ABCD`), tomu tlačítko nabídne „Připojit se do místnosti ABCD“ a pošle ho rovnou tam.
+- Do hubu se dostane kdykoli přes menu zápasu. Přihlášení a založení účtu zůstávají pod tlačítkem jako dřív.
+
+**Postup hosta:** host za online zápasy získává zkušenosti, kredity a implantáty stejně jako hráč s účtem a po registraci mu zůstanou.
+- Prohlížeč hosta si vytvoří náhodný klíč (`gk`, 24 znaků) a posílá ho jen našemu serveru. Klíč nikoho neidentifikuje a v prohlížeči je uložený jako ostatní nastavení.
+- Server pro každý klíč drží profil hosta (`doc.guests`). Po každém zápase do něj připíše odměny stejnou funkcí jako u účtu (`rewardsFor`).
+- Hostovy implantáty se v zápasech nepoužívají: host hraje se základním hrdinou. Sestava se mu odemkne až s účtem, což je další důvod se registrovat.
+- Profil hosta vydrží 7 dní od posledního zápasu (`GUEST_DAYS` v `data.js`). Server jich drží nejvýš 400; když je jich víc, nejdřív zmizí ten, kdo nejdéle nehrál. Databáze tak neroste donekonečna.
+- Po zápase host vidí, co získal, a pole „Tvůj postup hosta“ (úroveň, kredity, implantáty, zápasy) s tlačítkem **Založit účet**. Stejné pole má i nahoře na kartě Hrát.
+- Při založení účtu se profil hosta stane profilem nového účtu, dostane nové jméno a id a ze seznamu hostů zmizí. Hráč uvidí hlášku, že všechno, co získal jako host, je v účtu. Přihlášení do existujícího účtu postup hosta nepřebírá.
+- Hodnocená hra a kampaň jsou dál jen pro účty. Zápasy kratší než 45 s nic nedávají, stejně jako u účtu.
+- Ověřuje to test: odměny hosta a jejich souhrn, neplatný klíč nic nedrží, druhý zápas se přičte, registrace převezme kredity, úroveň i implantáty, stejný klíč podruhé nic nepřevezme, bez klíče vznikne běžný nový účet.
 
 **Střelnice** (tlačítko Střelnice na kartě Hrát, vedle Výcviku): cvičiště bez serveru, takže jde i offline.
 - Hráč s účtem tu hraje se svou sestavou zvoleného povolání (implantáty, strom, profese, mistrovství), host se základním hrdinou.
@@ -287,6 +304,13 @@ Hosté můžou hrát online bez účtu, jen se jim nic neukládá. Když server 
 ## Nasazení na internet
 
 Návod krok za krokem pro Render a databázi Neon (obojí zdarma, bez instalace gitu) je v [DEPLOY.md](DEPLOY.md).
+
+**Rychlé načítání:** server posílá soubory hry komprimované (brotli, nebo gzip pro starší prohlížeče) a s ETagem.
+- Kód hry má asi 750 KB a stáhne se z něj asi 220 KB.
+- Při další návštěvě se prohlížeč jen zeptá, jestli se něco změnilo, a dostane prázdnou odpověď 304: místo půl megabajtu se přenesou asi 3 KB.
+- Nová verze po nasazení se projeví hned, protože prohlížeč se ptá při každém otevření (`Cache-Control: no-cache`).
+- Komprimuje se jednou po startu serveru mimo hlavní vlákno, takže běžící zápasy to nezpomalí. Výsledek zůstává v paměti, dokud se soubor nezmění.
+- Ověřuje to test: brotli i gzip vrací přesně původní soubor, 304 při stejném ETagu, obrázky beze změny, český i anglický náhled `index.html`, změna souboru se projeví.
 
 ## Propagace
 

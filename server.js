@@ -1,10 +1,12 @@
 // Relikvie Aréna — authoritative game server.
 // Serves the client from ./public, the account API on /api and runs every match at 30 Hz; clients only send inputs.
 import http from 'node:http';
-import {readFile} from 'node:fs/promises';
+import {readFile,stat} from 'node:fs/promises';
+import {promisify} from 'node:util';
+import zlib from 'node:zlib';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {randomBytes} from 'node:crypto';
+import {randomBytes,createHash} from 'node:crypto';
 import {WebSocketServer} from 'ws';
 import * as S from './public/sim.js';
 import {openDB} from './db.js';
@@ -42,7 +44,7 @@ async function api(req,res,p,url){
   const body=req.method==='POST'?await readBody(req):{};
   if(p==='/api/register'||p==='/api/login'){
     if(limited(ip,'auth',12,5*60000))throw new HttpError(429,'Příliš mnoho pokusů o přihlášení. Zkus to za pár minut.');
-    return json(res,200,await meta[p.slice(5)](body.nick,body.pass));
+    return json(res,200,p==='/api/register'?await meta.register(body.nick,body.pass,body.gk):await meta.login(body.nick,body.pass));
   }
   // Počítadlo hráčů: one anonymous visit per browser and day (see stats.js)
   if(p==='/api/hello'&&req.method==='POST'){if(!limited(ip,'hello',6,3600000))stats.visit(ip,req.headers['user-agent'],{r:body.r===1?1:0,acc:!!body.acc,mob:!!body.mob});return json(res,200,{ok:true})}
@@ -89,14 +91,20 @@ const server=http.createServer(async(req,res)=>{
   const f=path.normalize(path.join(PUB,p));
   if(!f.startsWith(PUB+path.sep)){res.writeHead(403);return res.end()}
   if(p.includes('\0')){res.writeHead(400);return res.end()}
-  try{let data=await readFile(f);
+  try{const st=await stat(f);if(!st.isFile())throw 0;
+    let key=p,make=()=>readFile(f);
     // the share preview needs absolute addresses: PUBLIC_URL when set, otherwise the address this request came to
     if(p==='/index.html'){const host=String(req.headers['x-forwarded-host']||req.headers.host||''),proto=String(req.headers['x-forwarded-proto']||'').split(',')[0]==='https'||process.env.RENDER?'https':'http';
       const origin=(process.env.PUBLIC_URL||'').replace(/\/+$/,'')||(/^[a-z0-9.:-]{1,100}$/i.test(host)?`${proto}://${host}`:'');
-      data=data.toString('utf8').replaceAll('%ORIGIN%',origin);
       // a link with ?lang=en gets the English preview (the page itself switches language in the browser)
-      if(url.searchParams.get('lang')==='en')data=englishMeta(data,origin)}
-    res.writeHead(200,{'Content-Type':TYPES[path.extname(f)]||'application/octet-stream','Cache-Control':'no-cache'});res.end(data)}
+      const en=url.searchParams.get('lang')==='en';key=`${p}|${origin}|${en?'en':''}`;
+      make=async()=>{const html=(await readFile(f,'utf8')).replaceAll('%ORIGIN%',origin);return en?englishMeta(html,origin):html}}
+    const a=await asset(key,st.mtimeMs,TYPES[path.extname(f)]||'application/octet-stream',make);
+    const h={'Content-Type':a.type,'Cache-Control':'no-cache','ETag':a.etag,'Vary':'Accept-Encoding'};
+    if(String(req.headers['if-none-match']||'').split(',').some(t=>t.trim()===a.etag)){res.writeHead(304,h);return res.end()}
+    const ae=String(req.headers['accept-encoding']||'');let body=a.raw;
+    if(a.br&&/\bbr\b/.test(ae)){body=a.br;h['Content-Encoding']='br'}else if(a.gz&&/\bgzip\b/.test(ae)){body=a.gz;h['Content-Encoding']='gzip'}
+    h['Content-Length']=body.length;res.writeHead(200,h);res.end(req.method==='HEAD'?undefined:body)}
   catch{res.writeHead(404,{'Content-Type':'text/plain; charset=utf-8'});res.end('Nenalezeno')}
 });
 
@@ -112,6 +120,21 @@ const humans=room=>[...room.clients.values()];
 const maxPlayers=room=>S.MODES[room.mode].max;
 const QUICK_WAIT=20000; // a quick-play room starts on its own after this, the rest is filled with bots
 const RANKED_WAIT=12000; // a ranked room with an opponent starts this long after the last player joined (at once when full)
+// Static files are compressed once (brotli and gzip, off the main thread so matches keep their 30 Hz) and kept in
+// memory until the file changes. The ETag lets a returning player's browser keep its copy: Cache-Control no-cache
+// still asks every time, so a new deploy reaches everyone at once, but the answer is an empty 304 when nothing changed.
+const brotli=promisify(zlib.brotliCompress),gzip=promisify(zlib.gzip);
+const ASSETS=new Map(),PACK=/^text\/|^application\/(json|manifest)|svg/;
+function asset(key,mtime,type,make){
+  const hit=ASSETS.get(key);if(hit&&hit.mtime===mtime)return hit.p;
+  const p=(async()=>{let raw=await make();if(typeof raw==='string')raw=Buffer.from(raw);
+    const a={type,raw,etag:'W/"'+createHash('sha1').update(raw).digest('base64url').slice(0,22)+'"'};
+    if(PACK.test(type)&&raw.length>1024)[a.br,a.gz]=await Promise.all([brotli(raw,{params:{[zlib.constants.BROTLI_PARAM_QUALITY]:11,[zlib.constants.BROTLI_PARAM_SIZE_HINT]:raw.length}}),gzip(raw,{level:9})]);
+    return a})();
+  p.catch(()=>ASSETS.delete(key));
+  if(ASSETS.size>300)ASSETS.clear(); // index.html is kept per site address; a flood of made-up Host headers must not grow this
+  ASSETS.set(key,{mtime,p});return p;
+}
 function englishMeta(html,origin){
   const set=(attr,name,v)=>{html=html.replace(new RegExp(`(<meta ${attr}="${name}" content=")[^"]*(")`),`$1${v}$2`)};
   html=html.replace('<html lang="cs">','<html lang="en">');
@@ -369,7 +392,11 @@ function finishMatch(room){
   // a player whose connection dropped shortly before the end still gets the rewards into the account
   for(const c of room.clients.values()){
     const u=M.units.find(x=>x.id===c.unitId&&(x.ctrl==='human'||c.gone));if(!u)continue;
-    if(!c.profile){send(c,{type:'rewards',guest:true});continue}
+    if(!c.profile){
+      // a guest's rewards go to the profile kept for their browser key (none in ranked play, which guests cannot join)
+      const gp=!room.ranked&&meta.guestProfile(c.gk,true);if(!gp){send(c,{type:'rewards',guest:true});continue}
+      const r=meta.rewardsFor(M,u,gp,M.loot.filter(L=>L.owner===u.id).map(L=>L.item),u.id===mvp,null);
+      send(c,{type:'rewards',...r,guest:true,pend:meta.guestSummary(gp)});continue}
     const loot=M.loot.filter(L=>L.owner===u.id).map(L=>L.item);
     const mine=rk&&!rk.none?rk[c.profile.id]||null:null;
     const r=meta.rewardsFor(M,u,c.profile,loot,u.id===mvp,mine?mine.delta:null);
@@ -432,7 +459,7 @@ function onMessage(c,m){
       case 'hello':{
         if(room)leave(c);endSpectate(c);
         c.profile=meta.auth(m.token);dropHeld(c.profile?.id);c.rk=randomBytes(12).toString('hex');
-        c.name=c.profile?c.profile.nick:cleanName(m.name)+' (host)';
+        c.name=c.profile?c.profile.nick:cleanName(m.name)+' (host)';c.gk=c.profile?null:typeof m.gk==='string'?m.gk:null;
         c.cls=S.CLASSES[m.cls]?m.cls:(c.profile?.cls||'striker');
         if(c.profile&&c.profile.cls!==c.cls){c.profile.cls=c.cls;db.touch()}
         let r;

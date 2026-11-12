@@ -12,7 +12,7 @@ export class HttpError extends Error{constructor(status,msg){super(msg);this.sta
 const fail=(msg,status=400)=>{throw new HttpError(status,msg)};
 
 export function createMeta(db,{admins=''}={}){
-  const doc=db.doc;doc.guilds??={};doc.reports??={};doc.modlog??=[];
+  const doc=db.doc;doc.guilds??={};doc.reports??={};doc.modlog??=[];doc.guests??={};
   // moderators are named by nick in the ADMIN_NICKS environment variable, never stored in the data
   const ADMINS=new Set(String(admins).split(',').map(s=>s.trim().toLowerCase()).filter(Boolean));
   const tokenIndex=new Map();
@@ -118,7 +118,22 @@ export function createMeta(db,{admins=''}={}){
   }
   async function hashPass(pass,salt){return (await scryptAsync(String(pass),salt,64)).toString('hex')}
 
-  async function register(nick,pass){
+  // Guest progress: a guest's browser keeps a random key, and the server keeps a profile for it that collects match
+  // rewards exactly like an account. It lasts D.GUEST_DAYS days after the last match (at most GUEST_MAX guests, the
+  // longest unplayed go first) and becomes the new account's profile when that browser signs up.
+  const GUEST_MAX=400,GK_RE=/^[a-f0-9]{24}$/;
+  function pruneGuests(){
+    const old=Date.now()-D.GUEST_DAYS*864e5;for(const [k,g] of Object.entries(doc.guests))if(!g||g.at<old)delete doc.guests[k];
+    const left=Object.entries(doc.guests).sort((a,b)=>a[1].at-b[1].at);while(left.length>=GUEST_MAX)delete doc.guests[left.shift()[0]];
+  }
+  function guestProfile(gk,create){
+    if(typeof gk!=='string'||!GK_RE.test(gk))return null;
+    let g=Object.hasOwn(doc.guests,gk)?doc.guests[gk]:null;
+    if(!g){if(!create)return null;pruneGuests();g=doc.guests[gk]={at:0,p:newProfile('guest','Host')}}
+    g.at=Date.now();db.touch();return migrate(g.p);
+  }
+  const guestSummary=p=>({level:p.level,credits:p.credits,items:p.inv.length,matches:p.stats.matches});
+  async function register(nick,pass,gk){
     nick=String(nick||'').trim();pass=String(pass||'');
     if(!NICK_RE.test(nick))fail('Přezdívka musí mít 3–16 znaků: písmena, číslice, mezera, tečka, pomlčka nebo podtržítko.');
     if(pass.length<8||pass.length>100)fail('Heslo musí mít alespoň 8 znaků.');
@@ -128,8 +143,12 @@ export function createMeta(db,{admins=''}={}){
     const user={id,nick,salt,hash:await hashPass(pass,salt),tokens:[],created:Date.now()};
     // two registrations of the same nick can both pass the first check while hashing
     if(Object.hasOwn(doc.users,key))fail('Tato přezdívka je obsazená.',409);
-    doc.users[key]=user;doc.profiles[id]=newProfile(id,nick);
-    return{token:issueToken(user),profile:view(doc.profiles[id])};
+    // a guest who played in this browser keeps what they earned
+    const g=typeof gk==='string'&&GK_RE.test(gk)&&Object.hasOwn(doc.guests,gk)?doc.guests[gk]:null;
+    let p=newProfile(id,nick),merged=false;
+    if(g?.p){p=migrate(g.p);Object.assign(p,{id,nick,created:Date.now()});p.social={friends:[],inReq:[],outReq:[],blocked:[],recent:[]};p.guild=null;p.guildInv=[];delete doc.guests[gk];merged=true}
+    doc.users[key]=user;doc.profiles[id]=migrate(p);db.touch();
+    return{token:issueToken(user),profile:view(doc.profiles[id]),merged};
   }
   async function login(nick,pass){
     const key=String(nick||'').trim().toLowerCase(),user=Object.hasOwn(doc.users,key)?doc.users[key]:null;
@@ -803,6 +822,6 @@ export function createMeta(db,{admins=''}={}){
     p.credits+=credits;return{credits,titles,tiers:tiers.length};
   }
 
-  return{register,login,logout,auth,view,act,market,top,publicProfile,coPlayers,rewardsFor,rankedResult,canStartMission,friendOp,friendsView,isFriend,blocks,profById,
+  return{register,login,guestProfile,guestSummary,logout,auth,view,act,market,top,publicProfile,coPlayers,rewardsFor,rankedResult,canStartMission,friendOp,friendsView,isFriend,blocks,profById,
     guildView,guildList,tagOf,report,findPlayer:t=>profById(t)||profByNick(t),modView,modAction,muted,muteText,isAdmin,guildMembers:gid=>{const g=guildById(gid);return g?memberIds(g):[]},loadoutFor:(p,k,cap)=>D.computeLoadout(p,k,cap)};
 }

@@ -64,6 +64,9 @@ async function act(name,body,okMsg){
 let toastT;
 export function toast(msg,bad){const t=$('#toast');t.textContent=msg;t.className=bad?'bad':'';t.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>t.hidden=true,3500)}
 export const token=()=>H.token;
+// a random key for this browser's guest progress (see GUEST_DAYS); it carries no identity and goes only to our server
+export function guestKey(){let k=store.get('gk',null);if(typeof k!=='string'||!/^[a-f0-9]{24}$/.test(k)){k=[...crypto.getRandomValues(new Uint8Array(12))].map(b=>b.toString(16).padStart(2,'0')).join('');store.set('gk',k)}return k}
+export function goRegister(){authMode='register';H.guest=false;showAuth()}
 export const profile=()=>H.profile;
 export const playerClass=()=>H.cls;
 export const isOffline=()=>H.offline;
@@ -86,8 +89,10 @@ export function showAuth(){
       <div><button class="go" id="offBtn" type="button">Trénink proti botům</button></div></div>`;
     $('#offBtn').onclick=()=>{H.guest=true;showHub()};return;
   }
-  const reg=authMode==='register';
-  b.innerHTML=`<form class="authbox" id="authForm">
+  const reg=authMode==='register',invite=roomFromUrl();
+  b.innerHTML=`<div class="authbox now"><button class="go big" id="nowBtn" type="button">${invite?`Připojit se do místnosti ${invite}`:'Hrát hned'}</button>
+      <p class="help">${invite?'Bez registrace, rovnou do místnosti, kam tě pozvali.':'Bez registrace, rovnou do hry. Účet si můžeš založit kdykoli později.'}</p></div>
+    <form class="authbox" id="authForm">
       <div class="seg" role="tablist"><button type="button" data-m="login" aria-pressed="${!reg}">Přihlásit</button><button type="button" data-m="register" aria-pressed="${reg}">Nový účet</button></div>
       <label class="field">Přezdívka<input id="aNick" maxlength="16" autocomplete="username" required value="${esc(H.guestName)}"></label>
       <label class="field">Heslo<input id="aPass" type="password" maxlength="100" autocomplete="${reg?'new-password':'current-password'}" required></label>
@@ -100,13 +105,30 @@ export function showAuth(){
       <div><button class="ghost" id="guestBtn" type="button">Hrát jako host</button></div></div>`;
   b.querySelectorAll('[data-m]').forEach(x=>x.onclick=()=>{authMode=x.dataset.m;showAuth()});
   $('#guestBtn').onclick=()=>{H.guest=true;H.guestName=$('#aNick').value.trim()||H.guestName;showHub()};
+  $('#nowBtn').onclick=()=>playNow($('#aNick').value.trim());
   $('#authForm').onsubmit=async e=>{
     e.preventDefault();const nick=$('#aNick').value.trim(),pass=$('#aPass').value;
     if(reg&&pass!==$('#aPass2').value){$('#authErr').textContent='Hesla se neshodují.';return}
-    try{const j=await api('/api/'+(reg?'register':'login'),{nick,pass});H.token=j.token;store.set('token',j.token);store.set('nick',nick);H.profile=j.profile;H.cls=j.profile.cls;H.guest=false;H.tab='play';showHub();
-      if(reg)toast('Účet založen. Dostal jsi tři startovní implantáty a 200 kreditů.')}
+    try{const j=await api('/api/'+(reg?'register':'login'),reg?{nick,pass,gk:store.get('gk',null)}:{nick,pass});H.token=j.token;store.set('token',j.token);store.set('nick',nick);H.profile=j.profile;H.cls=j.profile.cls;H.guest=false;H.tab='play';
+      if(j.merged){store.set('gk',null);store.set('guestPend',null)}
+      showHub();
+      if(reg)toast(j.merged?'Účet založen. Všechno, co jsi získal jako host, je teď v účtu.':'Účet založen. Dostal jsi tři startovní implantáty a 200 kreditů.')}
     catch(err){$('#authErr').textContent=err.message}
   };
+}
+// "Hrát hned": no sign-up. A guest with the typed (or a made-up) nickname goes to the room from an invite link,
+// otherwise to the tutorial the first time in this browser and to a match against easy bots after that.
+const guestPend=()=>{const g=store.get('guestPend',null);return g&&typeof g==='object'&&Date.now()-(g.at||0)<D.GUEST_DAYS*864e5?g:null};
+const roomFromUrl=()=>{const r=(new URLSearchParams(location.search).get('room')||'').toUpperCase();return /^[A-Z]{4}$/.test(r)?r:''};
+const NICK_OK=/^[\p{L}\p{N} ._-]{3,16}$/u;
+const guestSaveBox=(g,id='guestReg')=>`<div class="guestsave"><b>Tvůj postup hosta</b><p class="help">Úroveň ${g.level} · kredity ${num(g.credits)} · implantáty ${g.items} · odehrané zápasy ${g.matches}. Podržíme ti to ${D.GUEST_DAYS} dní od posledního zápasu. Založ si účet a zůstane ti napořád.</p><div class="btns"><button class="go sm" type="button" id="${id}">Založit účet</button></div></div>`;
+function playNow(typed){
+  const name=[typed,H.guestName].find(n=>n&&NICK_OK.test(n))||'Pilot'+(1000+Math.floor(Math.random()*9000));
+  H.guest=true;H.guestName=name;store.set('nick',name);H.tab='play';showHub();
+  const room=roomFromUrl(),o={cls:H.cls,name};
+  if(room)return H.cb.join(room,o);
+  if(!store.get('tutDone',false))return H.cb.tutorial({...o,account:false});
+  H.cb.solo({mode:'arena',map:'core',diff:'easy',...o});
 }
 async function logout(){Social.disconnect();try{await api('/api/logout',{})}catch{}H.token=null;store.set('token',null);H.profile=null;H.guest=false;showAuth()}
 
@@ -219,6 +241,7 @@ function tabPlay(){
   $('#hubBody').innerHTML=`
     ${offer?`<section class="panel tutoffer"><div class="row"><div><h3>Nový v aréně?</h3><p class="help">Výcvik tě za pár minut provede pohybem, útokem, schopnostmi, ultimátkou, taktickou akcí, základnou a relikvií.${H.profile?' Za dokončení dostaneš 300 kreditů a implantát.':''}</p></div>
       <div class="btns"><button class="go" type="button" id="tutBtn">Spustit výcvik</button><button class="ghost sm" type="button" id="tutHide">Skrýt</button></div></div></section>`:''}
+    ${!H.profile&&!H.offline&&guestPend()?`<section class="panel">${guestSaveBox(guestPend())}</section>`:''}
     ${H.profile?.loginView?.can?loginPanel():''}
     <section class="panel"><h3>Povolání</h3>${classCards()}${classDetail(H.cls)}</section>
     <section class="panel"><h3>Režim</h3>
@@ -241,7 +264,7 @@ function tabPlay(){
     ${rankedPanel()}
     ${H.offline?'':`<section class="panel"><div class="row"><h3>Veřejné místnosti <small class="help" id="onlineN"></small></h3><button class="ghost sm" id="roomsRef" type="button">Obnovit</button></div><div class="list" id="roomList"><p class="help">Načítám…</p></div></section>`}
     <p class="help" id="helpText">${H.cb.isTouch()?'Levým palcem pohyb, tlačítkem Útok střelba na nejbližšího soupeře. Schopnosti míří automaticky.':'<kbd>W A S D</kbd> pohyb · <kbd>myš</kbd> míření · <kbd>levé tlačítko</kbd> útok · <kbd>Q</kbd> <kbd>E</kbd> <kbd>R</kbd> schopnosti · <kbd>F</kbd> ultimátka · <kbd>Mezerník</kbd> úskok · <kbd>Tab</kbd> skóre · <kbd>Esc</kbd> menu'}. Vlastní základna léčí a dobíjí energii.</p>`;
-  bindClassCards();bindLogin();
+  bindClassCards();bindLogin();$('#guestReg')&&($('#guestReg').onclick=goRegister);
   const save=()=>{store.set('play',P);tabPlay()};
   document.querySelectorAll('[data-mode]').forEach(b=>b.onclick=()=>{P.mode=b.dataset.mode;save()});
   document.querySelectorAll('[data-map]').forEach(b=>b.onclick=()=>{P.map=b.dataset.map;save()});
@@ -873,7 +896,13 @@ async function tabTop(){
 export function showRewards(m){
   const el=$('#endRewards');
   if(!m){el.innerHTML='';return}
-  if(m.guest){el.innerHTML=`<div class="rew"><p class="help">Hraješ jako host, odměny se neukládají. Přihlas se a získávej zkušenosti, kredity a implantáty.</p></div>`;return}
+  if(m.guest&&(!m.pend||m.res==='short')){el.innerHTML=`<div class="rew"><p class="help">${m.res==='short'?'Zápas trval méně než 45 sekund, odměny se nepočítají.':'Hraješ jako host, odměny se neukládají. Přihlas se a získávej zkušenosti, kredity a implantáty.'}</p></div>`;return}
+  if(m.guest){store.set('guestPend',{...m.pend,at:Date.now()});
+    el.innerHTML=`<div class="rew"><div class="big"><div><span>+${num(m.xp)}</span> zkušeností</div><div><span>+${num(m.credits)}</span> kreditů</div></div>
+      ${m.levelUps.length?`<div class="lvup">Nová úroveň ${m.levelUps.at(-1)}!</div>`:''}
+      ${m.items.length?`<div class="lbl">Kořist</div><div class="items">${m.items.map(i=>itemCard(i)).join('')}</div>`:''}
+      ${guestSaveBox(m.pend,'guestRegEnd')}</div>`;
+    $('#guestRegEnd').onclick=()=>{H.cb.leave();goRegister()};return}
   const R=m.ranked,rk=R?`<div class="rank">${divBadge(R.rating)}<div><span class="rkd" style="color:${R.delta>=0?'var(--green)':'var(--red)'}">${R.delta>=0?'+':''}${R.delta}</span> hodnocení · nyní <b style="display:inline;font-size:20px">${R.rating}</b>
       ${R.div>R.prevDiv?`<div class="lvup">Postup do divize ${D.DIVISIONS[R.div].name}</div>`:R.div<R.prevDiv?`<p class="help">Sestup do divize ${D.DIVISIONS[R.div].name}.</p>`:''}
       ${R.games<=D.PLACEMENT?`<p class="help">Umisťovací zápas ${R.games} / ${D.PLACEMENT}.</p>`:''}</div></div>`:m.rankedNone?`<p class="help">${esc(m.rankedNone)}</p>`:'';

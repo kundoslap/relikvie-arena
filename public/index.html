@@ -244,6 +244,13 @@ h2.sec{margin:0;font-family:var(--display);font-size:26px;font-weight:800;letter
 .awrap{max-width:560px;padding:calc(var(--gt) + 24px) var(--gr) calc(var(--gb) + 24px) var(--gl);display:grid;gap:22px}
 @media (min-width:900px){.awrap{padding-left:max(64px,env(safe-area-inset-left,0px))}}
 .authbox{display:grid;gap:12px;padding:18px;border:1px solid var(--line);background:rgba(10,14,28,.7);border-radius:3px}
+.guestsave{display:grid;gap:8px;margin-top:10px;padding:12px 14px;border:1px solid rgba(255,198,109,.45);border-radius:3px;background:rgba(255,198,109,.06)}
+.guestsave b{color:var(--gold);font-family:var(--display);letter-spacing:.08em;text-transform:uppercase}
+.panel>.guestsave{margin-top:0}
+.authbox.now{border-color:rgba(255,198,109,.45);text-align:center}
+.authbox.now .go{width:100%;padding:16px 22px;font-size:24px;animation:nowPulse 2.4s ease-in-out infinite}
+@keyframes nowPulse{50%{box-shadow:0 0 40px rgba(255,198,109,.6)}}
+@media (prefers-reduced-motion:reduce){.authbox.now .go{animation:none}}
 
 /* hub */
 #hub{background:linear-gradient(180deg,rgba(4,6,12,.92),rgba(4,6,12,.82) 60%,rgba(4,6,12,.7))}
