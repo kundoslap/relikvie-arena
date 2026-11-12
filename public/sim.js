@@ -1,6 +1,6 @@
 // Relikvie Aréna — authoritative simulation. Runs on the server and, for offline matches, in the browser.
 // Pure logic: no rendering. Visual effects leave the simulation as events in M.events.
-import {CLASSES,CLASS_KEYS,MAPS,MODES,NPCS,BOSSES,BOSS_KEYS,ENDLESS_MODS,ECHO_MODS,TACTICS,BOT_TACTIC,rollItem,skillDef,MASTERY,masteryKey,BURN,POISON_HEAL,MASTERY_BASIC,MUTATORS,mutatorsOfWeek,arenaLike,EVADES,SECONDARY,heightAt,depthAt,cliffAt,onPeak,LEVEL_STEP,LEVEL_EDGE,LEVEL_DMG,LEVEL_RANGE,PEAK} from './data.js';
+import {CLASSES,CLASS_KEYS,MAPS,MODES,NPCS,BOSSES,BOSS_KEYS,ENDLESS_MODS,ECHO_MODS,TACTICS,BOT_TACTIC,rollItem,skillDef,MASTERY,masteryKey,BURN,POISON_HEAL,MASTERY_BASIC,MUTATORS,mutatorsOfWeek,arenaLike,EVADES,SECONDARY,heightAt,depthAt,cliffAt,onPeak,LEVEL_STEP,LEVEL_EDGE,LEVEL_DMG,LEVEL_RANGE,PEAK,STORM} from './data.js';
 export * from './data.js';
 
 export const MATCH_TIME=360, RELIC_EVERY=40, TICK=1/30, TEAM_SIZE=3;
@@ -154,6 +154,7 @@ function damage(M,t,amt,src,o={}){
   if(src&&!o.dot&&M.map.levels&&heightAt(M.map,src.x,src.z)>heightAt(M.map,t.x,t.z)+1)amt*=LEVEL_DMG;
   if(o.ult&&src)amt*=(1+m(src,'ultDmg')/100)*(src.uniq.has('reactor')?1.3:1);
   if(src&&src.st.relic>0&&src.clsKey==='striker')amt*=1.25;
+  if(src&&src.clsKey==='hook'&&t.hookBy===src.id&&t.hookT>M.time)amt*=1.25;
   if(t.vuln>M.time)amt*=1.25;
   if(src&&src.kind==='hero'&&!o.dot){const bb=basicMastery(src).b;if((bb[1]===1||bb[6]===1)&&myDot(src,t))amt*=1+(bb[1]===1?.06:0)+(bb[6]===1?.05:0)}
   // mastery milestones 30–100: Zesílení / Popravčí on the attacker, Odolnost on the target, Oslabení from basic hits
@@ -516,6 +517,40 @@ SK.cryo=[
     fx(M,{t:'ban',ti:'Absolutní nula',col:'#c3b5ff',d:1.2,i:u.id})}
 ];
 
+// ---------- Hákař: hooks, pulls and the chain ----------
+// pulls e towards u until it stands `gap` from it; walls stop the pull (it is a short dash), bosses do not move
+function pullTo(M,e,u,gap,maxD=99){
+  if(e.dead||e.kind==='boss')return;const dx=e.x-u.x,dz=e.z-u.z,l=Math.hypot(dx,dz)||1,want=u.radius+e.radius+gap,go=Math.min(maxD,l-want);if(go<=.1)return;
+  e.dash={dx:-dx/l,dz:-dz/l,spd:34,t:go/34,after:.05};e.kbT=M.time;if(e.ai)e.ai.nav=null;
+}
+const hookMark=(M,e,u)=>{e.hookBy=u.id;e.hookT=M.time+3};
+const chainFx=(M,a,b,w=.07)=>fx(M,{t:'beam',a:[r2(a.x),1.3,r2(a.z)],b:[r2(b.x),1.2,r2(b.z)],c:0xd4ff4f,w,d:.3});
+SK.hook=[
+  // Hák: a skillshot; the first enemy hit is pulled in front of you
+  (M,u,pt)=>{const dir=aimDir(u,pt);
+    shoot(M,u,dir,{dmg:atk(M,u)*.9,speed:44,range:16+m(u,'hookR'),color:0xd4ff4f,size:1.5,onHit:(e,s)=>{if(e.dead)return;chainFx(M,s,e);
+      pullTo(M,e,s,.8);e.st.slow=Math.max(e.st.slow,.8);hookMark(M,e,s);addShield(s,40,s);if(m(s,'hookBleed'))e.st.bleed={dps:10,t:3,acc:0,src:s};
+      fx(M,{t:'txt',x:r2(e.x),z:r2(e.z),s:'Chycen',c:'info'})}})},
+  // Řetězový skok: the chain pulls you to the aimed point, a stun where you land
+  (M,u,pt)=>{const dir=aimDir(u,pt),dist=clamp(d2(u,pt),2,11),to={x:u.x+dir.x*dist,z:u.z+dir.z*dist};chainFx(M,u,to,.05);
+    u.dash={dx:dir.x,dz:dir.z,spd:34,t:dist/34,after:.05,end:()=>{fx(M,{t:'ring',x:r2(u.x),z:r2(u.z),c:0xd4ff4f,a:.4,b:2.8,d:.4});fx(M,{t:'burst',x:r2(u.x),z:r2(u.z),y:.2,c:0xd4ff4f,n:22,s:6,u:2,l:.45});
+      for(const e of near(foes(M,u),u,2.5)){damage(M,e,atk(M,u)*.8,u,{color:0xd4ff4f});if(e.kind!=='boss')e.st.stun=Math.max(e.st.stun,.5+m(u,'leapStun'))}
+      if(m(u,'leapShield'))addShield(u,60,u)}}},
+  // Spoutání: a chain to the enemy closest to the aim; running too far snaps it back with a stun
+  (M,u,pt)=>{const t=foes(M,u).filter(e=>visibleTo(u,e)&&d2(u,e)<6.5+e.radius).sort((a,b)=>d2(a,pt)-d2(b,pt))[0];if(!t)return false;aimDir(u,t);
+    chainFx(M,u,t,.09);damage(M,t,atk(M,u)*.6,u,{color:0xd4ff4f});hookMark(M,t,u);
+    if(t.kind==='boss'){t.st.slow=Math.max(t.st.slow,2);return}
+    t.st.tether={src:u,t:2.5+m(u,'tetherT'),r:6.5,stun:.8+m(u,'tetherStun'),dmg:atk(M,u)*.5,fx:0};fx(M,{t:'txt',x:r2(t.x),z:r2(t.z),s:'Spoután',c:'info'})},
+  // Vír řetězů: every enemy around is dragged in, then a hit and a stun (Dvojitý vír: once more a second later)
+  (M,u)=>{const um=u.prof.ultMod,R=9+(um?2:0),T=1+(um?.4:0);
+    const spin=(mul,first)=>{if(u.dead||M.state!=='play')return;const got=near(foes(M,u),u,R);fx(M,{t:'ring',x:r2(u.x),z:r2(u.z),c:0xd4ff4f,a:R,b:1,d:.35});
+      for(const e of got){chainFx(M,u,e);pullTo(M,e,u,.6);hookMark(M,e,u);addShield(u,30,u)}
+      later(M,.3,()=>{if(u.dead)return;fx(M,{t:'blast',x:r2(u.x),z:r2(u.z),r:3.5,c:0xd4ff4f});
+        for(const e of got){if(e.dead)continue;damage(M,e,atk(M,u)*mul,u,{color:0xd4ff4f,ult:true});if(first&&e.kind!=='boss')e.st.stun=Math.max(e.st.stun,T)}})};
+    spin(1.5,true);if(m(u,'vortexDouble'))later(M,1,()=>spin(.7,false));
+    fx(M,{t:'ban',ti:'Vír řetězů',col:'#d4ff4f',d:1.2,i:u.id})}
+];
+
 // ---------- profession skills ----------
 // B: +15 % when the skill is the chosen branch; md / pb: protocol A or B of the skill is active
 const SKP={
@@ -654,6 +689,8 @@ function evade(M,u,dir){
     case 'technician':s.inv=Math.max(s.inv,.15);fx(M,{t:'burst',...at,y:1,c:0x6acbff,n:22,s:3,u:2,l:.4});
       u.dash={dx,dz,spd:80,t:7/80,after:0,end:()=>fx(M,{t:'burst',x:r2(u.x),z:r2(u.z),y:1,c:0x6acbff,n:26,s:4,u:2,l:.45})};break;
     case 'pyro':s.inv=Math.max(s.inv,.25);fireZone(M,u,{x:u.x,z:u.z},2.2,2,.25);u.dash={dx,dz,spd:28,t:5.5/28,after:.1};break;
+    case 'hook':s.inv=Math.max(s.inv,.25);u.dash={dx,dz,spd:30,t:6/30,after:.1,hits:{r:1.5,dmg:atk(M,u)*.5,kb:0,set:new Set()}};
+      fx(M,{t:'burst',...at,y:.6,c:0xd4ff4f,n:16,s:4,u:1,l:.35});break;
     case 'cryo':s.inv=Math.max(s.inv,.25);for(const e of near(foes(M,u),u,3))chill(e,1.5);
       fx(M,{t:'ring',...at,c:0xc3b5ff,a:.4,b:3,d:.4});fx(M,{t:'burst',...at,y:.4,c:0xe9f8ff,n:20,s:3,u:1,l:.5});u.dash={dx,dz,spd:30,t:6/30,after:.1};break;
   }
@@ -679,6 +716,7 @@ function secondary(M,u,pt){
       cone(5.5,.6,e=>{damage(M,e,tech(M,u)*.95,u,{color:0xff6a1a});burn(e,u,{dps:10,t:2})});break;
     case 'cryo':shoot(M,u,dir,{dmg:tech(M,u)*.6*mul,speed:40,range:20,color:0xe9f8ff,size:1.4,onHit:(e,s)=>{
       if(!e.dead)chill(e,1.5)}});break;
+    case 'hook':shoot(M,u,dir,{dmg:atk(M,u)*.8*mul,speed:46,range:9,color:0xd4ff4f,size:1.3,onHit:(e,s)=>{if(e.dead)return;chainFx(M,s,e,.05);pullTo(M,e,s,.8,3);hookMark(M,e,s)}});break;
   }
   u.scd=D.cd*(1-Math.min(40,m(u,'cdr'))/100);fx(M,{t:'atk',i:u.id,s:6});return true;
 }
@@ -703,7 +741,7 @@ export function cast(M,u,i,pt){
   if(res===false)return false;
   if(i===3)u.ult=0;
   else{u.energy-=s.cost*costMul;
-    let cd=s.cd*(1-Math.min(45,m(u,'cdr'))/100)*(u.st.relic>0&&u.clsKey==='technician'?.7:u.st.relic>0&&u.clsKey==='cryo'?.8:1)*(u.prof.branch===id?.85:1);
+    let cd=s.cd*(1-Math.min(45,m(u,'cdr'))/100)*(u.st.relic>0&&u.clsKey==='technician'?.7:u.st.relic>0&&u.clsKey==='cryo'?.8:u.st.relic>0&&u.clsKey==='hook'&&(id==='c0'||id==='c2')?.6:1)*(u.prof.branch===id?.85:1);
     if(id==='c1'&&u.clsKey==='technician'&&m(u,'restoreCd'))cd=Math.max(2,cd-4);
     if(id==='c2'&&u.clsKey==='pyro'&&m(u,'blinkCd'))cd=Math.max(2,cd-3);
     if(id==='feint'&&pa)cd=Math.max(2,cd-4);
@@ -796,6 +834,22 @@ function updLevels(M,dt){
       let dx=u.x-cx,dz=u.z-cz,l=Math.hypot(dx,dz);if(l<.3){const a=Math.random()*Math.PI*2;dx=Math.cos(a);dz=Math.sin(a);l=1}
       u.dash={dx:dx/l,dz:dz/l,spd:18,t:Math.max(.12,(R+2-Math.hypot(u.x-cx,u.z-cz))/18),after:.2};u.kbT=M.time}});
 }
+// Bouřková elektrárna: warned lightning strikes (see STORM in data.js); bots already step out of warned circles
+function updStorm(M,dt){
+  if(M.state!=='play')return;
+  M.stormT=(M.stormT??STORM.start)-dt;if(M.stormT>0)return;M.stormT=STORM.every;
+  const map=M.map,R=map.r,heroes=M.units.filter(u=>u.kind==='hero'&&!u.dead),spots=[];
+  for(let i=0;i<STORM.n;i++)for(let k=0;k<10;k++){
+    const u=i<2&&heroes.length?heroes[Math.floor(Math.random()*heroes.length)]:null,a=Math.random()*Math.PI*2,d=u?Math.random()*3:Math.sqrt(Math.random())*(R-4);
+    const x=(u?u.x:0)+Math.cos(a)*d,z=(u?u.z:0)+Math.sin(a)*d;
+    if(Math.hypot(x,z)>R-2||map.bases.some(b=>Math.hypot(x-b.x,z-b.z)<STORM.r+5)||spots.some(s=>Math.hypot(x-s.x,z-s.z)<STORM.r*1.6))continue;
+    spots.push({x:r2(x),z:r2(z)});break}
+  for(const {x,z} of spots)tele(M,{x,z,r:STORM.r,sh:'c'},STORM.warn,()=>{if(M.state!=='play')return;
+    fx(M,{t:'bolt',a:[r2(x+rnd(-1.5,1.5)),16,r2(z+rnd(-1.5,1.5))],b:[x,0,z],c:0xffe27a});fx(M,{t:'blast',x,z,r:STORM.r,c:0xffe27a});
+    for(const u of M.units){if(u.dead||u.kind==='boss'||Math.hypot(u.x-x,u.z-z)>STORM.r+u.radius*.5)continue;
+      damage(M,u,u.maxHp*STORM.dmg,null,{color:0xffe27a});if(u.dead)continue;u.st.slow=Math.max(u.st.slow,STORM.slow);
+      if(u.kind==='hero'){u.ult=Math.min(100,u.ult+STORM.ult);fx(M,{t:'txt',x:r2(u.x),z:r2(u.z),s:'Nabito!',c:'info'})}}});
+}
 function separate(M){
   const U=M.units;
   for(let i=0;i<U.length;i++)for(let j=i+1;j<U.length;j++){const a=U[i],b=U[j];if(a.dead||b.dead)continue;
@@ -887,6 +941,11 @@ function updStatus(M,u,dt){
   if(s.burn){s.burn.acc+=dt;s.burn.t-=dt;
     while(s.burn&&s.burn.acc>=.5&&!u.dead){s.burn.acc-=.5;const b=s.burn;dotTick(M,u,b,b.dps*.5*(b.src&&b.src.st.relic>0&&b.src.clsKey==='pyro'?2:1),0xff6a1a)}
     if(s.burn&&s.burn.t<=0)s.burn=null}
+  if(s.tether){const T=s.tether,src=T.src;T.t-=dt;
+    if(!src||src.dead||u.dead||T.t<=0||s.decon>0)s.tether=null;
+    else if(d2(u,src)>T.r+u.radius){s.tether=null;chainFx(M,src,u,.12);pullTo(M,u,src,1.2);addShield(src,40,src);s.stun=Math.max(s.stun,T.stun);damage(M,u,T.dmg,src,{color:0xd4ff4f});hookMark(M,u,src);
+      fx(M,{t:'txt',x:r2(u.x),z:r2(u.z),s:'Škubnutí',c:'info'})}
+    else{T.fx-=dt;if(T.fx<=0){T.fx=.25;chainFx(M,src,u,.04)}}}
   if(u.dead)return;
   if(s.hot){s.hot.acc+=dt;s.hot.t-=dt;while(s.hot&&s.hot.acc>=.5){s.hot.acc-=.5;heal(M,u,s.hot.hps*.5,s.hot.src)}if(s.hot&&s.hot.t<=0)s.hot=null}
   if(u.shield>0)u.shield=Math.max(0,u.shield-dt*(u.kind==='boss'?0:3));
@@ -949,6 +1008,15 @@ function botSkills(M,u,t,d,aim,seen){
     if(u.hp<u.maxHp*.3&&d<6){if(cast(M,u,2,{x:u.x-(t.x-u.x)/l*7,z:u.z-(t.z-u.z)/l*7}))return}
     else if(d>8&&d<15&&seen&&u.energy>=55){if(cast(M,u,2,{x:t.x-(t.x-u.x)/l*3,z:t.z-(t.z-u.z)/l*3}))return}
     if(d<14&&cast(M,u,1,aim))return;
+  }else if(k==='hook'){
+    if(!t)return;
+    // Vír řetězů on a group, or to finish a hurt target close by; the hook from mid range pulls the target in
+    const n=near(foes(M,u),u,9).length,l=d||1;
+    if(u.ult>=100&&(n>=2||(d<6&&t.hp<t.maxHp*.5))){cast(M,u,3,u);return}
+    if(d>5.5&&d<16&&seen&&cast(M,u,0,{x:t.x+t.vx*.3,z:t.z+t.vz*.3}))return;
+    if(d<6.5&&seen&&t.kind!=='boss'&&!t.st.tether&&cast(M,u,2,t))return;
+    if(u.hp<u.maxHp*.3&&d<7){if(cast(M,u,1,{x:u.x-(t.x-u.x)/l*10,z:u.z-(t.z-u.z)/l*10}))return}
+    else if(d>5&&d<11&&seen&&u.hp>u.maxHp*.55&&cast(M,u,1,{x:t.x-(t.x-u.x)/l*1.5,z:t.z-(t.z-u.z)/l*1.5}))return;
   }else if(k==='cryo'){
     if(!t)return;
     // Absolutní nula lands after 0.55 s: aim where the target will be; worth it on a group or a hurt target
@@ -1027,7 +1095,7 @@ function botUpdate(M,u,dt){
     else if(!u.dash)u.face=Math.atan2(t.x-u.x,t.z-u.z);
     if(thinkNow&&Math.random()<diff.skill&&play)botSkills(M,u,t,d,aim,seen);
     // sekundární útok: in its range and in sight
-    if(thinkNow&&play&&seen&&!(u.scd>0)&&u.kind==='hero'&&Math.random()<diff.skill&&d<({striker:24,guardian:3.8,technician:17,pyro:5,cryo:18}[u.clsKey]||0))cast(M,u,6,aim);
+    if(thinkNow&&play&&seen&&!(u.scd>0)&&u.kind==='hero'&&Math.random()<diff.skill&&d<({striker:24,guardian:3.8,technician:17,pyro:5,cryo:18,hook:9}[u.clsKey]||0))cast(M,u,6,aim);
     if(thinkNow&&play&&u.tcd<=0)botTactic(M,u,t,d);
   }else{
     if(!u.dash&&u.vx*u.vx+u.vz*u.vz>.5)u.face=Math.atan2(u.vx,u.vz);
@@ -1392,7 +1460,7 @@ export function step(M,dt=TICK){
     updStatus(M,u,dt);if(u.dead)continue;
     if(u.ctrl==='bot')botUpdate(M,u,dt);else if(u.ctrl==='human')humanUpdate(M,u,dt);else if(u.ctrl==='npc')npcUpdate(M,u,dt);else bossUpdate(M,u,dt);
   }
-  separate(M);if(M.map.portals)updPortals(M,dt);if(M.map.levels)updLevels(M,dt);recordHist(M);updProjs(M,dt);updZones(M,dt);updRings(M,dt);updBeams(M,dt);updRelic(M,dt);updLoot(M,dt);
+  separate(M);if(M.map.portals)updPortals(M,dt);if(M.map.levels)updLevels(M,dt);if(M.map.storm)updStorm(M,dt);recordHist(M);updProjs(M,dt);updZones(M,dt);updRings(M,dt);updBeams(M,dt);updRelic(M,dt);updLoot(M,dt);
   if(M.mode==='control')updPoints(M,dt);
   if(M.flags)updFlags(M,dt);
   if(M.elim)updElim(M,dt);

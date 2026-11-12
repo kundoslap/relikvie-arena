@@ -38,7 +38,12 @@ const ICONS={
   iceshield:'<path d="M16 4 26 8v8c0 6-5 10-10 12-5-2-10-6-10-12V8Z"/><path d="M16 10v12M11 13l10 6M11 19l10-6"/>',
   icemine:'<circle cx="16" cy="18" r="7"/><path d="M16 4v4M16 11v14M10 15l12 6M10 21l12-6M8 6l3 3M24 6l-3 3"/>',
   freeze:'<path d="M16 2v28M3 9l26 14M3 23 29 9"/><circle cx="16" cy="16" r="5"/><path d="M12 4l4 3 4-3M12 28l4-3 4 3"/>',
-  iceslide:'<path d="M4 24h22" /><path d="M6 20c5 0 8-9 15-9M18 7l4 4-4 4"/><path d="M8 28l2-4M14 28l2-4M20 28l2-4"/>'
+  iceslide:'<path d="M4 24h22" /><path d="M6 20c5 0 8-9 15-9M18 7l4 4-4 4"/><path d="M8 28l2-4M14 28l2-4M20 28l2-4"/>',
+  // Hákař: a hook on a chain, a chain leap, a shackle and a vortex of chains
+  hook:'<path d="M16 3v12"/><path d="M16 15c-6 0-8 5-6 9 2 4 9 4 11 0 1-2 0-4-2-5"/><path d="M19 19l3-2"/><circle cx="16" cy="4" r="1.5"/>',
+  chainleap:'<path d="M4 26l6-6M12 18l4-4M18 12l4-4" /><path d="M20 6h7v7"/><circle cx="7" cy="23" r="2"/><circle cx="14" cy="16" r="2"/>',
+  shackle:'<circle cx="9" cy="16" r="5"/><circle cx="23" cy="16" r="5"/><path d="M14 16h4"/>',
+  vortex:'<path d="M16 16m-2 0a2 2 0 1 0 4 0 6 6 0 1 0-12 0 10 10 0 1 0 20 0 13 13 0 0 0-13-13"/><path d="M27 5l-3 3"/>'
 };
 export const svg=k=>`<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[k]}</svg>`;
 const hex=c=>'#'+c.toString(16).padStart(6,'0');
@@ -214,14 +219,14 @@ function derived(k){
 function classDetail(k){
   const c=D.CLASSES[k],lab=['Výdrž','Útok','TECH','Rychlost'];
   const rows=H.profile?derived(k).rows.map(([a,b])=>`<div class="stat">${a}<b>${b}</b></div>`).join(''):c.bars.map((v,i)=>`<div class="stat">${lab[i]}<i style="--v:${v*100}%"></i></div>`).join('');
-  return`<div class="detail" style="--c:${c.css}"><div class="stats">${rows}<p class="talent"><b>${c.talent}.</b> ${c.talentDesc}<br><b>Relikvie.</b> ${c.relic}</p></div>
+  return`<div class="detail" style="--c:${c.css}"><p class="hlore"><b translate="no">${c.hero||c.name}</b> · ${c.lore||c.role}</p><div class="stats">${rows}<p class="talent"><b>${c.talent}.</b> ${c.talentDesc}<br><b>Relikvie.</b> ${c.relic}</p></div>
     <div class="skl"><div class="sk"><kbd>LMB</kbd><div><b>${c.basic.name}</b>${c.basic.type==='melee'?'Úder na blízko do oblouku.':'Rychlá střela na dálku.'} <span style="color:${D.DOTS[c.basic.dot?.kind]?.color||'inherit'}">${D.basicFxText(k)}</span></div></div>
     ${c.skills.map((s,i)=>`<div class="sk"><kbd>${'QER'[i]}</kbd><div><b>${s.name}</b>${s.desc} <small>${s.cost} en · ${s.cd} s</small></div></div>`).join('')}
     <div class="sk"><kbd class="u">F</kbd><div><b>${c.ult.name}</b>${c.ult.desc}</div></div></div></div>`;
 }
 // a hero added lately carries a NOVÝ badge until you pick it once or its date passes
 const isNewCls=k=>{const d=D.NEW_CLASSES?.[k];return!!d&&Date.now()<Date.parse(d)&&!store.get('tried',[]).includes(k)};
-const classCards=()=>`<div class="classes">${Object.entries(D.CLASSES).map(([k,c])=>`<button type="button" class="cc" data-k="${k}" style="--c:${c.css}" aria-pressed="${k===H.cls}">${svg(k)}<b>${c.name}${isNewCls(k)?'<span class="newTag">NOVÝ</span>':''}</b><small>${c.role}</small></button>`).join('')}</div>`;
+const classCards=()=>`<div class="classes">${Object.entries(D.CLASSES).map(([k,c])=>`<button type="button" class="cc" data-k="${k}" style="--c:${c.css}" aria-pressed="${k===H.cls}">${svg(k)}<b>${c.name}${isNewCls(k)?'<span class="newTag">NOVÝ</span>':''}</b><i class="hname" translate="no">${c.hero||''}</i><small>${c.role}</small></button>`).join('')}</div>`;
 const bindClassCards=()=>document.querySelectorAll('#hubBody .cc').forEach(b=>b.onclick=()=>setCls(b.dataset.k));
 export function itemCard(it,o={}){
   if(!it)return`<div class="item empty"><b>${o.slot?D.SLOTS[o.slot].name:'Prázdné'}</b><small>Prázdný slot</small></div>`;
@@ -238,14 +243,17 @@ function tabPlay(){
   const M=D.MODES[P.mode];if(!M.maps.includes(P.map))P.map=M.maps[0];
   // new players (no tutorial yet, low level, not hidden) get the tutorial offered first
   const offer=!store.get('tutHide',false)&&(H.profile?!H.profile.tutorial&&H.profile.level<=5:true);
+  const FD=D.featuredOfDay(),fPct=Math.round(FD.bonus*100);
   $('#hubBody').innerHTML=`
     ${offer?`<section class="panel tutoffer"><div class="row"><div><h3>Nový v aréně?</h3><p class="help">Výcvik tě za pár minut provede pohybem, útokem, schopnostmi, ultimátkou, taktickou akcí, základnou a relikvií.${H.profile?' Za dokončení dostaneš 300 kreditů a implantát.':''}</p></div>
       <div class="btns"><button class="go" type="button" id="tutBtn">Spustit výcvik</button><button class="ghost sm" type="button" id="tutHide">Skrýt</button></div></div></section>`:''}
+    <section class="panel featured"><div class="row"><div><h3>Režim dne: ${D.MODES[FD.mode].name}</h3><p class="help">Dnes za zápasy v tomto režimu +${fPct} % zkušeností a kreditů${FD.weekend?' (víkendový bonus)':', o víkendu +'+Math.round(D.FEATURED.weekend*100)+' %'}. Tady se dnes potkáš s nejvíc hráči.</p></div>
+      ${P.mode===FD.mode?'<span class="tag feat">VYBRÁNO</span>':'<button class="go sm" type="button" id="featBtn">Vybrat</button>'}</div></section>
     ${!H.profile&&!H.offline&&guestPend()?`<section class="panel">${guestSaveBox(guestPend())}</section>`:''}
     ${H.profile?.loginView?.can?loginPanel():''}
     <section class="panel"><h3>Povolání</h3>${classCards()}${classDetail(H.cls)}</section>
     <section class="panel"><h3>Režim</h3>
-      <div class="modes">${Object.entries(D.MODES).map(([k,m])=>`<button type="button" class="mc" data-mode="${k}" aria-pressed="${k===P.mode}"><span class="tag">${m.pvp?`PVP · ${m.team||3} PROTI ${m.team||3}`:'KOOPERACE · AŽ 4'}</span><b>${m.name}</b><small>${m.desc}${m.mutators?`<br><span style="color:var(--gold)">Tento týden: ${D.mutatorsOfWeek().map(x=>D.MUTATORS[x].name).join(' + ')}</span>`:''}</small></button>`).join('')}</div>
+      <div class="modes">${Object.entries(D.MODES).map(([k,m])=>`<button type="button" class="mc" data-mode="${k}" aria-pressed="${k===P.mode}"><span class="tag">${m.pvp?`PVP · ${m.team||3} PROTI ${m.team||3}`:'KOOPERACE · AŽ 4'}</span>${k===FD.mode?`<span class="tag feat">REŽIM DNE +${fPct} %</span>`:''}<b>${m.name}</b><small>${m.desc}${m.mutators?`<br><span style="color:var(--gold)">Tento týden: ${D.mutatorsOfWeek().map(x=>D.MUTATORS[x].name).join(' + ')}</span>`:''}</small></button>`).join('')}</div>
       <div><div class="lbl">Mapa</div><div class="chips">${M.maps.map(k=>`<button type="button" class="chip" data-map="${k}" aria-pressed="${k===P.map}">${D.MAPS[k].name}<small>${D.MAPS[k].desc}</small></button>`).join('')}</div></div>
       ${P.mode==='boss'?`<div><div class="lbl">Boss</div><div class="chips">${Object.entries(D.BOSSES).map(([k,b])=>`<button type="button" class="chip" data-boss="${k}" aria-pressed="${k===P.boss}">${b.name} · ${b.title}<small>${b.desc}</small></button>`).join('')}</div></div>`:''}
       <div><div class="lbl">Obtížnost</div><div class="seg" id="pDiff">${[['easy','Lehká'],['normal','Normální'],['hard','Těžká']].map(([k,n])=>`<button type="button" data-d="${k}" aria-pressed="${k===P.diff}">${n}</button>`).join('')}</div>
@@ -267,6 +275,7 @@ function tabPlay(){
   bindClassCards();bindLogin();$('#guestReg')&&($('#guestReg').onclick=goRegister);
   const save=()=>{store.set('play',P);tabPlay()};
   document.querySelectorAll('[data-mode]').forEach(b=>b.onclick=()=>{P.mode=b.dataset.mode;save()});
+  $('#featBtn')&&($('#featBtn').onclick=()=>{P.mode=FD.mode;save()});
   document.querySelectorAll('[data-map]').forEach(b=>b.onclick=()=>{P.map=b.dataset.map;save()});
   document.querySelectorAll('[data-boss]').forEach(b=>b.onclick=()=>{P.boss=b.dataset.boss;save()});
   document.querySelectorAll('#pDiff button').forEach(b=>b.onclick=()=>{P.diff=b.dataset.d;save()});
@@ -363,6 +372,13 @@ async function tabMod(){
   try{renderMod(await api('/api/mod?nick='+encodeURIComponent(MOD_UI.nick)))}catch(e){$('#modBody')&&($('#modBody').innerHTML=`<section class="panel"><p class="err">${esc(e.message)}</p></section>`)}
 }
 async function modAct(body,msg){try{renderMod(await api('/api/mod',{...body,lookup:MOD_UI.nick}));if(msg)toast(msg)}catch(e){toast(e.message,true)}}
+// Odkud přišli: visits by source over the shown days, the biggest first; what has no source is a direct visit
+function srcLine(days){
+  const sum={};let v=0;for(const d of days){v+=d.v;for(const [k,n] of Object.entries(d.src||{}))sum[k]=(sum[k]||0)+n}
+  const tagged=Object.values(sum).reduce((a,b)=>a+b,0),all=Object.entries(sum).sort((a,b)=>b[1]-a[1]),list=all.slice(0,12),rest=all.slice(12).reduce((a,e)=>a+e[1],0);
+  if(!v)return'';
+  return`<p class="help">Odkud přišli (14 dní): ${[...list.map(([k,n])=>`<b>${esc(k==='share'?'sdílená karta':k)}</b> ${n}`),...(rest?[`<b>ostatní</b> ${rest}`]:[]),`<b>přímo</b> ${Math.max(0,v-tagged)}`].join(' · ')}. Vlastní odkaz pro propagaci: přidej na konec adresy <code>?src=nazev</code>, třeba <code>?src=reddit</code>.</p>`;
+}
 function renderMod(v){
   if(H.tab!=='mod'||!$('#modBody'))return;
   const state=s=>s?`${s.muteUntil?`<span class="bad">zákaz chatu ${until(s.muteUntil)}</span> `:''}${s.banUntil?`<span class="bad">zablokován ${until(s.banUntil)}</span> `:''}${s.warns?`varování ${s.warns}× · `:''}nahlášení celkem ${s.reports}`:'';
@@ -376,8 +392,9 @@ function renderMod(v){
   const ST=v.stats,MODE_N=k=>D.MODES[k]?.name||k,td=ST?.days?.[0];
   const statsHTML=ST?`<section class="panel"><div class="row"><h3>Návštěvnost</h3><small class="help">teď online ${ST.online}</small></div>
       ${td?`<p class="help">Dnes: návštěvníci <b>${td.v}</b> (noví ${td.nw}, vracející se ${td.ret}) · online zápasy <b>${td.m}</b>${td.m?` (${Object.entries(td.modes).sort((a,b)=>b[1]-a[1]).map(([k,n])=>`${esc(MODE_N(k))} ${n}`).join(', ')})`:''} · nejvíc najednou ${td.peak}</p>`:''}
-      <div style="overflow-x:auto"><table class="st"><thead><tr><th>Den</th><th title="Různí návštěvníci za den">Návštěvy</th><th>Noví</th><th title="Byli tu už dřív">Vracející</th><th>S účtem</th><th>Mobil</th><th>Zápasy</th><th title="Hráči (bez botů) v online zápasech, součet">Hráči v zápasech</th><th>Max online</th></tr></thead>
-      <tbody>${ST.days.slice(0,14).map(d=>`<tr><td>${new Date(d.day+'T12:00').toLocaleDateString('cs-CZ',{weekday:'short',day:'numeric',month:'numeric'})}</td><td><b>${d.v}</b></td><td>${d.nw}</td><td>${d.ret}${d.v?` <small>(${Math.round(d.ret/d.v*100)} %)</small>`:''}</td><td>${d.acc}</td><td>${d.mob}</td><td>${d.m}</td><td>${d.hm}</td><td>${d.peak}</td></tr>`).join('')||'<tr><td colspan="9">Zatím žádná data.</td></tr>'}</tbody></table></div>
+      <div style="overflow-x:auto"><table class="st"><thead><tr><th>Den</th><th title="Různí návštěvníci za den">Návštěvy</th><th>Noví</th><th title="Byli tu už dřív">Vracející</th><th>S účtem</th><th>Mobil</th><th>Zápasy</th><th title="Hráči (bez botů) v online zápasech, součet">Hráči v zápasech</th><th>Max online</th><th title="Kolikrát hráči sdíleli kartu s výsledkem">Sdílení</th></tr></thead>
+      <tbody>${ST.days.slice(0,14).map(d=>`<tr><td>${new Date(d.day+'T12:00').toLocaleDateString('cs-CZ',{weekday:'short',day:'numeric',month:'numeric'})}</td><td><b>${d.v}</b></td><td>${d.nw}</td><td>${d.ret}${d.v?` <small>(${Math.round(d.ret/d.v*100)} %)</small>`:''}</td><td>${d.acc}</td><td>${d.mob}</td><td>${d.m}</td><td>${d.hm}</td><td>${d.peak}</td><td>${d.sh||0}</td></tr>`).join('')||'<tr><td colspan="10">Zatím žádná data.</td></tr>'}</tbody></table></div>
+      ${srcLine(ST.days.slice(0,14))}
       <p class="help">Čísla jsou anonymní: server neukládá adresy ani identifikátory, návštěvník se rozlišuje jen v rámci jednoho dne. Trénink bez serveru se do zápasů nepočítá.</p></section>`:'';
   $('#modBody').innerHTML=statsHTML+`<section class="panel"><div class="row"><h3>Moderace</h3><small class="help">${v.open.length} nevyřízených nahlášení</small></div>
       <form class="inline" id="modFind" autocomplete="off"><label class="field">Najít hráče<input id="modNick" maxlength="16" value="${esc(MOD_UI.nick)}"></label><button class="ghost" type="submit">Hledat</button></form>
@@ -900,6 +917,7 @@ export function showRewards(m){
   if(m.guest){store.set('guestPend',{...m.pend,at:Date.now()});
     el.innerHTML=`<div class="rew"><div class="big"><div><span>+${num(m.xp)}</span> zkušeností</div><div><span>+${num(m.credits)}</span> kreditů</div></div>
       ${m.levelUps.length?`<div class="lvup">Nová úroveň ${m.levelUps.at(-1)}!</div>`:''}
+      ${m.featured?`<div class="lvup">Režim dne · +${Math.round(m.featured*100)} % zkušeností a kreditů (už v odměně)</div>`:''}
       ${m.items.length?`<div class="lbl">Kořist</div><div class="items">${m.items.map(i=>itemCard(i)).join('')}</div>`:''}
       ${guestSaveBox(m.pend,'guestRegEnd')}</div>`;
     $('#guestRegEnd').onclick=()=>{H.cb.leave();goRegister()};return}
@@ -916,6 +934,7 @@ export function showRewards(m){
     ${m.camp?.echo?'<div class="lvup">Ozvěna jádra pokořena · bonus týdne</div>':''}
     ${m.record?`<div class="lvup">Nový rekord v Nekonečnu · vlna ${m.record}</div>`:''}
     ${m.mvp?'<div class="lvup">MVP zápasu · +15 % zkušeností a kreditů</div>':''}
+    ${m.featured?`<div class="lvup">Režim dne · +${Math.round(m.featured*100)} % zkušeností a kreditů (už v odměně)</div>`:''}
     ${m.firstWin?`<div class="lvup">První výhra dne · +${num(m.firstWin.xp)} zkušeností a +${num(m.firstWin.cr)} kreditů (už v odměně)</div>`:''}
     ${m.masteryUps?.length?`<p class="help">Mistrovství: ${m.masteryUps.map(x=>`<b style="color:#c08bff">${esc(x.name)} ${x.rank}</b>${x.milestone?' · nový milník':''}`).join(', ')}${m.masteryUps.some(x=>x.milestone)?' · větev si vyber na kartě Mistrovství.':''}</p>`:''}
     ${m.crystals?.length?`<p class="help">Krystal: ${m.crystals.map(k=>`<b style="color:${D.parseCrystal(k)?.C.color}">${D.crystalName(k)}</b>`).join(', ')} · zasadíš ho do zdířky v Inventáři.</p>`:''}

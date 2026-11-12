@@ -2,7 +2,7 @@
 // Imported by the simulation, the server and the client, so every rule has one source.
 
 export const CLASSES={
-  striker:{name:'Lovec',role:'Nápor a přesnost',color:0xffb347,css:'#ffb347',hp:235,speed:9.2,def:.08,atk:40,tech:12,pref:11,
+  striker:{name:'Lovec',hero:'Vex Bleskorez',lore:'Lovkyně relikvií, která udeří dřív, než ji soupeř uvidí.',role:'Nápor a přesnost',color:0xffb347,css:'#ffb347',hp:235,speed:9.2,def:.08,atk:40,tech:12,pref:11,
     talent:'Kombinátor',talentDesc:'Zásah základním útokem zkrátí čekání schopností o 0,35 s.',
     basic:{type:'shot',name:'Pulzní střela',dmg:16,rate:.3,speed:46,range:22,size:1,dot:{kind:'bleed',dps:4,t:4}},
     skills:[{name:'Průrazný výpad',cost:30,cd:6,icon:'slash',desc:'Výpad vpřed a dva seky po 90 % útoku.'},
@@ -10,7 +10,7 @@ export const CLASSES={
             {name:'Krvavý šíp',cost:20,cd:5,icon:'arrow',desc:'Průrazný šíp. Krvácení 9 HP/s na 4 s.'}],
     ult:{name:'Bouřový průraz',icon:'bolt',desc:'Tři blesky v linii před tebou, každý 170 % útoku.'},
     relic:'Bouřová relikvie: +25 % poškození na 20 s.',bars:[.45,.9,.25,.95]},
-  guardian:{name:'Strážce',role:'Výdrž a obrana',color:0x5dffa8,css:'#5dffa8',hp:385,speed:7.9,def:.22,atk:30,tech:16,pref:2.2,
+  guardian:{name:'Strážce',hero:'Bor Ocelštít',lore:'Bývalý strážce trezoru relikvií. Kde stojí on, tudy se neprojde.',role:'Výdrž a obrana',color:0x5dffa8,css:'#5dffa8',hp:385,speed:7.9,def:.22,atk:30,tech:16,pref:2.2,
     talent:'Bastion',talentDesc:'Každý zásah na blízko přidá 6 bodů štítu.',
     basic:{type:'melee',name:'Pancéřový úder',dmg:30,rate:.62,range:3.4,dot:{kind:'poison',dps:4,t:3}},
     skills:[{name:'Kotva',cost:25,cd:8,icon:'anchor',desc:'Štít 90 a zpomalení nepřátel do 5,5 m o 40 %.'},
@@ -18,7 +18,7 @@ export const CLASSES={
             {name:'Štítová kupole',cost:35,cd:14,icon:'dome',desc:'Ty a spojenci do 7 m získáte štít 55.'}],
     ult:{name:'Titánův val',icon:'slam',desc:'Úder do země do 8 m: 200 % útoku, omráčení 1,4 s, štít 120.'},
     relic:'Titánova relikvie: štít 150 a −20 % přijatého poškození na 20 s.',bars:[1,.6,.35,.55]},
-  technician:{name:'Technik',role:'Energie a obnova',color:0x6acbff,css:'#6acbff',hp:245,speed:8.4,def:.1,atk:24,tech:35,pref:12,
+  technician:{name:'Technik',hero:'Ina Signálová',lore:'Inženýrka signálové sítě. Spojence opraví, soupeřům spojení přeruší.',role:'Energie a obnova',color:0x6acbff,css:'#6acbff',hp:245,speed:8.4,def:.1,atk:24,tech:35,pref:12,
     talent:'Inženýr',talentDesc:'Zásah základním útokem vrátí 5 energie.',
     basic:{type:'shot',name:'Výbojový šíp',dmg:25,rate:.48,speed:34,range:20,size:1.5,dot:{kind:'shock',dps:4,t:2}},
     skills:[{name:'Mor nanitů',cost:30,cd:9,icon:'nano',desc:'Zóna 4 m na 5 s, 50 % TECH za sekundu.'},
@@ -26,7 +26,7 @@ export const CLASSES={
             {name:'EMP',cost:30,cd:9,icon:'emp',desc:'Výboj v místě: 110 % TECH, −40 energie, umlčení 1,1 s.'}],
     ult:{name:'Řetězový výboj',icon:'chain',desc:'Blesk zasáhne cíl za 160 % TECH a přeskočí až na 3 další, každý za 90 % TECH.'},
     relic:'Relikvie ozvěny: energie ×1,8 a čekání −30 % na 20 s.',bars:[.55,.45,1,.75]},
-  pyro:{name:'Žhář',role:'Oheň a kontrola prostoru',color:0xff6a1a,css:'#ff6a1a',hp:305,speed:8.8,def:.12,atk:28,tech:40,pref:9,
+  pyro:{name:'Žhář',hero:'Dax Popelář',lore:'Topič z Rezavé kovárny, kterému oheň nikdy nestačil.',role:'Oheň a kontrola prostoru',color:0xff6a1a,css:'#ff6a1a',hp:305,speed:8.8,def:.12,atk:28,tech:40,pref:9,
     talent:'Popel',talentDesc:'Základní útok zapálí cíl: hoření 5 HP/s na 3 s. Ohnivé oblasti zapalují každého, kdo v nich stojí.',
     basic:{type:'shot',name:'Žhavý projektil',dmg:18,rate:.4,speed:36,range:19,size:1.6,dot:{kind:'burn',dps:10,t:3}},
     skills:[{name:'Plamenná vlna',cost:30,cd:7,icon:'flame',desc:'Vlna ohně do 6 m před tebou: 110 % TECH a hoření 8 HP/s na 3 s.'},
@@ -34,14 +34,22 @@ export const CLASSES={
             {name:'Fázový plamen',cost:25,cd:9,icon:'blink',desc:'Přesun až o 7 m. Na výchozím místě zůstane hořící oblast 2,5 m na 3 s.'}],
     ult:{name:'Inferno',icon:'inferno',desc:'Tři výbuchy ohně kolem tebe do 8,5 m, každý 115 % TECH, a hoření 12 HP/s na 4 s.'},
     relic:'Relikvie výhně: hoření dává dvojnásobné poškození a ohnivé oblasti jsou o polovinu větší na 20 s.',bars:[.6,.55,.85,.7]},
-  cryo:{name:'Kryonik',role:'Mráz a zastavení',color:0xc3b5ff,css:'#c3b5ff',hp:258,speed:8.6,def:.14,atk:26,tech:30,pref:10,
+  cryo:{name:'Kryonik',hero:'Sia Mrazivá',lore:'Strážkyně Ledového archivu, která mrazem zastaví každý útok.',role:'Mráz a zastavení',color:0xc3b5ff,css:'#c3b5ff',hp:258,speed:8.6,def:.14,atk:26,tech:30,pref:10,
     talent:'Podchlazení',talentDesc:'Každý třetí zásah základním útokem do stejného soupeře ho zpomalí o 40 % na 1 s.',
     basic:{type:'shot',name:'Ledová střepina',dmg:16,rate:.44,speed:40,range:19,size:1.3,dot:{kind:'shock',dps:4,t:2}},
     skills:[{name:'Mrazivý kužel',cost:30,cd:7,icon:'frostcone',desc:'Kužel mrazu do 7 m před tebou: 100 % TECH a zpomalení o 40 % na 1,5 s.'},
             {name:'Ledový krunýř',cost:30,cd:12,icon:'iceshield',desc:'Štít 70 pro tebe a štít 75 pro spojence do 8 m.'},
             {name:'Kryomina',cost:30,cd:10,icon:'icemine',desc:'Mina dopadne až 14 m daleko a po 0,7 s vybuchne do 3 m: 90 % TECH a zmrazení na 0,7 s.'}],
     ult:{name:'Absolutní nula',icon:'freeze',desc:'Mrazivá bouře v místě až 14 m daleko: po 0,55 s zasáhne vše do 7,5 m za 165 % TECH a zmrazí na 1,2 s.'},
-    relic:'Relikvie mrazu: každý zásah základním útokem zpomalí a čekání schopností je o 20 % kratší na 20 s.',bars:[.65,.5,.75,.9]}
+    relic:'Relikvie mrazu: každý zásah základním útokem zpomalí a čekání schopností je o 20 % kratší na 20 s.',bars:[.65,.5,.75,.9]},
+  hook:{name:'Hákař',hero:'Kord Řetězník',lore:'Jeřábník z neonového přístavu. Co chytí řetězem, to nepustí.',role:'Přitažení a kontrola',color:0xd4ff4f,css:'#d4ff4f',hp:330,speed:8.7,def:.18,atk:32,tech:16,pref:4.5,
+    talent:'Napnutý řetěz',talentDesc:'Soupeř, kterého přitáhneš nebo spoutáš, od tebe 3 s dostává o 25 % víc poškození. Každé přitažení Hákem nebo škubnutím ti dá štít 40, Vír řetězů 30 za každého soupeře.',
+    basic:{type:'melee',name:'Švih řetězem',dmg:31,rate:.52,range:4.5,dot:{kind:'bleed',dps:4,t:3}},
+    skills:[{name:'Hák',cost:25,cd:8,icon:'hook',desc:'Hák na 16 m chytí prvního soupeře v dráze a přitáhne ho k tobě: 90 % útoku a zpomalení na 0,8 s.'},
+            {name:'Řetězový skok',cost:25,cd:9,icon:'chainleap',desc:'Řetěz tě přitáhne až o 11 m. Po dopadu soupeři do 2,5 m dostanou 80 % útoku a omráčení 0,5 s.'},
+            {name:'Spoutání',cost:30,cd:11,icon:'shackle',desc:'Připoutá soupeře do 6,5 m na 2,5 s (60 % útoku). Když uteče dál, řetěz ho škubne zpátky: 50 % útoku a omráčení 0,8 s.'}],
+    ult:{name:'Vír řetězů',icon:'vortex',desc:'Stáhne všechny soupeře do 9 m k sobě, pak 150 % útoku a omráčení na 1 s.'},
+    relic:'Relikvie řetězů: Hák a Spoutání mají o 40 % kratší čekání na 20 s.',bars:[.75,.7,.3,.7]}
 };
 // damage over time from basic attacks: each class has its own kind. A new application refreshes the duration and keeps
 // the stronger one; they do not stack. Decontamination removes all of them, Restore only bleeding and burning.
@@ -58,7 +66,7 @@ export const basicFxText=k=>{const d=CLASSES[k]?.basic?.dot;if(!d)return'';retur
 export const BURN={talent:{kind:'burn',dps:5,t:3},wave:{dps:10,t:3},ult:{dps:12,t:4}};
 export const CLASS_KEYS=Object.keys(CLASSES);
 // heroes added lately: the hub shows a NOVÝ badge on them until this date
-export const NEW_CLASSES={cryo:'2026-12-15'};
+export const NEW_CLASSES={cryo:'2026-12-15',hook:'2027-01-31'};
 
 // ---------- progression ----------
 export const MAX_LEVEL=50;
@@ -73,16 +81,33 @@ export const EVADES={
   guardian:{name:'Štítový náraz',cd:6.5,icon:'bulwark',desc:'Výpad o 4,5 m za štítem: po dobu 0,8 s dostáváš polovinu poškození a odhodíš soupeře v cestě (60 % útoku).'},
   technician:{name:'Fázový skok',cd:5,icon:'blink',desc:'Okamžitý přesun o 7 m (projde mezi nepřáteli, zastaví se o zeď) s mžikem nezranitelnosti.'},
   pyro:{name:'Ohnivý kotoul',cd:4.5,icon:'firezone',desc:'Kotoul o 5,5 m s nezranitelností 0,25 s. Na výchozím místě vzplane oheň 2,2 m na 2 s.'},
-  cryo:{name:'Ledový skluz',cd:4.5,icon:'iceslide',desc:'Skluz o 6 m s nezranitelností 0,25 s. Soupeře do 3 m od výchozího místa zpomalí na 1,5 s.'}};
+  cryo:{name:'Ledový skluz',cd:4.5,icon:'iceslide',desc:'Skluz o 6 m s nezranitelností 0,25 s. Soupeře do 3 m od výchozího místa zpomalí na 1,5 s.'},
+  hook:{name:'Řetězový švih',cd:5,icon:'chainleap',desc:'Švih o 6 m s nezranitelností 0,25 s. Soupeře v cestě zasáhne za 50 % útoku.'}};
 // Sekundární útok (right mouse button): every hero's second attack, no energy, a short cooldown
 export const SECONDARY={
   striker:{name:'Průrazná střela',cd:7,icon:'arrow',desc:'Rychlá střela na 26 m, která proletí všemi soupeři v řadě: 110 % útoku.'},
   guardian:{name:'Úder štítem',cd:5,icon:'bulwark',desc:'Úder do 3,5 m před tebou: 110 % útoku, odhození o 3,5 m a zpomalení na 1 s. Dá ti štít 30. Na citadele shodí soupeře z okraje.'},
   technician:{name:'Odsávač',cd:7,icon:'pulse',desc:'Výboj na 18 m: 110 % TECH a vyléčí tě o polovinu toho. Zasaženému hrdinovi vezme 20 energie a dá ji tobě.'},
   pyro:{name:'Plamenomet',cd:4,icon:'flame',desc:'Proud ohně do 5,5 m před tebou: 95 % TECH a hoření 10 HP/s na 2 s.'},
-  cryo:{name:'Ledový hrot',cd:6,icon:'freeze',desc:'Hrot na 20 m: 60 % TECH a zpomalení na 1,5 s.'}};
+  cryo:{name:'Ledový hrot',cd:6,icon:'freeze',desc:'Hrot na 20 m: 60 % TECH a zpomalení na 1,5 s.'},
+  hook:{name:'Trhnutí',cd:6,icon:'hook',desc:'Krátký hák na 9 m: 80 % útoku a přitáhne zasaženého soupeře o 3 m k tobě.'}};
 // "Novinky" in the hub, newest first; id marks what a player has already seen
 export const CHANGELOG=[
+  {id:'2026-12g',title:'Nový hrdina: Hákař',items:[
+    'Kord Řetězník, jeřábník z neonového přístavu. Bojuje zblízka řetězem: Hák přitáhne soupeře k tobě, Řetězový skok přitáhne tebe k nim, Spoutání soupeře škubne zpátky, když uteče, a Vír řetězů stáhne celou skupinu na jedno místo.',
+    'Přitáhni soupeře k týmu, do lávy v Kovárně, pod blesk v Elektrárně nebo dolů z terasy na Citadele. Za každé přitažení dostaneš štít.',
+    'Všichni hrdinové mají jméno a krátký příběh: Vex Bleskorez, Bor Ocelštít, Ina Signálová, Dax Popelář, Sia Mrazivá a Kord Řetězník.']},
+  {id:'2026-12f',title:'Režim dne',items:[
+    'Každý den má jeden režim bonus +30 % zkušeností a kreditů, o víkendu dokonce +50 %. Najdeš ho nahoře na kartě Hrát, režimy se denně střídají.']},
+  {id:'2026-12e',title:'Nová mapa: Bouřková elektrárna',items:[
+    'Do arény bijí blesky. Každý se chvíli předem ohlásí červeným kruhem: uteč z něj, nebo zásah přežij a dostaneš +15 % ultimátky.',
+    'Hraje se v Aréně, Ovládnutí, Mutaci týdne a Eliminaci.']},
+  {id:'2026-12d',title:'Odkud hráči chodí',items:[
+    'Počítadlo návštěv anonymně sčítá, odkud lidé přišli (sdílená karta, pozvánka, jiný web) a kolikrát hráči sdíleli výsledek. Stále bez cookies a bez ukládání adres.']},
+  {id:'2026-12c',title:'Sdílej svůj výsledek',items:[
+    'Po zápase je tlačítko Sdílet výsledek. Udělá obrázek s tvým výsledkem, hrdinou a čísly ze zápasu a na mobilu ho rovnou pošleš přes WhatsApp, Messenger nebo Discord. Na počítači se obrázek uloží a odkaz zkopíruje.']},
+  {id:'2026-12b',title:'Vše z jednoho místa',items:[
+    'Grafika i písma se teď stahují přímo ze serveru hry, ne z cizích služeb. Hra tak funguje i tam, kde jsou tyto služby zablokované, a tvoje adresa nejde nikomu dalšímu.']},
   {id:'2026-12a',title:'Postup hosta se neztratí',items:[
     'I bez účtu teď za zápasy získáváš zkušenosti, kredity a implantáty. Hra ti je podrží 7 dní od posledního zápasu.',
     'Když si založíš účet, všechno získané za hosta se do něj přenese. Po zápase i na kartě Hrát uvidíš, co na tebe čeká.']},
@@ -331,7 +356,13 @@ export const SKINS={
     {k:'glacier',name:'Ledovec',armor:0xb8d4e8,glow:0x6ad8ff,acc:'hood',req:{level:5}},
     {k:'aurora',name:'Polární záře',armor:0x14283a,glow:0x5dffa8,acc:'antenna',req:{credits:900}},
     {k:'relic',name:'Relikviový kryonik',armor:0x2a2410,glow:0xffe08a,acc:'crown',req:{drop:true}},
-    {k:'pass',name:'Neonový mráz',armor:0x0c1222,glow:0xff7de9,acc:'crest',req:{pass:true}}]
+    {k:'pass',name:'Neonový mráz',armor:0x0c1222,glow:0xff7de9,acc:'crest',req:{pass:true}}],
+  hook:[
+    {k:'default',name:'Základní',armor:0x2e3226,glow:0xd4ff4f,acc:null},
+    {k:'rust',name:'Rezavý přístav',armor:0x5a3420,glow:0xffa64d,acc:'hood',req:{level:5}},
+    {k:'abyss',name:'Hlubinný lovec',armor:0x0e2230,glow:0x3fffd2,acc:'helm',req:{credits:900}},
+    {k:'relic',name:'Relikviový hákař',armor:0x2a2410,glow:0xffe08a,acc:'crown',req:{drop:true}},
+    {k:'pass',name:'Neonový řetěz',armor:0x0c1222,glow:0xff7de9,acc:'antenna',req:{pass:true}}]
 };
 // Legendary skins: hero archetypes from comics and films with our own names and emblems. Several accessories each,
 // a metal finish, a suit (dark) and second armour colour (accent), a cape colour and a particle trail (fx).
@@ -477,6 +508,26 @@ export const TREES={
       {id:'z3',name:'Hluboký mráz',max:3,fx:{freezeT:.15},desc:'Tvá zmrazení trvají o 0,15 s déle.'},
       {id:'z4',name:'Krystalizace',max:3,fx:{ult:7},desc:'Ultimátka se nabíjí o 7 % rychleji.'},
       {id:'z5',name:'Dvojitá mina',max:1,fx:{mineDouble:1},desc:'Kryomina po 1,5 s vybuchne podruhé (60 % TECH a zpomalení).'}]}
+  ],
+  hook:[
+    {k:'chain',name:'Řetěz',desc:'Hák a útok.',nodes:[
+      {id:'h1',name:'Ocelové oko',max:3,fx:{atk:3},desc:'+3 % útok.'},
+      {id:'h2',name:'Dlouhý řetěz',max:3,fx:{hookR:1.5},desc:'Hák doletí o 1,5 m dál.'},
+      {id:'h3',name:'Rychlé navíjení',max:3,fx:{cdr:3},desc:'Čekání schopností −3 %.'},
+      {id:'h4',name:'Napětí',max:3,fx:{ult:6},desc:'Ultimátka se nabíjí o 6 % rychleji.'},
+      {id:'h5',name:'Ostnatý hák',max:1,fx:{hookBleed:1},desc:'Přitažený soupeř krvácí 10 HP/s na 3 s.'}]},
+    {k:'iron',name:'Železo',desc:'Výdrž a skok.',nodes:[
+      {id:'i1',name:'Kroužková zbroj',max:3,fx:{hp:4},desc:'+4 % maximálního HP.'},
+      {id:'i2',name:'Tvrdé články',max:3,fx:{def:1.5},desc:'+1,5 bodu obrany.'},
+      {id:'i3',name:'Kotevní náraz',max:3,fx:{leapStun:.2},desc:'Řetězový skok omráčí o 0,2 s déle.'},
+      {id:'i4',name:'Vytrvalost',max:3,fx:{regen:5},desc:'Energie se obnovuje o 5 % rychleji.'},
+      {id:'i5',name:'Pevný úchop',max:1,fx:{leapShield:1},desc:'Po Řetězovém skoku získáš štít 60.'}]},
+    {k:'vortex',name:'Vír',desc:'Spoutání a ultimátka.',nodes:[
+      {id:'v1',name:'Švih',max:3,fx:{atk:2,rate:3},desc:'+2 % útok a +3 % rychlost útoku.'},
+      {id:'v2',name:'Dlouhé pouto',max:3,fx:{tetherT:.5},desc:'Spoutání trvá o 0,5 s déle.'},
+      {id:'v3',name:'Tvrdé škubnutí',max:3,fx:{tetherStun:.2},desc:'Škubnutí Spoutání omráčí o 0,2 s déle.'},
+      {id:'v4',name:'Hladový vír',max:3,fx:{ult:7},desc:'Ultimátka se nabíjí o 7 % rychleji.'},
+      {id:'v5',name:'Dvojitý vír',max:1,fx:{vortexDouble:1},desc:'Vír řetězů po 1 s stáhne soupeře znovu a zasáhne je za 70 % síly.'}]}
   ]
 };
 export function treeSpent(alloc){return Object.values(alloc||{}).reduce((a,b)=>a+(b|0),0)}
@@ -558,7 +609,8 @@ export const ULT_MODS={
   guardian:{name:'Otřesová vlna',desc:'Titánův val si před omráčením přitáhne soupeře o 2 m blíž a má dosah +1 m.'},
   technician:{name:'Statický řetěz',desc:'Každý zásah Řetězového výboje umlčí cíl na 1 s.'},
   pyro:{name:'Spalující jádro',desc:'Inferno má o 2 m větší dosah a vybuchne čtyřikrát.'},
-  cryo:{name:'Věčný led',desc:'Absolutní nula má o 1,5 m větší dosah a zmrazí o 0,5 s déle.'}
+  cryo:{name:'Věčný led',desc:'Absolutní nula má o 1,5 m větší dosah a zmrazí o 0,5 s déle.'},
+  hook:{name:'Mlýnek',desc:'Vír řetězů má o 2 m větší dosah a omráčí o 0,4 s déle.'}
 };
 // Taktické akce: one universal action on T for every class, chosen in the profile
 export const TACTICS={
@@ -569,7 +621,7 @@ export const TACTICS={
   barrier:{name:'Polní bariéra',lvl:12,cd:26,icon:'bulwark',desc:'Štít ve výši 22 % tvého maximálního HP.'}
 };
 export const TACTIC_KEYS=Object.keys(TACTICS);
-export const BOT_TACTIC={striker:'dodge',guardian:'barrier',technician:'decon',pyro:'dodge',cryo:'barrier'};
+export const BOT_TACTIC={striker:'dodge',guardian:'barrier',technician:'decon',pyro:'dodge',cryo:'barrier',hook:'barrier'};
 const classSkillIds=['c0','c1','c2'];
 // All skills a player may slot for a class at a given profession state.
 export function availableSkills(p,k){
@@ -692,6 +744,14 @@ export function weekKey(t=Date.now()){
   const d=new Date(dayKey(t)+'T00:00:00Z'),wd=(d.getUTCDay()+6)%7;d.setUTCDate(d.getUTCDate()-wd+3);
   const y=d.getUTCFullYear(),w1=new Date(Date.UTC(y,0,4));return y+'-W'+String(1+Math.round(((d-w1)/864e5-3+((w1.getUTCDay()+6)%7))/7)).padStart(2,'0');
 }
+// Režim dne: one mode a day gives more experience and credits (more on Saturday and Sunday), so the few players online
+// tend to meet in the same mode. The order is fixed and the same for everyone (Prague days); campaign missions do not count.
+export const FEATURED_MODES=['arena','control','boss','elim','ctf','waves','mutant','duel','endless'];
+export const FEATURED={bonus:.3,weekend:.5};
+export function featuredOfDay(t=Date.now()){
+  const d=new Date(dayKey(t)+'T00:00:00Z'),wd=d.getUTCDay(),weekend=wd===0||wd===6;
+  return{mode:FEATURED_MODES[Math.floor(d.getTime()/864e5)%FEATURED_MODES.length],weekend,bonus:weekend?FEATURED.weekend:FEATURED.bonus};
+}
 
 // ---------- maps ----------
 // pillars: [x,z,r]; hazards hurt anyone inside; points are capture zones for Ovládnutí.
@@ -748,6 +808,11 @@ export const MAPS={
     pillars:bastionPillars(),
     hazards:[],bases:[{x:-40,z:0},{x:40,z:0}],flags:[{x:-30,z:0},{x:30,z:0}],points:[{x:0,z:0},{x:0,z:-20},{x:0,z:20}],bossAt:{x:0,z:0},
     theme:{floor:0x0c0a18,gridA:[.35,.5,1],gridB:[1,.3,.6],accent:0xc9a0ff,fog:0x06040e,sky:[0x06040e,0x1c0f3a],pillar:'wall',amb:'motes',ambColor:0xc9a0ff,rim:0xc9a0ff,skyline:[0x3fb8ff,0xff3f8e,0xc9a0ff,0xffc66d]}},
+  // Bouřková elektrárna: warned lightning strikes (STORM below); four generators around the centre, open flanks
+  storm:{name:'Bouřková elektrárna',desc:'Do arény bijí ohlášené blesky. Uhni, nebo zásah přežij a nabij si ultimátku.',r:34,storm:true,
+    pillars:[[-8,-8,2],[8,8,2],[-8,8,2],[8,-8,2],[-18,0,2.2],[18,0,2.2],[0,-19,1.8],[0,19,1.8],[-22,-15,1.5],[22,15,1.5],[-22,15,1.5],[22,-15,1.5]],
+    hazards:[],bases:[{x:-27,z:0},{x:27,z:0}],points:[{x:0,z:0},{x:0,z:-25},{x:0,z:25}],bossAt:{x:12,z:5},
+    theme:{floor:0x0b0c16,gridA:[1,.85,.3],gridB:[.35,.6,1],accent:0xffe27a,fog:0x05050a,sky:[0x05050a,0x1a1c3a],pillar:'box',amb:'motes',ambColor:0xffe27a,rim:0xffe27a,skyline:[0xffe27a,0x6acbff,0xffb347,0x9a7dff]}},
   // Neonová citadela: two heights, the ground and a terrace on the north and the south side; the centre is open ground.
   // `levels` are flat tops, a circle c:[x,z,r] or a box b:[x0,z0,x1,z1], with height h (a level with peak:true would be a
   // summit that charges ultimates and throws everyone off every 30 s; no map has one now);
@@ -767,6 +832,11 @@ export const MAP_KEYS=Object.keys(MAPS);
 // Everything stays on the 2D plane; a point's height comes from the map. A unit cannot step up more than LEVEL_STEP
 // at once (cliffs are walls, ramps are fine) but can drop down anywhere. From below you reach a unit on a higher
 // level only within LEVEL_EDGE of its edge; shooting down gives LEVEL_DMG damage and LEVEL_RANGE more range.
+// Bouřková elektrárna: from `start` s into the match, every `every` s come `n` lightning strikes, each warned `warn` s
+// ahead by a circle of radius `r`; whoever stands in it loses `dmg` × max HP and is slowed, a hero who survives gets
+// `ult` % ultimate.
+// Two strikes aim near random heroes, the rest anywhere in the arena; never at the bases.
+export const STORM={start:15,every:7,warn:1.3,n:3,r:3,dmg:.12,slow:.6,ult:15};
 export const LEVEL_STEP=.8,LEVEL_EDGE=2.5,LEVEL_DMG=1.1,LEVEL_RANGE=2;
 export const PEAK={every:30,warn:2.5,ult:3,dmg:.08};
 const inBox=(b,x,z)=>x>=b[0]&&x<=b[2]&&z>=b[1]&&z<=b[3];
@@ -790,11 +860,11 @@ export const onPeak=(map,u)=>{const P=map.levels?.find(L=>L.peak);return!!P&&hei
 
 // ---------- modes ----------
 export const MODES={
-  arena:{name:'Aréna',desc:'3 proti 3. Body za zničení soupeřů a za relikvii ve středu. Vyhrává 20 bodů.',pvp:true,maps:['core','forge','archive','observ','citadel'],max:6,win:20},
-  control:{name:'Ovládnutí',desc:'3 proti 3 o tři body. Každý držený bod přidává skóre, vyhrává 100.',pvp:true,maps:['core','forge','archive','observ','citadel'],max:6,win:100},
+  arena:{name:'Aréna',desc:'3 proti 3. Body za zničení soupeřů a za relikvii ve středu. Vyhrává 20 bodů.',pvp:true,maps:['core','forge','archive','observ','citadel','storm'],max:6,win:20},
+  control:{name:'Ovládnutí',desc:'3 proti 3 o tři body. Každý držený bod přidává skóre, vyhrává 100.',pvp:true,maps:['core','forge','archive','observ','citadel','storm'],max:6,win:100},
   ctf:{name:'Únos relikvie',desc:'3 proti 3 v Pevnosti relikvií. Ukradni soupeřovu relikvii a dones ji ke své, která musí být doma. Vyhrávají 3 únosy.',pvp:true,maps:['bastion'],max:6,win:3},
-  mutant:{name:'Mutace týdne',desc:'3 proti 3 podle pravidel Arény, ale s dvěma mutacemi, které se mění každé pondělí. Vyhrává 20 bodů.',pvp:true,mutators:true,maps:['core','forge','archive','observ','citadel'],max:6,win:20},
-  elim:{name:'Eliminace',desc:'3 proti 3 na kola bez oživení. Kolo vyhrává tým, který zůstane stát. Po 40 s se aréna začne zmenšovat a mimo kruh to pálí. Vyhrávají 4 kola.',pvp:true,rounds:true,maps:['core','forge','archive','observ','citadel'],max:6,win:4,time:900},
+  mutant:{name:'Mutace týdne',desc:'3 proti 3 podle pravidel Arény, ale s dvěma mutacemi, které se mění každé pondělí. Vyhrává 20 bodů.',pvp:true,mutators:true,maps:['core','forge','archive','observ','citadel','storm'],max:6,win:20},
+  elim:{name:'Eliminace',desc:'3 proti 3 na kola bez oživení. Kolo vyhrává tým, který zůstane stát. Po 40 s se aréna začne zmenšovat a mimo kruh to pálí. Vyhrávají 4 kola.',pvp:true,rounds:true,maps:['core','forge','archive','observ','citadel','storm'],max:6,win:4,time:900},
   duel:{name:'Souboj',desc:'1 proti 1 bez relikvie a bodů. Vyhrává, kdo první pětkrát zničí soupeře.',pvp:true,team:1,maps:['archive','core','sanctum'],max:2,win:5},
   boss:{name:'Lov bosse',desc:'Až 4 hráči proti bossovi s mechanikami. Tým má společné životy.',pvp:false,maps:['sanctum','core','forge','archive','observ'],max:4,lives:8},
   waves:{name:'Vlny',desc:'Až 4 hráči proti vlnám dronů. Každá pátá vlna je boss, cílem je přežít 15 vln.',pvp:false,waves:true,maps:['sanctum','forge','archive','core','observ'],max:4,lives:6,last:15},
@@ -889,7 +959,7 @@ export const MASTERY_ULT_BRANCHES=[
 ];
 // basic attack mastery: rank 5 unlocks the class element (Lovec bleed, Strážce poison, Technik shock, Žhář a stronger
 // burn); every rank adds 0.5 % basic attack damage; one XP per four hits
-export const MASTERY_BASIC={dmgPerRank:.005,hitsPerXp:4,elementRank:5,second:{striker:'shock',guardian:'burn',technician:'burn',pyro:'shock',cryo:'poison'}};
+export const MASTERY_BASIC={dmgPerRank:.005,hitsPerXp:4,elementRank:5,second:{striker:'shock',guardian:'burn',technician:'burn',pyro:'shock',cryo:'poison',hook:'shock'}};
 export const MASTERY_BASIC_BRANCHES=[
   [{k:'potent',name:'Síla živlu',desc:'Efekt živlu dává o 50 % víc poškození.'},{k:'lasting',name:'Trvalost',desc:'Efekt živlu trvá o 2 s déle.'}],
   [{k:'spark',name:'Jiskra',desc:'Každý 5. zásah přeskočí na dalšího soupeře do 6 m (25 % síly) a přenese živel.'},{k:'expose',name:'Rozklad',desc:'Soupeři pod tvým živlem dostávají od tebe o 6 % víc.'}],

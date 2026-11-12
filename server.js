@@ -2,6 +2,7 @@
 // Serves the client from ./public, the account API on /api and runs every match at 30 Hz; clients only send inputs.
 import http from 'node:http';
 import {readFile,stat} from 'node:fs/promises';
+import {readFileSync} from 'node:fs';
 import {promisify} from 'node:util';
 import zlib from 'node:zlib';
 import path from 'node:path';
@@ -15,7 +16,18 @@ import {createStats} from './stats.js';
 
 const PORT=Number(process.env.PORT)||8080;
 const PUB=path.join(path.dirname(fileURLToPath(import.meta.url)),'public');
-const TYPES={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.png':'image/png','.svg':'image/svg+xml','.ico':'image/x-icon','.json':'application/json','.webp':'image/webp','.webmanifest':'application/manifest+json; charset=utf-8'};
+const TYPES={'.woff2':'font/woff2','.woff':'font/woff','.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.png':'image/png','.svg':'image/svg+xml','.ico':'image/x-icon','.json':'application/json','.webp':'image/webp','.webmanifest':'application/manifest+json; charset=utf-8'};
+// Three.js and the two fonts come from npm (exact versions in package.json) and are served from here, so the game
+// loads nothing from other servers: no CDN can be down or blocked, and no player's address goes to a third party.
+// The version is in the address (/vendor/three@0.160.0/…), so browsers may keep these files for a year.
+const NM=path.join(path.dirname(fileURLToPath(import.meta.url)),'node_modules');
+const VENDOR=Object.fromEntries([['three','three'],['chakra-petch','@fontsource/chakra-petch'],['saira-condensed','@fontsource/saira-condensed']].map(([n,dir])=>{
+  const root=path.join(NM,dir);let v='?';try{v=JSON.parse(readFileSync(path.join(root,'package.json'),'utf8')).version}catch{}return[`${n}@${v}`,root]}));
+const VENDOR_EXT=new Set(['.js','.css','.woff2','.woff']);
+// all font weights the page uses in one stylesheet; each @font-face downloads only for the characters it covers
+const FONTS_CSS=(()=>{let css='';for(const [n,w] of [['chakra-petch',[400,500,600]],['saira-condensed',[300,600,800]]]){
+  const key=Object.keys(VENDOR).find(k=>k.startsWith(n+'@'));
+  for(const x of w)try{css+=readFileSync(path.join(VENDOR[key],x+'.css'),'utf8').replaceAll('url(./files/',`url(/vendor/${key}/files/`)}catch{}}return css})();
 const END_LINGER=12000;
 const MATCH_SECONDS=Number(process.env.MATCH_SECONDS)||0; // optional override of the 6-minute match, handy for testing
 
@@ -47,7 +59,8 @@ async function api(req,res,p,url){
     return json(res,200,p==='/api/register'?await meta.register(body.nick,body.pass,body.gk):await meta.login(body.nick,body.pass));
   }
   // Počítadlo hráčů: one anonymous visit per browser and day (see stats.js)
-  if(p==='/api/hello'&&req.method==='POST'){if(!limited(ip,'hello',6,3600000))stats.visit(ip,req.headers['user-agent'],{r:body.r===1?1:0,acc:!!body.acc,mob:!!body.mob});return json(res,200,{ok:true})}
+  if(p==='/api/hello'&&req.method==='POST'){if(!limited(ip,'hello',6,3600000))stats.visit(ip,req.headers['user-agent'],{r:body.r===1?1:0,acc:!!body.acc,mob:!!body.mob,src:typeof body.src==='string'?body.src.slice(0,40):''});return json(res,200,{ok:true})}
+  if(p==='/api/shared'&&req.method==='POST'){if(!limited(ip,'shared',20,3600000))stats.shared();return json(res,200,{ok:true})}
   if(p==='/api/top')return json(res,200,meta.top());
   if(p==='/api/player')return json(res,200,meta.publicProfile(url.searchParams.get('id')||url.searchParams.get('nick')||''));
   if(p==='/api/rooms')return json(res,200,{rooms:publicRooms(),online:wss.clients.size});
@@ -88,19 +101,25 @@ const server=http.createServer(async(req,res)=>{
   if(p.startsWith('/api/')){try{await api(req,res,p,url)}catch(e){if(!(e instanceof HttpError))console.error(e);json(res,e.status||500,{error:e instanceof HttpError?e.message:'Chyba serveru.'})}return}
   if(p==='/healthz'){res.writeHead(200,{'Content-Type':'text/plain'});return res.end('ok')}
   if(p==='/')p='/index.html';
-  const f=path.normalize(path.join(PUB,p));
-  if(!f.startsWith(PUB+path.sep)){res.writeHead(403);return res.end()}
+  let f,vendor=false;
+  if(p.startsWith('/vendor/')){
+    vendor=true;const [,,pkg,...rest]=p.split('/'),root=Object.hasOwn(VENDOR,pkg)?VENDOR[pkg]:null;
+    if(p==='/vendor/fonts.css')f='fonts.css';
+    else{if(!root||!VENDOR_EXT.has(path.extname(p))){res.writeHead(404);return res.end()}
+      f=path.normalize(path.join(root,...rest));if(!f.startsWith(root+path.sep)){res.writeHead(403);return res.end()}}
+  }else{f=path.normalize(path.join(PUB,p));
+    if(!f.startsWith(PUB+path.sep)){res.writeHead(403);return res.end()}}
   if(p.includes('\0')){res.writeHead(400);return res.end()}
-  try{const st=await stat(f);if(!st.isFile())throw 0;
-    let key=p,make=()=>readFile(f);
+  try{const fontsCss=f==='fonts.css',st=fontsCss?{mtimeMs:0}:await stat(f);if(!fontsCss&&!st.isFile())throw 0;
+    let key=p,make=fontsCss?()=>FONTS_CSS:()=>readFile(f);
     // the share preview needs absolute addresses: PUBLIC_URL when set, otherwise the address this request came to
     if(p==='/index.html'){const host=String(req.headers['x-forwarded-host']||req.headers.host||''),proto=String(req.headers['x-forwarded-proto']||'').split(',')[0]==='https'||process.env.RENDER?'https':'http';
       const origin=(process.env.PUBLIC_URL||'').replace(/\/+$/,'')||(/^[a-z0-9.:-]{1,100}$/i.test(host)?`${proto}://${host}`:'');
       // a link with ?lang=en gets the English preview (the page itself switches language in the browser)
       const en=url.searchParams.get('lang')==='en';key=`${p}|${origin}|${en?'en':''}`;
       make=async()=>{const html=(await readFile(f,'utf8')).replaceAll('%ORIGIN%',origin);return en?englishMeta(html,origin):html}}
-    const a=await asset(key,st.mtimeMs,TYPES[path.extname(f)]||'application/octet-stream',make);
-    const h={'Content-Type':a.type,'Cache-Control':'no-cache','ETag':a.etag,'Vary':'Accept-Encoding'};
+    const a=await asset(key,st.mtimeMs,TYPES[path.extname(fontsCss?'fonts.css':f)]||'application/octet-stream',make);
+    const h={'Content-Type':a.type,'Cache-Control':vendor&&p!=='/vendor/fonts.css'?'public, max-age=31536000, immutable':'no-cache','ETag':a.etag,'Vary':'Accept-Encoding'};
     if(String(req.headers['if-none-match']||'').split(',').some(t=>t.trim()===a.etag)){res.writeHead(304,h);return res.end()}
     const ae=String(req.headers['accept-encoding']||'');let body=a.raw;
     if(a.br&&/\bbr\b/.test(ae)){body=a.br;h['Content-Encoding']='br'}else if(a.gz&&/\bgzip\b/.test(ae)){body=a.gz;h['Content-Encoding']='gzip'}

@@ -82,6 +82,17 @@ export function buildHero(k,team,skinKey){
     box(body,.5,.55,.06,dark,0,1.32,-.21);
     const staff=mesh(armR,new THREE.CylinderGeometry(.03,.03,1.5,6),dark,0,-.45,.2);staff.rotation.x=.15;
     const gem=mesh(armR,new THREE.OctahedronGeometry(.12),glow,0,.32,.31);gem.scale.set(.8,1.5,.8);
+  }else if(k==='hook'){
+    // Hákař: a heavy plated coat, a chain slung across the chest, a hooded helm and a big hook on the right arm
+    box(body,.62,.7,.4,armor,0,1.4,0);box(body,.05,.56,.02,glow,.16,1.4,.21);box(body,.05,.56,.02,glow,-.16,1.4,.21);
+    for(let i=0;i<6;i++){const r=mesh(body,new THREE.TorusGeometry(.075,.022,5,10),glow,-.27+i*.11,1.72-i*.1,.22);r.rotation.y=i%2?Math.PI/2:0;r.rotation.z=.75}
+    for(const s of [-1,1])box(body,.3,.14,.42,armor,s*.4,1.76,0).rotation.z=s*-.25;
+    box(body,.34,.36,.36,armor,0,1.95,0);box(body,.28,.06,.04,glow,0,1.96,.19);box(body,.42,.14,.42,dark,0,2.13,-.02);
+    box(body,.46,.5,.06,dark,0,1.34,-.22);
+    box(armR,.22,.14,.28,armor,0,-.72,.05);mesh(armR,new THREE.CylinderGeometry(.035,.035,.36,6),glow,0,-.92,.08);
+    const hk=mesh(armR,new THREE.TorusGeometry(.24,.055,6,18,Math.PI*1.35),glow,0,-1.22,.16);hk.rotation.y=Math.PI/2;hk.rotation.z=-.6;
+    const tip=mesh(armR,new THREE.ConeGeometry(.08,.24,5),glow,0,-1.0,.38);tip.rotation.x=-.9;
+    for(let i=0;i<3;i++)mesh(armL,new THREE.TorusGeometry(.13,.025,5,12),dark,0,-.35-i*.12,0).rotation.x=Math.PI/2;
   }else{
     mesh(body,new THREE.CylinderGeometry(.34,.26,.72,8),armor,0,1.4,0);
     mesh(body,new THREE.CylinderGeometry(.36,.28,.36,8,1,true),dark,0,1.9,0);
@@ -93,7 +104,7 @@ export function buildHero(k,team,skinKey){
   }
   let cape=null,halo=null,wings=null;
   // chest front and height per class, so emblems and reactors sit on the armour
-  const chestZ={striker:.19,guardian:.29,technician:.31,pyro:.21,cryo:.19}[k]||.2,chestY=k==='guardian'?1.5:1.45;
+  const chestZ={striker:.19,guardian:.29,technician:.31,pyro:.21,cryo:.19,hook:.21}[k]||.2,chestY=k==='guardian'?1.5:1.45;
   const accs=Array.isArray(skin.acc)?skin.acc:skin.acc?[skin.acc]:[];
   const capeMat=skin.cape!=null?new THREE.MeshStandardMaterial({color:skin.cape,metalness:.2,roughness:.75,transparent:true,side:THREE.DoubleSide}):dark;
   if(capeMat!==dark)K.mats.push(capeMat);
@@ -407,6 +418,13 @@ export function buildArena(scene,mapKey,hiQ){
     for(let i=0;i<3;i++){const r=new THREE.Mesh(new THREE.TorusGeometry(8+i*3,.1,6,96),new THREE.MeshBasicMaterial({color:HDR(i===1?0xff7de9:0x7df9ff,1.4),transparent:true,opacity:.55}));r.rotation.x=Math.PI/2+i*.35;dome.add(r)}
     const star=new THREE.Mesh(new THREE.IcosahedronGeometry(1.4),new THREE.MeshBasicMaterial({color:HDR(0xdff6ff,2.4)}));dome.add(star);
     updaters.push((dt,t)=>{dome.rotation.y=t*.12;dome.children.forEach((c,i)=>{if(i<3)c.rotation.z=t*(.1+i*.05)});star.rotation.x=t*.5})}
+  // Bouřková elektrárna: a slowly turning ring of storm clouds that flashes now and then
+  if(mapKey==='storm'){const cloud=new THREE.Group();cloud.position.y=26;g.add(cloud);const mats=[];
+    for(let i=0;i<14;i++){const a=i/14*Math.PI*2,mt=new THREE.MeshBasicMaterial({color:0x2a2f52,transparent:true,opacity:.3,depthWrite:false});mats.push(mt);
+      const c=new THREE.Mesh(new THREE.SphereGeometry(rnd(3.5,5.5),10,8),mt);c.scale.y=.35;c.position.set(Math.cos(a)*rnd(24,32),rnd(-1,1.5),Math.sin(a)*rnd(24,32));cloud.add(c)}
+    let flash=0,next=2;
+    updaters.push((dt,t)=>{cloud.rotation.y=t*.04;next-=dt;if(next<=0){flash=1;next=rnd(1.5,5)}flash=Math.max(0,flash-dt*4);
+      const k=flash*flash;for(const mt of mats){mt.color.setRGB(.16+k*.84,.18+k*.8,.32+k*.5);mt.opacity=.3+k*.4}})}
   // relic pedestal in the centre
   const pg=new THREE.CylinderGeometry(1.6,1.9,.3,6),ped=new THREE.Mesh(pg,pm),py=heightAt(map,0,0)+.15;ped.position.y=py;ped.receiveShadow=true;g.add(ped);
   const pe=new THREE.LineSegments(new THREE.EdgesGeometry(pg),new THREE.LineBasicMaterial({color:HDR(T.accent,1.6)}));pe.position.y=py;g.add(pe);

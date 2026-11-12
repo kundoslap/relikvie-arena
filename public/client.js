@@ -13,6 +13,7 @@ import {svg,esc} from './hub.js';
 import * as Social from './social.js';
 import * as Snd from './audio.js';
 import * as Cfg from './settings.js';
+import {shareResult} from './share.js';
 
 const {TICK,TEAM_COL,TEAM_NAME,CLASSES,MAPS,MODES,BOSSES,RARITIES}=S;
 const V3=THREE.Vector3,$=s=>document.querySelector(s);
@@ -320,7 +321,7 @@ const nearMe=(e,r=12)=>{const p=myPos();return Math.hypot(e.x-p.x,e.z-p.z)<r};
 const sfx=(name,pos,o)=>{if(G.mode!=='menu')Snd.play(name,pos,o)};
 const ui=(name,o={})=>sfx(name,null,{...o,ui:true});
 // basic attacks and casts: pitch by class, melee swings, heavier shots for NPCs and bosses; your own are louder
-const CLS_F={striker:900,guardian:520,technician:1250,pyro:620,cryo:1500};
+const CLS_F={striker:900,guardian:520,technician:1250,pyro:620,cryo:1500,hook:700};
 function atkSound(e,v){
   const mine=e.i===G.you,o={key:e.i,gap:.05,vol:mine?1:.55};
   if(e.s===3)return sfx('ult',v,{...o,f:(CLS_F[v.k]||700)/4,gap:.3,vol:mine?1:.8});
@@ -491,7 +492,7 @@ function startAttract(){
 // For recording videos: a hard bot match with no interface at all and a camera that cuts between shots like a film:
 // following a hero in the thick of it, a low dramatic orbit, and a wide view of the arena. ?map=… picks the arena,
 // ?mode=control the mode. Keys: Space next shot, N next arena, P pause, Esc back to the game.
-const TRAILER_MAPS=['citadel','core','observ','forge','archive'];
+const TRAILER_MAPS=['storm','citadel','core','observ','forge','archive'];
 function startTrailer(){
   const q=new URLSearchParams(location.search),T=G.trailer||(G.trailer={mi:0,kind:-1,cut:0,ang:0,focus:0,fixed:MAPS[q.get('map')]&&!MAPS[q.get('map')].ctfOnly?q.get('map'):null});
   G.mode='menu';G.solo=false;G.paused=false;
@@ -891,8 +892,21 @@ function showEnd(m){
   const room=G.mode==='on'&&!G.solo;
   $('#endNote').textContent=room?'Za chvíli se všichni vrátíte do místnosti.':'';
   $('#againBtn').hidden=room;$('#menuBtn').textContent=room?'Opustit místnost':'Zpět do hubu';
+  G.endMsg=m;$('#shareBtn').hidden=!m.stats?.some(u=>u.i===G.you);
   showOnly('end');
 }
+// the share card: your own row of the table, the result and the subtitle as the end screen shows them (already in the player's language)
+$('#shareBtn').onclick=async()=>{
+  const m=G.endMsg,u=m?.stats?.find(x=>x.i===G.you);if(!u)return;
+  const mode=MODES[m.mode||G.info.mode]||{},myTeam=G.roster.get(G.you)?.t??u.t;
+  const win=mode.endless?m.wave>=S.ENDLESS_WIN:m.winner==null||m.winner<0?null:m.winner===myTeam;
+  const b=$('#shareBtn');b.disabled=true;
+  try{const r=await shareResult({title:$('#endTitle').textContent,sub:$('#endSub').textContent,win,name:String(u.n).replace(/ \(host\)$/,''),cls:u.k,
+      pve:!mode.pvp,mvp:m.mvp!=null&&m.mvp===G.you,st:{ki:u.ki,de:u.de,dm:u.dm,he:u.he,nk:u.nk}});
+    if(r==='saved')Hub.toast('Obrázek je uložený a text s odkazem zkopírovaný, stačí ho vložit.')}
+  catch(e){console.warn(e);Hub.toast('Sdílení se nepovedlo.',true)}
+  finally{b.disabled=false}
+};
 // the finished online match leaves mode 'on'; without resetting it the new match's roster would not switch to the HUD
 $('#againBtn').onclick=()=>{const o=G.lastOpts;if(!o)return toHub();if(G.mode==='on'){closeWs();startAttract()}G.ended=false;if(o.local)startLocal(o);else if(o.mission)hubCallbacks.mission(o.mission,o);else hubCallbacks.solo(o)};
 $('#menuBtn').onclick=()=>toHub();
@@ -1215,9 +1229,17 @@ frame();
 Hub.init(hubCallbacks).then(()=>{if(!TRAILER){resumeAfterReload();hello()}});
 // Počítadlo hráčů: once a day the browser tells the server it was here: new or returning, signed in, touch device.
 // It keeps only the day of its last visit, no identifier (the server side is described in stats.js).
+// Where the visit came from, read before the address is cleaned up: ?src= of a promotion link (e.g. ?src=reddit),
+// otherwise the name of the referring site, a room invite or the installed app; empty for a direct visit.
+const LAUNCH=new URLSearchParams(location.search),REFERRER=document.referrer;
+function visitSource(){
+  const s=(LAUNCH.get('src')||'').toLowerCase();if(/^[a-z0-9-]{1,20}$/.test(s))return s;
+  try{const r=REFERRER&&new URL(REFERRER).hostname.replace(/^www\./,'');if(r&&r!==location.hostname)return r.slice(0,40)}catch{}
+  if(LAUNCH.get('room'))return'pozvánka';if(LAUNCH.get('source')==='app')return'aplikace';return'';
+}
 function hello(){try{
   const today=S.dayKey(),last=store.get('lastVisit',null);if(last===today)return;store.set('lastVisit',today);
-  fetch('/api/hello',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({r:last?1:0,acc:!!store.get('token',null),mob:matchMedia('(pointer:coarse)').matches})}).catch(()=>{})}catch{}}
+  fetch('/api/hello',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({r:last?1:0,acc:!!store.get('token',null),mob:matchMedia('(pointer:coarse)').matches,src:visitSource()})}).catch(()=>{})}catch{}}
 // installable app: the service worker keeps a copy of the game for offline training
 if('serviceWorker' in navigator&&(location.protocol==='https:'||location.hostname==='localhost'))navigator.serviceWorker.register('/sw.js').catch(e=>console.warn('Service worker:',e.message));
 // local test harnesses read the game state; the live site does not expose it

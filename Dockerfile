@@ -4,7 +4,7 @@ WORKDIR /app
 ENV NODE_ENV=production
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
-COPY server.js db.js meta.js ./
+COPY server.js db.js meta.js stats.js ./
 COPY public ./public
 RUN mkdir -p data && chown node:node data
 USER node

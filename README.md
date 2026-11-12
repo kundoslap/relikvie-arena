@@ -28,7 +28,7 @@ Proměnné prostředí:
 - **Aréna** — 3 proti 3, body za zničení a relikvii ve středu, vyhrává 20.
 - **Ovládnutí** — 3 proti 3 o body A, B, C. Držený bod přidává skóre, vyhrává 100.
 - **Únos relikvie** — 3 proti 3 ve vlastní aréně **Pevnost relikvií**: bludiště zdí se třemi propojenými cestami (sever, střed, jih) bez slepých uliček, zrcadlově souměrné pro oba týmy. Každý tým má relikvii v pevnosti, jejíž zeď míří do středu a brány jsou ze stran a zezadu. Dotykem soupeřovu relikvii sebereš (nositel je o 15 % pomalejší, nemůže se maskovat a je vidět na minimapě); bod dostaneš, když ji doneseš ke své relikvii, která musí být doma. Když nositel padne, relikvie leží a tým, kterému patří, ji dotykem vrátí, jinak se vrátí sama po 15 s. Vyhrávají 3 únosy. Boti kradou, nosí, honí nositele, vracejí relikvii a jeden brání.
-- **Mutace týdne** — 3 proti 3 podle pravidel Arény (body za zničení, relikvie ve středu, vyhrává 20) na mapách Neonové jádro, Rezavá kovárna, Ledový archiv, Hvězdná observatoř a Neonová citadela. Platí v ní dvě mutace, které se mění každé pondělí (podle čísla týdne, pro všechny stejně). Možné mutace:
+- **Mutace týdne** — 3 proti 3 podle pravidel Arény (body za zničení, relikvie ve středu, vyhrává 20) na mapách Neonové jádro, Rezavá kovárna, Ledový archiv, Hvězdná observatoř, Neonová citadela a Bouřková elektrárna. Platí v ní dvě mutace, které se mění každé pondělí (podle čísla týdne, pro všechny stejně). Možné mutace:
   - Rychlé čekání: −25 % čekání;
   - Přebití: +50 % obnovy energie;
   - Zrychlení: +20 % rychlosti;
@@ -47,9 +47,26 @@ Proměnné prostředí:
 
 **Kampaň relikvií** (jen s účtem): 12 misí ve dvou aktech, od průzkumu dronů přes Omegu až po Archona. Mise se odemykají postupně podle úrovně, první dokončení dává velkou odměnu a titul, Omega navíc relikviový vzhled. Opakované výhry dávají střepy bosse, za 20 střepů se vyrábí legendární implantát. Týdenní cíl kampaně je 5 výher. Po poražení Omegy se otevře **Ozvěna jádra**, týdenní výzva s bossem a dvěma modifikátory (odolní nepřátelé, krvavá ozvěna…). Mise jdou hrát s boty nebo až se třemi přáteli.
 
-**Povolání:** Lovec (nápor a přesnost), Strážce (výdrž a obrana), Technik (energie a obnova), **Žhář** (oheň a kontrola prostoru) a **Kryonik** (mráz a zastavení). Žhář střílí žhavé projektily, které zapalují (hoření 6 HP/s), má Plamennou vlnu (kužel ohně do 6 m s hořením), Žhnoucí půdu (hořící oblast 3,5 m na 4 s), Fázový plamen (přesun o 7 m, za sebou nechá oheň) a ultimátku Inferno (tři výbuchy ohně kolem sebe do 8,5 m). Jeho relikvie zdvojnásobí hoření a zvětší ohnivé oblasti. Hoření odstraní Dekontaminace a Obnova. Strom má větve Výheň, Popel a Inferno, vzhledy Uhlíková maska, Modrý plamen, relikviový a neonový z průkazu. V soubojích botů 1 na 1 vychází Žhář zhruba na 50 % výher.
+**Povolání:** Lovec (nápor a přesnost), Strážce (výdrž a obrana), Technik (energie a obnova), **Žhář** (oheň a kontrola prostoru), **Kryonik** (mráz a zastavení) a **Hákař** (přitažení a kontrola). Žhář střílí žhavé projektily, které zapalují (hoření 6 HP/s), má Plamennou vlnu (kužel ohně do 6 m s hořením), Žhnoucí půdu (hořící oblast 3,5 m na 4 s), Fázový plamen (přesun o 7 m, za sebou nechá oheň) a ultimátku Inferno (tři výbuchy ohně kolem sebe do 8,5 m). Jeho relikvie zdvojnásobí hoření a zvětší ohnivé oblasti. Hoření odstraní Dekontaminace a Obnova. Strom má větve Výheň, Popel a Inferno, vzhledy Uhlíková maska, Modrý plamen, relikviový a neonový z průkazu. V soubojích botů 1 na 1 vychází Žhář zhruba na 50 % výher.
 
 **Kryonik** (pátý hrdina, listopad 2026): 258 HP, rychlost 8,6, TECH 30. Ledová střepina (16, dostřel 19 m); talent Podchlazení: každý třetí zásah do stejného soupeře ho zpomalí o 40 % na 1 s. Q Mrazivý kužel (7 m, 100 % TECH, zpomalení 1,5 s), E Ledový krunýř (štít 70 sobě a 75 spojencům do 8 m), R Kryomina (dopadne až 14 m daleko, po 0,7 s vybuchne do 3 m: 90 % TECH a zmrazení 0,7 s). Ultimátka Absolutní nula: bouře v místě až 14 m daleko, po 0,55 s zasáhne vše do 7,5 m za 165 % TECH a zmrazí na 1,2 s. Zmrazení je omráčení; bossy jen zpomalí. Na obrazovce je zmrazená jednotka uzavřená v průsvitném ledovém krystalu s nápisem ZMRAŽEN (vlastní příznak ve snímku, bit 131072), zpomalené jednotce padá jinovatka a zbroj má modrý nádech. V menu má Kryonik u karty značku NOVÝ (NEW_CLASSES v data.js, do 15. 12. 2026), dokud si ho hráč jednou nevybere (rel.tried v localStorage). Úskok Ledový skluz (6 m, zpomalí soupeře u výchozího místa), relikvie mrazu (každý zásah zpomalí, čekání −20 %), strom Mráz / Led / Nula, úprava ultimátky Věčný led, 5 základních a 3 legendární vzhledy (Zimní vladařka, Sněžný titán, Hvězdný led), bot s taktickou akcí Polní bariéra. První verze s dlouhým zpomalením vyhrávala souboje v 94 % (Strážce byl zpomalený 77 % času). Po úpravě (méně HP, slabší střepina, kratší zpomalení a zmrazení, silnější štít pro spojence a větší ultimátka) vychází v soubojích kolem 47 % (silný proti Strážci a Technikovi, slabý proti Lovci) a v týmech 3 na 3 kolem 43–45 %. Další měření (500 týmových zápasů a 80 soubojů na dvojici) ukázalo spíš 41–42 %. Zkoušeno: bot, který používá ultimátku i na jednoho zdravého soupeře, a bližší boj (beze změny); 265 HP (souboje 57 %, týmy 45 %); TECH 33 (souboje 53 %, týmy 42 %); krunýř, který nabíjí ultimátku (souboje 56 %, týmy 46 %); štít spojencům 80 (beze změny). Ve hře je 258 HP: souboje kolem 52 %, týmy kolem 46 %. Osmé kolo: Technik v týmech dál vyhrával 57,5 % (1 200 zápasů). Kratší umlčení z EMP (1,1 s místo 1,6 s) ho srazilo na 52,8 % a Kryonika zvedlo na 46,8 %; Technikovy souboje beze změny (42–43 %). Slabší skoky Řetězového výboje (75 %) a slabší léčení spojenců z Obnovy (75 %) nic průkazně nezměnily. Deváté kolo: Kryonik byl v týmech nejslabší (43,5 %), Žhář 48 %. Silnější krunýř pro spojence (štít 75 místo 60, dosah 8 m místo 6 m) zvedl Kryonika na 49,5 % (1 200 zápasů) a souboje nemění. Víc HP (275) dalo jen 47 %, víc TECH 46,5 %.
+
+**Hákař** (šestý hrdina, listopad 2026): 330 HP, rychlost 8,7, obrana 18 %, útok 32. Bojuje zblízka řetězem a přitahuje soupeře k sobě, k týmu, do lávy, do blesků nebo z terasy.
+- Švih řetězem: úder do oblouku na 4,5 m, 31 poškození. Na mistrovství 5 krvácení.
+- Talent Napnutý řetěz: přitažený nebo spoutaný soupeř od něj 3 s dostává o 25 % víc. Každé přitažení Hákem nebo škubnutím dá Hákaři štít 40, Vír řetězů 30 za každého soupeře.
+- Q **Hák**: střela na 16 m chytí prvního soupeře v dráze a přitáhne ho před Hákaře (90 % útoku, zpomalení 0,8 s).
+- E **Řetězový skok**: přitáhne Hákaře až o 11 m (zastaví se o zeď). Po dopadu 80 % útoku a omráčení 0,5 s soupeřům do 2,5 m.
+- R **Spoutání**: připoutá soupeře do 6,5 m na 2,5 s (60 % útoku). Když uteče dál, řetěz ho škubne zpátky (50 % útoku, omráčení 0,8 s). Dekontaminace pouto přeruší.
+- F **Vír řetězů**: stáhne všechny soupeře do 9 m k sobě, po 0,3 s 150 % útoku a omráčení 1 s.
+- Úskok Řetězový švih (6 m, nezranitelnost 0,25 s, zasáhne soupeře v cestě), sekundární útok Trhnutí (hák na 9 m, přitáhne o 3 m).
+- Relikvie řetězů: Hák a Spoutání mají o 40 % kratší čekání. Úprava ultimátky Mlýnek (+2 m dosah, omráčení +0,4 s).
+- Strom: Řetěz (Dlouhý řetěz, Ostnatý hák s krvácením), Železo (výdrž, delší omráčení skoku, štít po skoku), Vír (delší a tvrdší Spoutání, Dvojitý vír). Vzhledy Rezavý přístav, Hlubinný lovec, relikviový a neonový ze sezónního průkazu.
+- Bossové se nikdy nepřitahují, jen dostanou poškození. Přitažení je krátký výpad, takže ho zastaví zeď a nikoho neprotáhne skrz sloup.
+- Boti: Hák ze střední vzdálenosti (míří s předstihem), Spoutání zblízka, skok na soupeře, nebo od něj, když jsou zranění, Vír na skupinu.
+- Ladění: první verze vyhrávala v týmu jen asi 30 % (moc umírala). Pomohlo víc zdraví a silnější švih, štít za přitažení a talent +25 % místo +15 %. Výsledek na 900 zápasech 3 proti 3: Hákař 49 %, Lovec 50 %, Strážce 57 %, Technik 51 %, Žhář 46 %, Kryonik 47 %. V soubojích 1 na 1 boti s Hákařem vyhrávají asi 59 %. Některé dvojice jsou tam hodně jednostranné: proti Kryonikovi, Lovci a Technikovi vyhrává, proti Žhářovi a Strážci prohrává. Lidé se ale háku umí vyhnout líp než boti.
+- Test (22 kontrol): přitažení, minutí, talent, skok, spoutání se škubnutím, vír na skupinu, boss se nehne, relikvie, úskok, sekundární útok a 20 zápasů botů bez chyb.
+
+**Jména hrdinů:** každý hrdina má jméno a krátký příběh, které se ukazují na kartě hrdiny v hubu: Lovec **Vex Bleskorez**, Strážce **Bor Ocelštít**, Technik **Ina Signálová**, Žhář **Dax Popelář**, Kryonik **Sia Mrazivá**, Hákař **Kord Řetězník**. Jména se nepřekládají, příběhy ano.
 
 **Vyváženost povolání** (listopad 2026): Strážce jako jediný hrdina na blízko v soubojích 1 na 1 prohrával (kolem 25 % výher) a Lovec vyhrával dvě třetiny. Proto má Strážce 385 HP místo 360 a rychlost 7,9 místo 7,6, Žhář 290 HP místo 275 a Lovec 222 HP místo 230. V soubojích botů na těžkou obtížnost (všechny dvojice, obě strany) teď vycházejí všechna čtyři povolání zhruba mezi 41 a 50 % výher (zbytek tvoří remízy).
 
@@ -108,6 +125,7 @@ Rozbor dostane jen padlý hráč (případně divák, který ho sleduje), ostatn
 | Technik | Odsávač | 7 s | výboj na 18 m: 110 % TECH, vyléčí tě o polovinu, zasaženému hrdinovi vezme 20 energie a dá ji tobě |
 | Žhář | Plamenomet | 4 s | kužel do 5,5 m: 95 % TECH a hoření 10 HP/s na 2 s |
 | Kryonik | Ledový hrot | 6 s | hrot na 20 m: 60 % TECH a zpomalení 1,5 s |
+| Hákař | Trhnutí | 6 s | hák na 9 m: 80 % útoku a přitáhne zasaženého soupeře o 3 m |
 
 Boti ho použijí, když mají cíl na dohled a v dosahu. Server propouští ze vstupu akce 0–6 (6 = sekundární útok). Ladění: první verze byla moc silná. Kryonikův hrot zmrazil každého už zpomaleného soupeře a Kryonik vyhrával souboje 64 %, Technika i Strážce porážel 10 : 1. Lovec s průraznou střelou za 140 % měl 58 %. Po čtyřech kolech úprav (bez zmrazení, slabší Lovec, silnější Strážce, Technik a Žhář) jsou týmy 3 na 3 na 1 800 zápasech: Lovec 51 %, Strážce 52 %, Technik 54 %, Žhář 44 %, Kryonik 50 %. Souboje: Strážce 54 %, Lovec 48 %, Kryonik 46 %, Žhář 42 %, Technik 36 % (Technik byl v soubojích slabý už předtím).
 
@@ -150,7 +168,7 @@ Po sedmém dni řada začne znovu. Když hráč den vynechá, začíná znovu od
 - **Serafín** — kopí světla v liniích. Na 70 % a 35 % vzlétne a z nebe padá světlo.
 - **Archon** — Rozsudek spálí polovinu arény, gravitace přitáhne tým k úderu. V polovině povolá hlídače.
 
-**Mapy:** Neonové jádro, Rezavá kovárna (lávové kanály pálí), Ledový archiv (hustý les sloupů), **Hvězdná observatoř** (kruh obelisků a dva páry teleportních bran), Rudá svatyně (aréna pro bosse), Pevnost relikvií (bludiště jen pro Únos relikvie), **Neonová citadela** (terasy na dvou patrech). Boti hledají cestu po navigační mřížce, takže obejdou i dlouhé zdi. Každá má vlastní vzhled, oblohu, sloupy a částice.
+**Mapy:** Neonové jádro, Rezavá kovárna (lávové kanály pálí), Ledový archiv (hustý les sloupů), **Hvězdná observatoř** (kruh obelisků a dva páry teleportních bran), Rudá svatyně (aréna pro bosse), Pevnost relikvií (bludiště jen pro Únos relikvie), **Neonová citadela** (terasy na dvou patrech), **Bouřková elektrárna** (ohlášené blesky). Boti hledají cestu po navigační mřížce, takže obejdou i dlouhé zdi. Každá má vlastní vzhled, oblohu, sloupy a částice.
 
 **Hvězdná observatoř** se hraje v Aréně, Ovládnutí, Eliminaci, Lovu bosse, Vlnách i Nekonečnu:
 - Dva páry teleportních bran propojují protilehlé rohy mapy: azurový pár severozápad–jihovýchod, růžový pár jihozápad–severovýchod.
@@ -159,6 +177,19 @@ Po sedmém dni řada začne znovu. Když hráč den vynechá, začíná znovu od
 - Maskovaný soupeř se teleportem neprozradí.
 - Brány jsou vidět i na minimapě a hra skok ukáže jako skok, ne jako sklouznutí přes mapu.
 
+**Režim dne** (`featuredOfDay` v `data.js`, bonus v `rewardsFor` v `meta.js`): každý den má jeden režim bonus +30 % zkušeností a kreditů, v sobotu a neděli +50 %.
+- Režimy se střídají pevně v pořadí Aréna, Ovládnutí, Lov bosse, Eliminace, Únos relikvie, Vlny, Mutace týdne, Souboj, Nekonečno. Den se počítá podle Prahy, pro všechny stejně. Devět režimů se střídá se sedmi dny v týdnu, takže na víkend vychází pokaždé jiný režim.
+- Smysl: dokud je hráčů málo, rozptýlí se po devíti režimech a potkají hlavně boty. Režim dne je stáhne na jedno místo.
+- Na kartě Hrát je nahoře panel „Režim dne“ s tlačítkem Vybrat a karta režimu má štítek „REŽIM DNE +30 %“. Po zápase se v odměnách ukáže řádek „Režim dne · +30 % (už v odměně)“. Platí i pro hosty, neplatí pro mise kampaně.
+- Test: bez bonusu mimo režim dne, s bonusem v něm (180 → 234 zkušeností), všechny režimy v rotaci existují, za 9 dní se vystřídají všechny, sobota má víkendový bonus.
+
+**Bouřková elektrárna** (Aréna, Ovládnutí, Mutace týdne, Eliminace): čtyři generátory kolem středu a otevřené boky. Mechanika je v `updStorm` v `sim.js`, čísla v `STORM` v `data.js`.
+- Od 15. sekundy bijí každých 7 s tři blesky. Každý se 1,3 s předem ohlásí červeným kruhem (poloměr 3 m), pak udeří.
+- Dva blesky míří poblíž náhodných hrdinů, třetí kamkoli do arény. Na základny nikdy.
+- Kdo v kruhu zůstane, ztratí 12 % maximálního zdraví a na 0,6 s se zpomalí. Když hrdina zásah přežije, dostane +15 % ultimátky („Nabito!“). Hráč tak volí mezi úhybem a nabitím ultimátky.
+- Boti ohlášené kruhy opouštějí stejně jako u bossů. Na 300 zápasech je zasáhly jen asi 2 % blesků, takže blesky hlavně nutí k pohybu a pro boty nejsou past.
+- Ověřeno na 300 zápasech botů (Aréna, Ovládnutí, Eliminace): všechny skončily, bez chyb. Vyhrávání podobné jako na Neonovém jádru (Lovec 47 %, Strážce 51 %, Technik 55 %, Žhář 45 %, Kryonik 52 %), zápasy trvají stejně dlouho.
+- Nad mapou se pomalu točí prstenec bouřkových mraků, které občas probleskne.
 **Neonová citadela** je mapa s patry. Hraje se v Aréně, Ovládnutí, Mutaci týdne a Eliminaci:
 - Dvě výšky: přízemí a dvě terasy na severu a jihu (3 m). Střed je otevřená plocha s relikvií a bodem B, kryjí ho čtyři sloupy kolem středu a čtyři dál. Body A a C leží na terasách.
 - Na terasy vedou rampy z obou boků a ze země u terasy tě na ni vystřelí skoková plošina. Dolů se dá seskočit odkudkoli.
@@ -312,6 +343,14 @@ Návod krok za krokem pro Render a databázi Neon (obojí zdarma, bez instalace 
 - Komprimuje se jednou po startu serveru mimo hlavní vlákno, takže běžící zápasy to nezpomalí. Výsledek zůstává v paměti, dokud se soubor nezmění.
 - Ověřuje to test: brotli i gzip vrací přesně původní soubor, 304 při stejném ETagu, obrázky beze změny, český i anglický náhled `index.html`, změna souboru se projeví.
 
+**Žádné cizí servery:** three.js (0.160.0) a písma Chakra Petch a Saira Condensed jsou balíčky z npm (`three`, `@fontsource/*`, přesné verze v `package.json`) a posílá je náš server na adrese `/vendor/…`. Hra tedy nestahuje nic z unpkg ani z Google Fonts.
+- Nevypadne, když CDN nefunguje nebo je zablokovaná (školní sítě, herní portály s přísnými pravidly).
+- Adresa hráče nejde žádné třetí straně.
+- Verze je v adrese (`/vendor/three@0.160.0/…`), takže prohlížeč si tyto soubory drží rok a znovu je nestahuje.
+- `/vendor/fonts.css` server poskládá při startu z použitých řezů písma. Každý řez se stáhne jen pro znaky, které stránka opravdu použije (latinka a čeština).
+- Server pustí ven jen soubory `.js`, `.css`, `.woff2` a `.woff` z těchto tří balíčků, nic jiného z `node_modules`.
+- **Při nahrání na GitHub nezapomeň na `package.json` i `package-lock.json`.** Render podle nich balíčky nainstaluje (`npm ci`).
+
 ## Propagace
 
 **Náhled odkazu:** `index.html` má značky Open Graph a Twitter Card. Discord, Facebook, Messenger, X a další z nich při sdílení vykreslí obrázek `public/og.png` (1200 × 630, neonová aréna s relikvií a výzvou „Hraj zdarma v prohlížeči“) s názvem a popisem. Tyhle služby chtějí plnou adresu obrázku. Server proto v `index.html` nahradí `%ORIGIN%` adresou webu: vezme proměnnou prostředí `PUBLIC_URL` (třeba `https://relikvie.onrender.com`, jen když se má použít jiná adresa), jinak adresu, na kterou přišel požadavek (na Renderu s https). Obrázek se dá kdykoli vyměnit za jiný se stejným názvem a rozměry (anglická varianta je `public/og-en.png`, viz Anglická verze níže). Po změně si Discord a Facebook drží starý náhled ještě nějakou dobu v mezipaměti.
@@ -323,6 +362,14 @@ Návod krok za krokem pro Render a databázi Neon (obojí zdarma, bez instalace 
 - **Zápasy:** počet online zápasů a jejich rozdělení podle režimů.
 - **Hráči v zápasech:** součet lidí (bez botů) ve všech zápasech dne.
 - **Max online:** nejvíc lidí připojených najednou.
+- **Sdílení:** kolikrát hráči sdíleli kartu s výsledkem zápasu.
+- **Odkud přišli** (řádek pod tabulkou, součet za 14 dní): podle zdroje návštěvy, největší první. Zdroj se určí takto:
+  - `?src=` na konci adresy, když je v ní;
+  - jinak název webu, ze kterého hráč klikl (třeba `discord.com` nebo `reddit.com`; jen název, nikdy celá adresa);
+  - jinak „pozvánka“ (odkaz do místnosti) nebo „aplikace“ (nainstalovaná hra);
+  - ostatní jsou „přímo“. Karty sdílené ze hry mají v odkazu `?src=share` a v přehledu se ukážou jako „sdílená karta“.
+
+  **Při propagaci dávej do každého odkazu vlastní `?src=`**, třeba `https://…/?src=reddit`, `?src=itchio`, `?src=discord` nebo `?src=tiktok` (s angličtinou `?lang=en&src=reddit`). Po pár dnech uvidíš, odkud chodí nejvíc hráčů. Zdroj smí mít 1–20 malých písmen, číslic nebo pomlček. Za den se ukládá nejvýš 40 různých zdrojů, zbytek se sečte jako „jiné“.
 
 Jak to funguje (`stats.js`):
 - Prohlížeč jednou denně pošle `POST /api/hello`. Uloží si jen datum poslední návštěvy, podle kterého pozná „nový“ nebo „vracející se“; žádné ID ani cookie.
@@ -330,6 +377,12 @@ Jak to funguje (`stats.js`):
 - Ukládají se jen souhrnná čísla za den (`doc.stats.days`, posledních 90 dní) ve stejné databázi jako účty.
 - Na jednu adresu se započítá nejvýš 6 hlášení za hodinu. Trénink bez serveru a trailerový režim se nepočítají.
 - Ověřuje to test (návštěvy, noví a vracející se, zápas, max online, přístup jen pro správce, žádné identifikátory v datech).
+
+**Sdílení výsledku** (tlačítko „Sdílet výsledek“ na obrazovce po zápase, `public/share.js`): hra nakreslí kartu 1200 × 630 (JPEG, asi 100 KB) s výsledkem, režimem a mapou, jménem hráče, hrdinou, čtyřmi čísly (zničení nebo zničení NPC, pády, poškození, léčení), odznakem MVP a výzvou „Hraj zdarma v prohlížeči“ s adresou webu.
+- Na mobilu se otevře systémová nabídka sdílení (WhatsApp, Messenger, Discord…) s obrázkem a textem typu „Vítězství · Modří 20 : 14 Rudí · Neonové jádro · 12 zničení · MVP. Zkus mě porazit: https://…“.
+- Kde sdílet soubory nejde (většina počítačů), obrázek se uloží a text s odkazem se zkopíruje do schránky.
+- V angličtině je karta i text anglicky a odkaz vede na `?lang=en`.
+- Nic se nikam nenahrává, všechno se kreslí v prohlížeči. Tlačítko se nezobrazí, když hráč v zápase nebyl (sledování).
 
 **Trailerový režim** pro natáčení videí: otevři hru s `?trailer` na konci adresy (třeba `https://…/?trailer`). Hra pustí zápas botů na těžkou obtížnost bez jakéhokoli rozhraní (žádné menu, HUD, jména ani čísla poškození) a kamera střihá mezi záběry jako ve filmu: sledování hrdiny tam, kde se bojuje (vybere toho, kolem kterého je nejvíc dalších), nízký dramatický oblet a celkový pohled na arénu. Záběr trvá 5–8 s, a když sledovaný hrdina padne, střihne se hned. Po konci zápasu začne další na další mapě (citadela, jádro, observatoř, kovárna, archiv).
 - `?trailer&map=citadel` drží jednu arénu, `&mode=control` přepne na Ovládnutí.

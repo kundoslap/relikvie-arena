@@ -741,7 +741,9 @@ export function createMeta(db,{admins=''}={}){
       for(let i=0;i<Math.floor(M.wave/3);i++)items.push(D.rollItem(p.level,{boost:M.wave*.04}));
     }
     if(mvp){xp*=1.15;cr*=1.15}
-    xp=Math.round(xp*mult*part);cr=Math.round(cr*mult*part);
+    // Režim dne: +30 % (weekend +50 %) for a match in today's featured mode, not for campaign missions
+    const fd=D.featuredOfDay(),featured=!M.mission&&M.mode===fd.mode?fd.bonus:0;
+    xp=Math.round(xp*mult*part*(1+featured));cr=Math.round(cr*mult*part*(1+featured));
     let skin=null;
     if(!M.D.pvp&&M.bossKills&&Math.random()<.04*M.bossKills){
       const cand=D.CLASS_KEYS.map(k=>k+':relic').filter(s=>!p.skins.includes(s));if(cand.length){skin=cand[Math.floor(Math.random()*cand.length)];p.skins.push(skin)}}
@@ -796,7 +798,7 @@ export function createMeta(db,{admins=''}={}){
       score:M.D.pvp?[M.score[u.team],M.score[1-u.team]]:null,dur:Math.round(M.time),xp,cr,mvp,rk});
     p.history.length=Math.min(p.history.length,D.HISTORY_MAX);
     db.touch();
-    return{xp,credits:cr,items,res,levelUps,sold,skin,camp,goalsDone:done,record,mvp,guild,pass,crystals,masteryUps,firstWin,achNew:achDiff(p,achBefore)};
+    return{xp,credits:cr,items,res,levelUps,sold,skin,camp,goalsDone:done,record,mvp,guild,pass,crystals,masteryUps,firstWin,featured,achNew:achDiff(p,achBefore)};
   }
 
   // ---------- achievements ----------
