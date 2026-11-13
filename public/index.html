@@ -730,5 +730,27 @@ body.trailer>*:not(#stage):not(#trailerTip){display:none!important}
 {"imports":{"three":"/vendor/three@0.160.0/build/three.module.js","three/addons/":"/vendor/three@0.160.0/examples/jsm/"}}
 </script>
 <script type="module" src="client.js"></script>
+<script>
+// When the game code does not start (a file missing on the server, a blocked network, an old browser), say so
+// instead of leaving a black screen; the note goes away by itself if the game starts late on a slow connection.
+(function(){var bad=[],esc=function(s){return String(s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})};
+  addEventListener('error',function(e){var t=e.target;if(t&&t!==window&&(t.src||t.href))bad.push(t.src||t.href);else if(e.message)bad.push(e.message)},true);
+  addEventListener('unhandledrejection',function(e){bad.push(e.reason&&e.reason.message||String(e.reason))});
+  var shown=null;
+  function check(){if(window.__booted){if(shown)shown.remove();return}
+    if(!shown&&document.body){shown=document.createElement('div');shown.id='bootErr';
+      shown.style.cssText='position:fixed;inset:0;display:grid;place-items:center;background:#04060c;color:#eef4ff;font:16px system-ui,sans-serif;z-index:99999;padding:24px;text-align:center';
+      shown.innerHTML='<div style="max-width:560px"><h2 style="margin:0 0 10px">Hru se nepodařilo načíst</h2><p>The game failed to load.</p><p>Zkus stránku obnovit (Ctrl+F5). Když to nepomůže, pošli správci hry text níže.</p>'
+        +'<p style="opacity:.6;font-size:12px;word-break:break-all">'+esc(bad.slice(0,6).join(' · ')||'bez chybové hlášky')+'</p>'
+        +'<button type="button" onclick="location.reload()" style="margin-top:8px;padding:10px 20px;font-weight:700;border:0;border-radius:3px;background:#ffc66d">Obnovit / Reload</button></div>';
+      document.body.appendChild(shown);
+      // which of the game's files the server does not have (the usual cause: a file left out of an upload)
+      var files=['client.js','i18n.js','lang-en.js','share.js','hub.js','data.js','sim.js','models.js','social.js','audio.js','settings.js','vendor/three@0.160.0/build/three.module.js','vendor/three@0.160.0/examples/jsm/postprocessing/EffectComposer.js'];
+      Promise.all(files.map(function(f){return fetch('/'+f,{method:'HEAD',cache:'no-store'}).then(function(r){return r.ok?null:f},function(){return f})})).then(function(miss){
+        miss=miss.filter(Boolean);var p=document.createElement('p');p.style.cssText='color:#ff8fa8;font-weight:700';
+        p.textContent=miss.length?'Na serveru chybí: '+miss.join(', '):'Všechny soubory hry na serveru jsou.';shown.firstChild.appendChild(p)})}
+    setTimeout(check,1000)}
+  setTimeout(check,15000)})();
+</script>
 </body>
 </html>

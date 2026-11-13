@@ -349,7 +349,8 @@ Návod krok za krokem pro Render a databázi Neon (obojí zdarma, bez instalace 
 - Verze je v adrese (`/vendor/three@0.160.0/…`), takže prohlížeč si tyto soubory drží rok a znovu je nestahuje.
 - `/vendor/fonts.css` server poskládá při startu z použitých řezů písma. Každý řez se stáhne jen pro znaky, které stránka opravdu použije (latinka a čeština).
 - Server pustí ven jen soubory `.js`, `.css`, `.woff2` a `.woff` z těchto tří balíčků, nic jiného z `node_modules`.
-- **Při nahrání na GitHub nezapomeň na `package.json` i `package-lock.json`.** Render podle nich balíčky nainstaluje (`npm ci`).
+- Soubory, které potřebuje prohlížeč, jsou přibalené přímo ve složce `public/vendor`: three.js (`build/three.module.js` a použité doplňky s tím, co importují) a písma jen pro latinku a češtinu (12 souborů woff2 a `fonts.css`). Server je posílá odtud a z `node_modules` jen tehdy, když tam chybí. Hra se tak načte, i když se na serveru nenainstalovaly balíčky nebo se nenahrál nový `server.js`. Kopii vytváří skript (`vendor.mjs` ve scratchpadu): po změně verze three.js se musí spustit znovu.
+- **Pojistka proti černé obrazovce:** když se kód hry do 15 s nespustí, `index.html` místo černé obrazovky ukáže hlášku „Hru se nepodařilo načíst“ s tlačítkem Obnovit. Hláška vypíše chybu z prohlížeče a sama zkontroluje, které soubory hry server nemá („Na serveru chybí: share.js“). Když se hra na pomalém připojení nakonec spustí, hláška zmizí.
 
 ## Propagace
 

@@ -1225,6 +1225,7 @@ applyTouch();
 const TRAILER=new URLSearchParams(location.search).has('trailer');
 if(TRAILER){startTrailer();trailerTip()}else startAttract();
 frame();
+window.__booted=true; // the load-failure note in index.html checks this
 // in trailer mode the hub still loads (settings, sounds) but nothing is shown and no match is resumed
 Hub.init(hubCallbacks).then(()=>{if(!TRAILER){resumeAfterReload();hello()}});
 // Počítadlo hráčů: once a day the browser tells the server it was here: new or returning, signed in, touch device.

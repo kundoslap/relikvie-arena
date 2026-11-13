@@ -104,7 +104,10 @@ const server=http.createServer(async(req,res)=>{
   let f,vendor=false;
   if(p.startsWith('/vendor/')){
     vendor=true;const [,,pkg,...rest]=p.split('/'),root=Object.hasOwn(VENDOR,pkg)?VENDOR[pkg]:null;
-    if(p==='/vendor/fonts.css')f='fonts.css';
+    // the copies in public/vendor come first (they are part of the upload); node_modules is only a fallback
+    const pf=path.normalize(path.join(PUB,p));
+    if(pf.startsWith(PUB+path.sep)&&await stat(pf).then(s=>s.isFile(),()=>false))f=pf;
+    else if(p==='/vendor/fonts.css')f='fonts.css';
     else{if(!root||!VENDOR_EXT.has(path.extname(p))){res.writeHead(404);return res.end()}
       f=path.normalize(path.join(root,...rest));if(!f.startsWith(root+path.sep)){res.writeHead(403);return res.end()}}
   }else{f=path.normalize(path.join(PUB,p));
