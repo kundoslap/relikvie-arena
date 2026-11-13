@@ -93,6 +93,11 @@ export const SECONDARY={
   hook:{name:'Trhnutí',cd:6,icon:'hook',desc:'Krátký hák na 9 m: 80 % útoku a přitáhne zasaženého soupeře o 3 m k tobě.'}};
 // "Novinky" in the hub, newest first; id marks what a player has already seen
 export const CHANGELOG=[
+  {id:'2026-12t',title:'Epický zásobník a setové implantáty',items:[
+    'V Obchodě je nový Epický zásobník za 2 400 kreditů (od úrovně 10): vždy nejméně epický implantát, asi 10% šance na legendární.',
+    'Setové implantáty: tři sady (Strážce trezoru, Lovec signálu, Ozvěnový mág), každá má kus do každého slotu. 2 kusy jedné sady dají bonus, 3 kusy silnější bonus se zvláštním efektem.',
+    'Strážce trezoru: více HP a obrany, s celou sadou silnější štíty a štít 100 po oživení. Lovec signálu: útok a rychlost útoku, s celou sadou vrací zničení energii a zkracuje čekání. Ozvěnový mág: TECH a energie, s celou sadou je každá čtvrtá schopnost zdarma.',
+    'Setové kusy padají z Epického zásobníku (35 % epických), občas je nabízí obchodník a některé epické implantáty ze zápasů jsou setové. V inventáři mají tyrkysový okraj a detail ukazuje, které kusy máš a co sada dává.']},
   {id:'2026-12s',title:'Nový režim: Relikviobal',items:[
     'Fotbal s relikvií na novém dlouhém hřišti Neonový stadion. Seber relikvii ve středu a doběhni s ní do soupeřovy branky, nebo ji sekundárním útokem (pravé tlačítko, C) hoď. Hozená relikvie v brance je taky gól, i vlastní.',
     'Kdo relikvii nese, je o 10 % pomalejší, nemůže se maskovat a pustí ji, když padne nebo ho něco omráčí. Omráčení je tedy skluz.',
@@ -326,6 +331,27 @@ export function rollItem(level=1,o={}){
   if(r===4){u=pick(Object.keys(UNIQUES).filter(k=>UNIQUES[k].slot===slot));name=UNIQUES[u].name}
   return{id:newId(),slot,r,lvl:level,aff,u,name};
 }
+// ---------- setové implantáty ----------
+// Three sets, one piece for each slot. A set piece is an epic implant (three epic affixes) with the set's name and a `set`
+// key, so the forge, the market and selling treat it like any epic. Wearing 2 pieces of one set adds b2, all 3 add b3
+// as well (more stats and a special effect, a `u` flag the simulation checks like a unique implant).
+export const SET_COLOR='#3dffc8';
+export const SETS={
+  vault:{name:'Strážce trezoru',pieces:{core:'Trezorové jádro',dermal:'Trezorová derma',neural:'Trezorový uzel'},
+    b2:{fx:{hp:10,def:2},desc:'+10 % max. HP a +2 b. obrany.'},b3:{fx:{shield:15},u:'setVault',desc:'+15 % síla štítů a po každém oživení štít 100.'}},
+  hunter:{name:'Lovec signálu',pieces:{core:'Lovecké jádro',dermal:'Lovecká derma',neural:'Lovecký uzel'},
+    b2:{fx:{atk:6,rate:5},desc:'+6 % útok a +5 % rychlost útoku.'},b3:{fx:{speed:4},u:'setHunter',desc:'+4 % rychlost a každé zničení soupeře vrátí 30 energie a zkrátí čekání schopností o 2 s.'}},
+  echo:{name:'Ozvěnový mág',pieces:{core:'Ozvěnové jádro',dermal:'Ozvěnová derma',neural:'Ozvěnový uzel'},
+    b2:{fx:{tech:8,regen:8},desc:'+8 % TECH a +8 % obnovy energie.'},b3:{fx:{cdr:5},u:'setEcho',desc:'+5 % zkrácení čekání a každá čtvrtá schopnost nestojí energii.'}}
+};
+export const SET_KEYS=Object.keys(SETS);
+// chance that an epic implant from these sources is a set piece
+export const SET_CHANCE={crate:.35,merchant:.25,drop:.15};
+// turns an epic implant into a piece of a set (random set when none is given), keeping its slot and affixes
+export function makeSet(it,set){set=SETS[set]?set:pick(SET_KEYS);it.set=set;it.name=SETS[set].pieces[it.slot];return it}
+export const setItem=(level,set,slot)=>makeSet(rollItem(level,{slot,minR:3,maxR:3}),set);
+// equipped pieces per set
+export function setCounts(p){const n={};for(const s of SLOT_KEYS){const id=p?.eq?.[s],it=id&&p.inv?.find(i=>i.id===id);if(it?.set&&SETS[it.set])n[it.set]=(n[it.set]||0)+1}return n}
 export const itemValue=it=>Math.round([6,18,50,150,500][it.r]*(1+it.lvl*.08));
 export const rollAffix=(k,level,r)=>Math.round(AFFIX_BASE[k]*(1+level*.045)*RARITIES[r].mult*rnd(.7,1)*10)/10;
 export const affixPool=slot=>AFFIX_POOLS[slot]||[];
@@ -366,7 +392,8 @@ export function itemStats(it){
 export const INV_MAX=80;
 export const CRATES={
   basic:{name:'Zásobník',desc:'Náhodný implantát tvé úrovně.',price:150,boost:0,minR:0},
-  rare:{name:'Vzácný zásobník',desc:'Nejméně vzácný implantát, vyšší šance na epický a legendární.',price:650,boost:.6,minR:2}
+  rare:{name:'Vzácný zásobník',desc:'Nejméně vzácný implantát, vyšší šance na epický a legendární.',price:650,boost:.6,minR:2},
+  epic:{name:'Epický zásobník',desc:'Nejméně epický implantát, asi 10% šance na legendární. Epický implantát je s 35% šancí kusem některé sady.',price:2400,boost:1.2,minR:3,setChance:.35,level:10}
 };
 export const MARKET_FEE=.05;
 
@@ -593,6 +620,10 @@ export function safeTree(k,alloc,level){try{return validateTree(k,alloc,level)}c
 export function computeLoadout(p,k,cap=MASTERY.max){
   const mods={},uniq=[];const add=(key,v)=>mods[key]=(mods[key]||0)+v;
   for(const s of SLOT_KEYS){const id=p?.eq?.[s];const it=id&&p.inv?.find(i=>i.id===id);if(!it)continue;for(const a of itemStats(it))add(a.k,a.v);if(it.u)uniq.push(it.u)}
+  // set bonuses: 2 pieces of one set, then all 3
+  const sets=setCounts(p);
+  for(const [k,n] of Object.entries(sets)){const S=SETS[k];if(n>=2)for(const [fk,fv] of Object.entries(S.b2.fx))add(fk,fv);
+    if(n>=3){for(const [fk,fv] of Object.entries(S.b3.fx))add(fk,fv);if(S.b3.u)uniq.push(S.b3.u)}}
   const alloc=p?.tree?.[k]||{};
   for(const br of TREES[k]||[])for(const n of br.nodes){const r=alloc[n.id]|0;if(r)for(const [fk,fv] of Object.entries(n.fx))add(fk,fv*r)}
   const skin=p&&skinOwned(p,k,p.skin?.[k])?p.skin[k]:'default';
@@ -603,7 +634,7 @@ export function computeLoadout(p,k,cap=MASTERY.max){
   // ultimate mastery charges the ultimate faster: +1 % per rank, +10 % with the Rychlé nabití branch
   const mastery=masteryLoadout(p,cap),um=mastery[k+':ult'];
   if(um)add('ult',Math.min(um.r,MASTERY.bonusCap)*MASTERY.ultPerRank+(um.b[0]===0?10:0)+(um.b[4]===0?10:0)+(um.b[11]===0?15:0));
-  return{mods,uniq,skin,level:p?.level||1,prof,title:p?.title||null,tactic,mastery};
+  return{mods,uniq,skin,level:p?.level||1,prof,title:p?.title||null,tactic,mastery,sets};
 }
 
 // ---------- professions ----------
@@ -1191,5 +1222,5 @@ export const BOSS_KEYS=Object.keys(BOSSES);
 
 // Lookup tables are indexed by names that come from players (class, mode, crate, slot…). Without a prototype,
 // keys like "constructor" or "toString" are simply missing instead of resolving to built-in functions.
-for(const T of [CLASSES,DIFF_REWARD,STATS,SLOTS,AFFIX_BASE,AFFIX_POOLS,BASE_NAMES,UNIQUES,CRATES,SKINS,TREES,SCHOOLS,PROF_SKILLS,PASSIVES,ULT_MODS,
+for(const T of [CLASSES,DIFF_REWARD,STATS,SLOTS,AFFIX_BASE,AFFIX_POOLS,BASE_NAMES,UNIQUES,CRATES,SETS,SKINS,TREES,SCHOOLS,PROF_SKILLS,PASSIVES,ULT_MODS,
   TACTICS,BOT_TACTIC,ACTS,ECHO_MODS,MUTATORS,GOALS,WEEKLY_GOALS,MAPS,MODES,NPCS,BOSSES])Object.setPrototypeOf(T,null);

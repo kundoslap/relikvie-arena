@@ -233,10 +233,19 @@ const classCards=()=>`<div class="classes">${Object.entries(D.CLASSES).map(([k,c
 const bindClassCards=()=>document.querySelectorAll('#hubBody .cc').forEach(b=>b.onclick=()=>setCls(b.dataset.k));
 export function itemCard(it,o={}){
   if(!it)return`<div class="item empty"><b>${o.slot?D.SLOTS[o.slot].name:'Prázdné'}</b><small>Prázdný slot</small></div>`;
-  return`<button type="button" class="item r${it.r}" data-id="${it.id}" aria-pressed="${!!o.sel}">${o.eq?'<span class="eqd">VYBAVENO</span>':''}<b>${esc(it.name)}${it.up?` <span class="iup">+${it.up}</span>`:''}${it.lock?' <span class="ilk" title="Zamčeno">🔒</span>':''}</b><small>${D.RARITIES[it.r].name} · ${D.SLOTS[it.slot].name} · úr. ${it.lvl}</small>${sockDots(it)}</button>`;
+  return`<button type="button" class="item r${it.r}${it.set?' set':''}" data-id="${it.id}" aria-pressed="${!!o.sel}">${o.eq?'<span class="eqd">VYBAVENO</span>':''}<b>${esc(it.name)}${it.up?` <span class="iup">+${it.up}</span>`:''}${it.lock?' <span class="ilk" title="Zamčeno">🔒</span>':''}</b><small>${D.RARITIES[it.r].name} · ${D.SLOTS[it.slot].name} · úr. ${it.lvl}</small>${it.set?`<small class="setn">Sada ${D.SETS[it.set].name}</small>`:''}${sockDots(it)}</button>`;
 }
 const sockDots=it=>it.sock?.length?`<span class="socks">${it.sock.map(s=>{const c=s&&D.parseCrystal(s);return`<i style="${c?`--c:${c.C.color}`:''}" class="${c?'on':''}" title="${c?D.crystalName(s):'Prázdná zdířka'}"></i>`}).join('')}</span>`:'';
 const affixes=it=>D.itemStats(it).map(a=>D.fmtStat(a.k,a.v)).join(' · ')+(it.up?` · +${it.up}`:'');
+// the set of a piece: which pieces the player owns and wears, and the two bonuses (lit when active)
+const setTag=it=>it.set?` · <span style="color:${D.SET_COLOR}">sada ${D.SETS[it.set].name}</span>`:'';
+function setBlock(it){
+  const S=D.SETS[it.set];if(!S)return'';const p=H.profile,n=D.setCounts(p)[it.set]||0;
+  const pieces=D.SLOT_KEYS.map(s=>{const own=p.inv.some(i=>i.set===it.set&&i.slot===s),on=p.inv.some(i=>i.set===it.set&&i.slot===s&&isEq(i));
+    return`<span class="${on?'on':own?'own':''}">${S.pieces[s]}</span>`}).join('');
+  return`<div class="setb"><b>Sada ${S.name} · vybaveno ${n} / 3</b><div class="setp">${pieces}</div>
+    <p class="${n>=2?'on':''}"><b>2 kusy:</b> ${S.b2.desc}</p><p class="${n>=3?'on':''}"><b>3 kusy:</b> ${S.b3.desc}</p></div>`;
+}
 const isEq=it=>H.profile&&Object.values(H.profile.eq).includes(it.id);
 
 // ---------- Hrát ----------
@@ -673,7 +682,8 @@ function tabProf(){
 function tabHero(){
   const p=H.profile,k=H.cls,d=derived(k),cur=p.skin?.[k]||'default',st=p.stats;
   const mods=Object.entries(d.L.mods).filter(([x])=>D.STATS[x]).map(([x,v])=>`<span>${D.fmtStat(x,v)}</span>`).join('')||'<span>Žádné bonusy</span>';
-  const uniq=d.L.uniq.map(u=>`<p class="talent"><b style="color:var(--gold)">${D.UNIQUES[u].name}.</b> ${D.UNIQUES[u].desc}</p>`).join('');
+  const uniq=d.L.uniq.filter(u=>D.UNIQUES[u]).map(u=>`<p class="talent"><b style="color:var(--gold)">${D.UNIQUES[u].name}.</b> ${D.UNIQUES[u].desc}</p>`).join('')
+    +Object.entries(d.L.sets||{}).filter(([,n])=>n>=2).map(([k,n])=>{const S=D.SETS[k];return`<p class="talent"><b style="color:${D.SET_COLOR}">Sada ${S.name} (${n}/3).</b> ${S.b2.desc}${n>=3?' '+S.b3.desc:''}</p>`}).join('');
   $('#hubBody').innerHTML=`${classCards()}
     <div class="grid2">
       <section class="panel"><h3>${D.CLASSES[k].name} · vzhled</h3><canvas id="preview" width="520" height="520"></canvas>
@@ -736,7 +746,7 @@ function itemDetail(it){
   const essOut=D.ESSENCE[it.r]+Array.from({length:it.up|0},(_,n)=>Math.floor((D.upgradeCost(it,n)?.essence||0)/2)).reduce((a,b)=>a+b,0);
   return`<div class="idet r${it.r}"><h4>${esc(it.name)}${it.up?` <span class="iup">+${it.up}</span>`:''}</h4><small class="help">${D.RARITIES[it.r].name} · ${D.SLOTS[it.slot].name} · úroveň ${it.lvl}${eq?' · vybaveno':''}${it.lock?' · zamčeno':''}</small>
     <ul>${it.aff.map((a,i)=>`<li>${D.fmtStat(a.k,Math.round(a.v*m*10)/10)}${next?` <small class="help">→ ${Math.round(a.v*(m+D.UPGRADE_STEP)*10)/10}</small>`:''}${p.level>=rc.level&&!it.offer&&it.aff.length?` <button class="ghost xs" type="button" data-rt="${i}" title="Přeladit za ${costTxt(rc)}">přeladit</button>`:''}</li>`).join('')}
-      ${st.filter(a=>a.crystal).map(a=>`<li style="color:${D.parseCrystal(a.crystal).C.color}">${D.fmtStat(a.k,a.v)} <small class="help">· ${D.crystalName(a.crystal)}</small></li>`).join('')}</ul>${it.u?`<p class="uq">${D.UNIQUES[it.u].desc}</p>`:''}
+      ${st.filter(a=>a.crystal).map(a=>`<li style="color:${D.parseCrystal(a.crystal).C.color}">${D.fmtStat(a.k,a.v)} <small class="help">· ${D.crystalName(a.crystal)}</small></li>`).join('')}</ul>${it.u?`<p class="uq">${D.UNIQUES[it.u].desc}</p>`:''}${setBlock(it)}
     ${it.offer?`<div class="rew"><b>Přeladění · ${D.fmtStat(it.aff[it.offer.i].k,it.aff[it.offer.i].v)} → <span style="color:var(--green)">${D.fmtStat(it.offer.k,it.offer.v)}</span></b><small class="help">Hodnoty jsou bez vylepšení, to se počítá navíc.</small>
       <div class="btns"><button class="go sm" type="button" id="rtYes">Vzít novou</button><button class="ghost sm" type="button" id="rtNo">Nechat původní</button></div></div>`:''}
     <div class="btns"><button class="go sm" id="eqBtn" type="button">${eq?'Sundat':'Vybavit'}</button><button class="ghost sm" id="lockBtn" type="button">${it.lock?'Odemknout':'Zamknout'}</button>
@@ -854,7 +864,7 @@ function tabMarket(){
       <div class="seg" id="mSort"><button type="button" data-o="price" aria-pressed="${K.sort==='price'}">Nejlevnější</button><button type="button" data-o="new" aria-pressed="${K.sort==='new'}">Nejnovější</button></div>
       <div class="seg"><button type="button" id="mMine" aria-pressed="${K.mine}">Moje nabídky</button></div></div>
       <p class="help">Předmět nabídneš v Inventáři. Kupuješ za kredity, prodávající dostane cenu bez ${D.MARKET_FEE*100} % poplatku.</p></section>
-    <section class="panel"><div class="list">${K.list.map(l=>`<div class="lrow r${l.item.r}"><div><b>${esc(l.item.name)}</b><small>${D.RARITIES[l.item.r].name} · ${D.SLOTS[l.item.slot].name} · úr. ${l.item.lvl} · ${esc(affixes(l.item))}${l.item.u?' · '+esc(D.UNIQUES[l.item.u].desc):''}</small><small>Prodává ${esc(l.sellerNick)}</small></div>
+    <section class="panel"><div class="list">${K.list.map(l=>`<div class="lrow r${l.item.r}"><div><b>${esc(l.item.name)}</b><small>${D.RARITIES[l.item.r].name}${setTag(l.item)} · ${D.SLOTS[l.item.slot].name} · úr. ${l.item.lvl} · ${esc(affixes(l.item))}${l.item.u?' · '+esc(D.UNIQUES[l.item.u].desc):''}</small><small>Prodává ${esc(l.sellerNick)}</small></div>
       <div class="price">${num(l.price)}</div>${l.mine?`<button class="ghost sm" type="button" data-cancel="${l.id}">Stáhnout</button>`:`<button class="go sm" type="button" data-buy="${l.id}" ${H.profile.credits<l.price?'disabled':''}>Koupit</button>`}</div>`).join('')||'<p class="help">Žádné nabídky. Buď první, kdo něco nabídne.</p>'}</div></section>`;
   const re=()=>{K.list=null;tabMarket()};
   $('#mRef').onclick=re;
@@ -872,14 +882,15 @@ function tabShop(){
   $('#hubBody').innerHTML=`<section class="panel"><div class="row"><h3>Obchodník · dnešní zboží</h3>
       ${MR.rerolled?'<small class="help">Zboží dnes už vyměněno</small>':`<button class="ghost sm" type="button" id="mrRe" ${p.credits<D.MERCHANT.rerollCost?'disabled':''}>Vyměnit zboží za ${D.MERCHANT.rerollCost} kr.</button>`}</div>
       <p class="help">Každý den o půlnoci přiveze čtyři vybrané implantáty tvé úrovně: vzácný nebo lepší do každého slotu a jeden epický nebo legendární. Každý kus koupíš jen jednou, na rozdíl od zásobníku víš předem, co dostaneš.</p>
-      <div class="list">${MR.offers.map((o,i)=>`<div class="lrow r${o.item.r}" style="${o.sold?'opacity:.5':''}"><div><b>${esc(o.item.name)}</b><small>${D.RARITIES[o.item.r].name} · ${D.SLOTS[o.item.slot].name} · úr. ${o.item.lvl} · ${esc(affixes(o.item))}${o.item.u?' · '+esc(D.UNIQUES[o.item.u].desc):''}</small></div>
+      <div class="list">${MR.offers.map((o,i)=>`<div class="lrow r${o.item.r}" style="${o.sold?'opacity:.5':''}"><div><b>${esc(o.item.name)}</b><small>${D.RARITIES[o.item.r].name}${setTag(o.item)} · ${D.SLOTS[o.item.slot].name} · úr. ${o.item.lvl} · ${esc(affixes(o.item))}${o.item.u?' · '+esc(D.UNIQUES[o.item.u].desc):''}</small></div>
         <div class="price">${num(o.price)}</div>${o.sold?'<small class="help">Koupeno</small>':`<button class="go sm" type="button" data-mr="${i}" ${p.credits<o.price?'disabled':''}>Koupit</button>`}</div>`).join('')}</div></section>
-    <div class="grid2"><section class="panel"><h3>Zásobníky</h3>${Object.entries(D.CRATES).map(([k,c])=>`<div class="lrow ${k==='rare'?'r2':'r0'}"><div><b>${c.name}</b><small>${c.desc}</small></div><div class="price">${num(c.price)}</div><button class="go sm" type="button" data-crate="${k}" ${p.credits<c.price?'disabled':''}>Koupit</button></div>`).join('')}
-      <p class="help">Šance na vzácnost: ${D.RARITIES.map(r=>`${r.name} ${r.weight} %`).join(', ')}. Vzácný zásobník šance na vyšší vzácnost zvyšuje.</p></section>
+    <div class="grid2"><section class="panel"><h3>Zásobníky</h3>${Object.entries(D.CRATES).map(([k,c])=>{const lock=c.level&&p.level<c.level;return`<div class="lrow r${c.minR}"><div><b>${c.name}</b><small>${c.desc}${lock?` Od úrovně ${c.level}.`:''}</small></div><div class="price">${num(c.price)}</div><button class="go sm" type="button" data-crate="${k}" ${p.credits<c.price||lock?'disabled':''}>Koupit</button></div>`}).join('')}
+      <p class="help">Šance na vzácnost: ${D.RARITIES.map(r=>`${r.name} ${r.weight} %`).join(', ')}. Vzácný a epický zásobník šance na vyšší vzácnost zvyšují.</p>
+      <p class="help"><b style="color:${D.SET_COLOR}">Setové implantáty:</b> ${D.SET_KEYS.map(k=>D.SETS[k].name).join(', ')}. Každá sada má kus do každého slotu, 2 kusy dají bonus a 3 kusy silnější bonus se zvláštním efektem. Padají z epického zásobníku, občas je nabízí obchodník a některé epické implantáty ze zápasů jsou setové.</p></section>
     <section class="panel"><h3>Vzhledy</h3><div class="list">${D.CLASS_KEYS.flatMap(k=>D.SKINS[k].filter(s=>s.req?.credits).map(s=>{const own=D.skinOwned(p,k,s.k);
       return`<div class="lrow"><div><b style="color:${hex(s.glow)}">${s.name}</b><small>${D.CLASSES[k].name}</small></div><div class="price">${num(s.req.credits)}</div>${own?'<small class="help">Vlastníš</small>':`<button class="go sm" type="button" data-bk="${k}" data-bs="${s.k}" ${p.credits<s.req.credits?'disabled':''}>Koupit</button>`}</div>`})).join('')}</div>
       <p class="help">Další vzhledy se odemknou na úrovni 5. Relikviové vzhledy padají jen z poražených bossů.</p></section></div>`;
-  document.querySelectorAll('[data-crate]').forEach(b=>b.onclick=()=>act('crate',{type:b.dataset.crate},j=>`Získáno: ${j.item.name} (${D.RARITIES[j.item.r].name}).`));
+  document.querySelectorAll('[data-crate]').forEach(b=>b.onclick=()=>act('crate',{type:b.dataset.crate},j=>`Získáno: ${j.item.name} (${D.RARITIES[j.item.r].name}${j.item.set?', sada '+D.SETS[j.item.set].name:''}).`));
   document.querySelectorAll('[data-bk]').forEach(b=>b.onclick=()=>act('buySkin',{cls:b.dataset.bk,skin:b.dataset.bs},'Vzhled koupen a nasazen.'));
   document.querySelectorAll('[data-mr]').forEach(b=>b.onclick=()=>act('merchantBuy',{i:+b.dataset.mr},j=>`Koupeno: ${j.item.name}.`));
   $('#mrRe')&&($('#mrRe').onclick=()=>act('merchantReroll',{},'Obchodník přivezl nové zboží.'));

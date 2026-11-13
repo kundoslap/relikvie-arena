@@ -114,7 +114,8 @@ export function createMeta(db,{admins=''}={}){
   }
   // three slot-specific offers of rare or better, plus one epic-or-better special
   function merchantOffers(p){
-    return [...D.SLOT_KEYS.map(slot=>D.rollItem(p.level,{slot,minR:2,boost:.3})),D.rollItem(p.level,{minR:3,boost:.3})]
+    const sp=D.rollItem(p.level,{minR:3,boost:.3});if(sp.r===3&&Math.random()<D.SET_CHANCE.merchant)D.makeSet(sp);
+    return [...D.SLOT_KEYS.map(slot=>D.rollItem(p.level,{slot,minR:2,boost:.3})),sp]
       .map(item=>({item,price:Math.max(150,Math.round(D.itemValue(item)*D.MERCHANT.markup/10)*10),sold:false}));
   }
   function grantXp(p,xp){const ups=[];p.xp+=xp;
@@ -374,7 +375,8 @@ export function createMeta(db,{admins=''}={}){
     crate(p,{type}){
       const c=D.CRATES[type];if(!c)fail('Neznámý zásobník.');if(p.credits<c.price)fail('Nemáš dost kreditů.');
       if(p.inv.length>=D.INV_MAX)fail('Inventář je plný. Nejdřív něco prodej.');
-      p.credits-=c.price;const it=D.rollItem(p.level,{boost:c.boost,minR:c.minR});p.inv.push(it);return{item:it};
+      if(c.level&&p.level<c.level)fail(`${c.name} je od úrovně ${c.level}.`);
+      p.credits-=c.price;const it=D.rollItem(p.level,{boost:c.boost,minR:c.minR});if(it.r===3&&c.setChance&&Math.random()<c.setChance)D.makeSet(it);p.inv.push(it);return{item:it};
     },
     marketList(p,{itemId,price}){
       price=Math.round(+price);if(!(price>=10&&price<=1e6))fail('Cena musí být 10 až 1 000 000 kreditů.');
@@ -831,6 +833,8 @@ export function createMeta(db,{admins=''}={}){
       p.weekly.pts+=g;if(res==='win')p.weekly.wins++;if(mvp)p.weekly.mvp++;weekly={gain:g,pts:p.weekly.pts,pos:Object.hasOwn(doc.profiles,p.id)?weeklyPos(p):0}}
     // first win of the calendar day (Prague): a fixed bonus on top, once a day
     let firstWin=null;if(won&&p.firstWin!==D.dayKey()){p.firstWin=D.dayKey();xp+=D.FIRST_WIN.xp;cr+=D.FIRST_WIN.cr;firstWin={...D.FIRST_WIN}}
+    // an epic implant from a match is sometimes a set piece
+    for(const it of items)if(it.r===3&&!it.set&&Math.random()<D.SET_CHANCE.drop)D.makeSet(it);
     // apply
     p.credits+=cr;const levelUps=grantXp(p,xp);const pass=passGain(p,xp);
     let sold=0;for(const it of items)if(!giveItem(p,it))sold++;

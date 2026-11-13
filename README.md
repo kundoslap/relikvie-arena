@@ -279,6 +279,16 @@ Kdo už měl schopnost na úrovni 20 a hrál dál, má nasbírané body započí
 
 **Mistrovství základního útoku (živly):** základní útok má vlastní mistrovství 0–20 (1 bod za 4 zásahy, +0,5 % poškození za úroveň). Úroveň 5 odemkne živel povolání, který působí při každém zásahu: Lovec **krvácení** 4 HP/s, Strážce **jed** 4 HP/s (cíl se navíc léčí o 30 % méně), Technik **elektrický šok** 4 HP/s, Žhář silnější **hoření** 10 HP/s (jeho talent zapaluje slabším ohněm 5 HP/s už od začátku). Milníky: Síla živlu (+50 %) / Trvalost (+2 s), Jiskra (každý 5. zásah přeskočí na dalšího soupeře) / Rozklad (cíle pod tvým živlem dostávají o 6 % víc), Vysátí (léčí 15 % poškození živlu) / Šíření (při pádu cíle živel přeskočí na soupeře do 4 m), Exploze (každý 8. zásah odpálí zbytek živlu) / Dvojí živel (přidá druhý živel). Efekty se nesčítají, nový zásah obnoví trvání. Dekontaminace odstraní všechny, Obnova jen krvácení. V hodnocené hře platí úroveň 5, takže živel má každý; vyváženost je ověřená souboji botů na úrovni 0 i 5.
 
+**Epický zásobník a setové implantáty** (`SETS`, `setCounts`, `makeSet` v `data.js`):
+- Obchod má tři zásobníky: Zásobník (150 kr., jakýkoli implantát), Vzácný (650 kr., nejméně vzácný) a **Epický** (2 400 kr., od úrovně 10, nejméně epický, legendární asi v 10 % případů). Epický implantát z epického zásobníku je s 35% šancí setový kus.
+- **Setové implantáty**: tři sady po třech kusech, jeden do každého slotu (jádro, derma, neurál). Setový kus je epický implantát (tři epické vlastnosti) s názvem sady a klíčem `set`, takže ho dílna, tržiště i prodej berou jako jakýkoli epický. Bonusy sady se sčítají v `computeLoadout` podle počtu vybavených kusů jedné sady:
+  - Strážce trezoru: 2 kusy +10 % max. HP a +2 b. obrany; 3 kusy navíc +15 % síla štítů a štít 100 po každém oživení.
+  - Lovec signálu: 2 kusy +6 % útok a +5 % rychlost útoku; 3 kusy navíc +4 % rychlost a každé zničení soupeře vrátí 30 energie a zkrátí čekání schopností o 2 s.
+  - Ozvěnový mág: 2 kusy +8 % TECH a +8 % obnovy energie; 3 kusy navíc +5 % zkrácení čekání a každá čtvrtá schopnost nestojí energii.
+- Zvláštní efekt 3 kusů je příznak v `uniq` (`setVault`, `setHunter`, `setEcho`), který simulace kontroluje stejně jako unikátní legendární implantáty.
+- Odkud: Epický zásobník (35 % epických), obchodník (nabídka epického nebo lepšího je s 25% šancí setová) a epické implantáty ze zápasů (15 %).
+- V hubu mají setové kusy tyrkysový okraj a název sady. Detail ukazuje, které kusy hráč vlastní a vybavil, a rozsvítí aktivní bonusy. Karta Postava vypisuje aktivní sady, obchodník a tržiště u kusu píšou sadu.
+
 **Dílna a krystaly** (z původní Relikvie: esence, vylepšování, přeladění, zamykání a výroba; zdířky s krystaly jsou nové):
 - **Rozložení** implantátu dá esenci (běžný 1, neobvyklý 3, vzácný 8, epický 22, legendární 40 a 3 legendární fragmenty), epické a legendární občas krystal. Vylepšený implantát vrátí polovinu esence za vylepšení, krystaly ze zdířek se vrací do zásoby. Hromadně jde rozložit nevybavené, nezamčené a neupravené implantáty do vzácných včetně.
 - **Vylepšení +1 až +5** za kredity a esenci (od úrovní 5, 10, 15, 20, 25), každý stupeň +6 % ke všem vlastnostem implantátu.

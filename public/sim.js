@@ -92,7 +92,7 @@ export function resetUnit(u,M){
   u.x=b.x+Math.cos(a)*r;u.z=b.z+Math.sin(a)*r;u.vx=u.vz=0;u.face=u.team===0?Math.PI/2:-Math.PI/2;
   u.hp=u.maxHp;u.dlog=[];u.ecd=0;u.scd=0;
   // Náskok (ultimate mastery 30): at least 15 % ultimate after every respawn
-  if(u.mast?.[u.clsKey+':ult']?.b?.[4]===1)u.ult=Math.max(u.ult||0,15);u.shield=u.pass.has('reserve')?60:0;u.energy=u.uniq.has('capacitor')?100:Math.min(100,60+m(u,'start'));u.cds=[0,0,0];u.atkCd=0;u.dead=false;u.respawn=0;
+  if(u.mast?.[u.clsKey+':ult']?.b?.[4]===1)u.ult=Math.max(u.ult||0,15);u.shield=Math.max(u.pass.has('reserve')?60:0,u.uniq.has('setVault')?100:0);u.energy=u.uniq.has('capacitor')?100:Math.min(100,60+m(u,'start'));u.cds=[0,0,0];u.atkCd=0;u.dead=false;u.respawn=0;
   u.lx=null;u.fallH=0;u.st={stun:0,slow:0,silence:0,cloak:0,inv:1.5,relic:0,bleed:null,hot:null,fieldAcc:0,hazAcc:0,haste:0,hasteK:1,bulwark:0,nanite:null,decon:0,marked:0};
   u.ambush=0;u.ambushK=0;u.drive=null;u.bomb=null;u.hurtT=-99;u.dash=null;u.lastHit=null;u.lastHitT=-99;u.ai.retreat=false;u.ai.lane=rnd(-12,12);u.hist=[];
 }
@@ -210,7 +210,9 @@ function kill(M,t,src){
   if(t.kind==='hero'){
     deathRecap(M,t,k);
     t.respawn=(M.elim?1e9:M.D.pvp?5+Math.min(4,t.deaths*.4):6+Math.min(4,t.deaths*.5))*(M.emod.has('rapid')?.5:1);
-    if(k&&k.team!==t.team&&k.kind==='hero'){k.kills++;k.ult=Math.min(100,k.ult+15+(k.mast?.[k.clsKey+':ult']?.b?.[7]===0?10:0));echoReset(M,k)}
+    if(k&&k.team!==t.team&&k.kind==='hero'){k.kills++;k.ult=Math.min(100,k.ult+15+(k.mast?.[k.clsKey+':ult']?.b?.[7]===0?10:0));echoReset(M,k)
+      // sada Lovec signálu (3 kusy): energy back and shorter cooldowns
+      if(k.uniq.has('setHunter')){k.energy=Math.min(100,k.energy+30);k.cds=k.cds.map(c=>Math.max(0,c-2));fx(M,{t:'txt',x:r2(k.x),z:r2(k.z),s:'Lovec signálu',c:'info'})}}
     if(arenaLike(M.mode)||M.mode==='duel'){if(k&&k.team!==t.team)M.score[k.team]++;else M.score[1-t.team]++}
     if(!M.D.pvp){M.lives=Math.max(0,M.lives-1);if(M.lives<=0&&M.state==='play')endMatch(M,1)}
     fx(M,k&&k.team!==t.team?{t:'feed',k:'kill',a:k.id,b:t.id}:{t:'feed',k:'field',b:t.id});
@@ -743,7 +745,10 @@ export function cast(M,u,i,pt){
   const res=i===3?SK[u.clsKey][3](M,u,P):id[0]==='c'&&id.length===2?SK[u.clsKey][+id[1]](M,u,P):SKP[id](M,u,P,u.prof.branch===id?1.15:1,pa,pb);
   if(res===false)return false;
   if(i===3)u.ult=0;
-  else{u.energy-=s.cost*costMul;
+  else{
+    // sada Ozvěnový mág (3 kusy): every fourth ability is free
+    const free=u.uniq.has('setEcho')&&(u.echoN=(u.echoN||0)+1)%4===0;if(free)fx(M,{t:'txt',x:r2(u.x),z:r2(u.z),s:'Ozvěna · zdarma',c:'info'});
+    if(!free)u.energy-=s.cost*costMul;
     let cd=s.cd*(1-Math.min(45,m(u,'cdr'))/100)*(u.st.relic>0&&u.clsKey==='technician'?.7:u.st.relic>0&&u.clsKey==='cryo'?.8:u.st.relic>0&&u.clsKey==='hook'&&(id==='c0'||id==='c2')?.6:1)*(u.prof.branch===id?.85:1);
     if(id==='c1'&&u.clsKey==='technician'&&m(u,'restoreCd'))cd=Math.max(2,cd-4);
     if(id==='c2'&&u.clsKey==='pyro'&&m(u,'blinkCd'))cd=Math.max(2,cd-3);
