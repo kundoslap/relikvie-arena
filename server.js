@@ -56,7 +56,7 @@ async function api(req,res,p,url){
   const body=req.method==='POST'?await readBody(req):{};
   if(p==='/api/register'||p==='/api/login'){
     if(limited(ip,'auth',12,5*60000))throw new HttpError(429,'Příliš mnoho pokusů o přihlášení. Zkus to za pár minut.');
-    return json(res,200,p==='/api/register'?await meta.register(body.nick,body.pass,body.gk):await meta.login(body.nick,body.pass));
+    return json(res,200,p==='/api/register'?await meta.register(body.nick,body.pass,body.gk,body.ref):await meta.login(body.nick,body.pass));
   }
   // Počítadlo hráčů: one anonymous visit per browser and day (see stats.js)
   if(p==='/api/hello'&&req.method==='POST'){if(!limited(ip,'hello',6,3600000))stats.visit(ip,req.headers['user-agent'],{r:body.r===1?1:0,acc:!!body.acc,mob:!!body.mob,src:typeof body.src==='string'?body.src.slice(0,40):''});return json(res,200,{ok:true})}

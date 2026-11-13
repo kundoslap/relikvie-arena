@@ -46,6 +46,8 @@ const bloomPass=new UnrealBloomPass(new THREE.Vector2(1,1),hiQ?.65:.5,.4,.7);com
 composer.addPass(new OutputPass());
 // a phone held upright sees little to the sides: pull the camera back so about 11 m stay visible left and right (a shot reaches ~20 m)
 const portraitZoom=()=>camera.aspect<1?Math.min(2,Math.max(1,.85/camera.aspect)):1;
+// a phone held sideways sees little in height: the camera goes a bit further out so the fight around you fits
+const phoneZoom=()=>isTouch&&camera.aspect>=1&&innerHeight<=520?1.22:1;
 function resize(){const w=innerWidth,h=innerHeight;renderer.setSize(w,h);composer.setSize(w,h);camera.aspect=w/h;camera.updateProjectionMatrix()}
 addEventListener('resize',resize);resize();
 // settings that apply at once: resolution, bloom, names over units
@@ -148,6 +150,9 @@ const nameOf=id=>G.roster.get(id)?.n||'?';
 const mutNames=mods=>(mods||[]).map(k=>S.MUTATORS[k]?.name).filter(Boolean).join(' + ');
 const tag=id=>{const r=G.roster.get(id);return r?`<span class="t${r.t}">${esc(r.n)}</span>`:'?'};
 let flashT=0;function screenFlash(k=.8){if(Cfg.get('flash'))flashT=Math.max(flashT,k)}
+// Vibrace: a short buzz on a touch device for the moments that matter (heavy hit, death, kill, ultimate ready, win).
+// Hits are throttled so a burst of damage is one buzz; browsers without vibration (iPhone) simply do nothing.
+let buzzT=0;function buzz(p,minGap=0){if(!isTouch||!Cfg.get('vibrate')||!navigator.vibrate)return;const now=performance.now();if(now-buzzT<minGap)return;buzzT=now;try{navigator.vibrate(p)}catch{}}
 
 // ---------- session state ----------
 const G={mode:'menu',M:null,acc:0,you:0,roster:new Map(),snaps:[],last:null,evq:[],stats:[],ended:false,info:{mode:'arena',map:'core'},
@@ -333,13 +338,13 @@ function atkSound(e,v){
 }
 const EV={
   dmg:e=>{floatText(e,e.a,e.o?'dot':e.s&&e.s===G.you?'out':e.g===G.you?'in':'dmg');burst(e,e.c,e.o?2:6,4,2,.35);
-    const v=views.get(e.g);if(v&&!e.o)v.flash=.14;if(e.g===G.you&&!e.o){G.shake=Math.max(G.shake,Math.min(.6,e.a/80));if(e.a>=40)screenFlash(.5)}
+    const v=views.get(e.g);if(v&&!e.o)v.flash=.14;if(e.g===G.you&&!e.o){G.shake=Math.max(G.shake,Math.min(.6,e.a/80));if(e.a>=40){screenFlash(.5);buzz(25,250)}}
     if(!e.o){if(e.g===G.you)ui('hitIn',{gap:.09,vol:Math.min(1,.5+e.a/60)});else if(e.s===G.you)ui('hitOut',{gap:.04,big:e.a>=60,vol:.8});else sfx('hit',e,{gap:.05,vol:.5})}},
   heal:e=>{floatText(e,'+'+e.a,'heal');if(e.g===G.you&&e.a>=8)ui('heal',{gap:.5,vol:.7})},
   txt:e=>floatText(e,e.s,e.c),
   death:e=>{const v=views.get(e.g);if(!v)return;const c=v.kind==='h'?CLASSES[v.k].color:v.kind==='b'?BOSSES[v.k].color:S.NPCS[v.k].color;
     burst(e,c,v.kind==='b'?120:40,v.kind==='b'?14:10,6,1);burst(e,TEAM_COL[v.t],30,8,5,.9);ringFx(e,TEAM_COL[v.t],.5,v.kind==='b'?12:5,.6);
-    if(v.kind==='b'){columnFx(e,BOSSES[v.k].color);G.shake=1}if(e.g===G.you){G.shake=Math.max(G.shake,.8);screenFlash(1)}
+    if(v.kind==='b'){columnFx(e,BOSSES[v.k].color);G.shake=1}if(e.g===G.you){G.shake=Math.max(G.shake,.8);screenFlash(1);buzz([90,50,140])}
     if(v.kind==='b')ui('boom',{s:2.2,gap:.2});if(e.g===G.you)ui('died',{dur:1.4});else sfx('death',e,{f:v.kind==='n'?700:460,gap:.04,vol:v.kind==='n'?.55:.85})},
   recap:e=>{if(e.only===G.you)showRecap(e)},
   // levels: a landing after a drop, a jump pad launch
@@ -350,7 +355,7 @@ const EV={
   spawn:e=>{const v=views.get(e.g);if(!v)return;burst(e,TEAM_COL[v.t]??0xffffff,30,4,6,.8,.4);ringFx(e,TEAM_COL[v.t]??0xffffff,.4,3,.5);if(e.g===G.you)ui('spawn',{vol:.7})},
   feed:e=>{
     if(e.k==='kill'){feed(`${tag(e.a)} zničil ${tag(e.b)}`);if(e.b===G.you)banner('Zničen',`Dostal tě ${nameOf(e.a)}`,2,'var(--red)');
-      else if(e.a===G.you){const v=views.get(e.b);if(v)floatText(v,'Zničen','info');ui('kill')}}
+      else if(e.a===G.you){const v=views.get(e.b);if(v)floatText(v,'Zničen','info');ui('kill');buzz(35,100)}}
     else if(e.k==='field'){feed(`${tag(e.b)} padl`);if(e.b===G.you)banner('Zničen','',2,'var(--red)')}
     // streaks, multi-kills and shutdowns: a line in the feed for everyone, a banner and a sound for the one who did it
     else if(e.k==='multi'||e.k==='streak'){const name=e.k==='multi'?S.MULTI_NAME(e.n):S.STREAKS[e.n];
@@ -887,6 +892,7 @@ function showEnd(m){
   const ms=G.info.mission==='echo'?{name:'Ozvěna jádra'}:G.info.mission?S.missionById(G.info.mission):null;
   $('#endSub').textContent=pve?`${ms?'Kampaň · '+ms.name:MODES[m.mode||G.info.mode].name}${m.mode==='waves'?` · vlna ${m.wave}`:endless?' · tým padl':''} · ${MAPS[G.info.map].name}`:`${TEAM_NAME[0]} ${m.score[0]} : ${m.score[1]} ${TEAM_NAME[1]} · ${MAPS[G.info.map].name}`;
   Snd.play(endless?(m.wave>=S.ENDLESS_WIN?'win':'lose'):w===myTeam?'win':'lose',null,{ui:true,dur:2.5});
+  if(endless?m.wave>=S.ENDLESS_WIN:w===myTeam)buzz([40,40,40,40,120]);
   $('#endTable').innerHTML=boardHTML(m.stats);
   $('#endDebrief').innerHTML=debriefHTML(m,pve);
   const room=G.mode==='on'&&!G.solo;
@@ -965,7 +971,7 @@ function drawHUD(){
       if(i===6){const sc=me.sc||0,cd=S.SECONDARY[meInfo.k]?.cd||6;el.style.setProperty('--cd',Math.min(1,sc/cd).toFixed(3));el.querySelector('.t').textContent=sc>0?Math.ceil(sc):''}
       else if(i===5){const ev=me.ev||0,cd=S.EVADES[meInfo.k]?.cd||4;el.style.setProperty('--cd',Math.min(1,ev/cd).toFixed(3));el.querySelector('.t').textContent=ev>0?(ev<1?ev.toFixed(1).replace('.',','):Math.ceil(ev)):''}
       else if(i===4){const [tk,tc]=me.tc||['dodge',0],cd=S.TACTICS[tk]?.cd||1;el.style.setProperty('--cd',Math.min(1,tc/cd).toFixed(3));el.querySelector('.t').textContent=tc>0?Math.ceil(tc):''}
-      else if(i===3){el.style.setProperty('--cd',(1-me.u/100).toFixed(3));el.classList.toggle('ready',me.u>=100);el.querySelector('.t').textContent=me.u>=100?'':me.u+'%'}
+      else if(i===3){el.style.setProperty('--cd',(1-me.u/100).toFixed(3));el.classList.toggle('ready',me.u>=100);if(me.u>=100&&!G.ultBuzz){G.ultBuzz=true;buzz([25,60,25])}else if(me.u<100)G.ultBuzz=false;el.querySelector('.t').textContent=me.u>=100?'':me.u+'%'}
       else{const sk=(sk0=>sk0?.defs[i])(mySkills())||C.skills[i];el.style.setProperty('--cd',Math.min(1,me.c[i]/sk.cd).toFixed(3));el.querySelector('.t').textContent=me.c[i]>0?Math.ceil(me.c[i]):'';el.classList.toggle('poor',me.e<sk.cost)}
     });
     const mu=s.um.get(G.you);$('#dead').hidden=!(mu&&mu.d);
@@ -1207,7 +1213,7 @@ function frame(now=performance.now()){
   autoQuality(dt);
   if(G.trailer)trailerCam(dt);
   else if(G.mode==='menu'){if(!still)menuAngle+=dt*.06;camera.position.set(Math.cos(menuAngle)*46,30,Math.sin(menuAngle)*46);camera.lookAt(-6,0,0)}
-  else{const p=camFocus();camPos.lerp(new V3(p.x,0,p.z),1-Math.exp(-dt*6));const far=portraitZoom()*Cfg.get('zoom'),boss=G.info.mode==='boss'||G.last?.bs?1.12:1;
+  else{const p=camFocus();camPos.lerp(new V3(p.x,0,p.z),1-Math.exp(-dt*6));const far=portraitZoom()*phoneZoom()*Cfg.get('zoom'),boss=G.info.mode==='boss'||G.last?.bs?1.12:1;
     const sx=(Math.random()-.5)*G.shake*.9,sz=(Math.random()-.5)*G.shake*.9;
     camera.position.set(camPos.x+sx,26*far*boss,camPos.z+17*far*boss+sz);camera.lookAt(camPos.x+sx*.5,0,camPos.z-1+sz*.5)}
   ray.setFromCamera(ndc,camera);{const hit=LV&&arena?.solids.length?ray.intersectObjects(arena.solids,false)[0]:null;if(hit)mouseWorld.copy(hit.point);else ray.ray.intersectPlane(groundPlane,mouseWorld)}

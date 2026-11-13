@@ -50,6 +50,8 @@ const hex=c=>'#'+c.toString(16).padStart(6,'0');
 const num=n=>Math.round(n).toLocaleString('cs-CZ');
 const store={get(k,d){try{const v=localStorage.getItem('rel.'+k);return v==null?d:JSON.parse(v)}catch{return d}},set(k,v){try{localStorage.setItem('rel.'+k,JSON.stringify(v))}catch{}}};
 
+{const r=new URLSearchParams(location.search).get('ref');if(D.REF_RE.test(r||'')&&!(store.get('ref',null)?.at>Date.now()-30*864e5))store.set('ref',{c:r,at:Date.now()})}
+const refCode=()=>{const r=store.get('ref',null);return r&&D.REF_RE.test(r.c||'')&&r.at>Date.now()-30*864e5?r.c:null};
 export const H={token:store.get('token',null),profile:null,guest:false,offline:false,tab:'play',cb:null,
   cls:store.get('cls','striker'),play:store.get('play',{mode:'arena',map:'core',boss:'collector',diff:'normal'}),guestName:store.get('nick',''),
   inv:{slot:'',minR:0,sel:null},tree:{cls:null,draft:null},mk:{slot:'',r:'',sort:'price',mine:false,list:null},top:null};
@@ -114,9 +116,10 @@ export function showAuth(){
   $('#authForm').onsubmit=async e=>{
     e.preventDefault();const nick=$('#aNick').value.trim(),pass=$('#aPass').value;
     if(reg&&pass!==$('#aPass2').value){$('#authErr').textContent='Hesla se neshodují.';return}
-    try{const j=await api('/api/'+(reg?'register':'login'),reg?{nick,pass,gk:store.get('gk',null)}:{nick,pass});H.token=j.token;store.set('token',j.token);store.set('nick',nick);H.profile=j.profile;H.cls=j.profile.cls;H.guest=false;H.tab='play';
-      if(j.merged){store.set('gk',null);store.set('guestPend',null)}
+    try{const j=await api('/api/'+(reg?'register':'login'),reg?{nick,pass,gk:store.get('gk',null),ref:refCode()}:{nick,pass});H.token=j.token;store.set('token',j.token);store.set('nick',nick);H.profile=j.profile;H.cls=j.profile.cls;H.guest=false;H.tab='play';
+      if(j.merged){store.set('gk',null);store.set('guestPend',null)}if(reg)store.set('ref',null);
       showHub();
+      if(reg&&j.refBy)setTimeout(()=>toast(`Pozval tě ${j.refBy}. Na ${D.REFERRAL.level}. úrovni dostanete oba ${num(D.REFERRAL.credits)} kreditů a implantát.`),3800);
       if(reg)toast(j.merged?'Účet založen. Všechno, co jsi získal jako host, je teď v účtu.':'Účet založen. Dostal jsi tři startovní implantáty a 200 kreditů.')}
     catch(err){$('#authErr').textContent=err.message}
   };
@@ -250,6 +253,7 @@ function tabPlay(){
     <section class="panel featured"><div class="row"><div><h3>Režim dne: ${D.MODES[FD.mode].name}</h3><p class="help">Dnes za zápasy v tomto režimu +${fPct} % zkušeností a kreditů${FD.weekend?' (víkendový bonus)':', o víkendu +'+Math.round(D.FEATURED.weekend*100)+' %'}. Tady se dnes potkáš s nejvíc hráči.</p></div>
       ${P.mode===FD.mode?'<span class="tag feat">VYBRÁNO</span>':'<button class="go sm" type="button" id="featBtn">Vybrat</button>'}</div></section>
     ${!H.profile&&!H.offline&&guestPend()?`<section class="panel">${guestSaveBox(guestPend())}</section>`:''}
+    ${weeklyClaimPanel()}
     ${H.profile?.loginView?.can?loginPanel():''}
     <section class="panel"><h3>Povolání</h3>${classCards()}${classDetail(H.cls)}</section>
     <section class="panel"><h3>Režim</h3>
@@ -300,8 +304,13 @@ function tabPlay(){
     $('#roomsRef').onclick=loadRooms;loadRooms();
   }
   document.querySelectorAll('[data-ranked]').forEach(b=>b.onclick=()=>H.cb.ranked(b.dataset.ranked,opts()));
+  $('#claimWeekly')&&($('#claimWeekly').onclick=()=>act('claimWeekly',{},j=>`Odměna Hvězd týdne (${j.rank}. místo): +${num(j.credits)} kreditů${j.item?' a implantát':''}${j.title?`, titul ${j.title}`:''}.`));
   $('#claimSeason')&&($('#claimSeason').onclick=()=>act('claimSeason',{},j=>`Odměna za sezónu: +${num(j.credits)} kreditů${j.item?' a implantát':''}${j.title?`, titul ${j.title}`:''}.`));
 }
+// Hvězdy týdne: what a place pays, and the waiting reward of last week
+const weeklyRewardTxt=W=>`${num(W.credits)} kreditů${W.minR?` · ${W.minR>=4?'legendární implantát':`implantát ${D.RARITIES[W.minR].name.toLowerCase()} nebo lepší`}`:''}${W.title?` · titul ${W.title}`:''}`;
+function weeklyClaimPanel(){const P=H.profile?.weeklyPrev,W=P&&!P.claimed&&D.weeklyReward(P.rank);if(!W)return'';
+  return`<section class="panel featured"><div class="row"><div><h3>Hvězdy týdne: ${P.rank}. místo</h3><p class="help">Minulý týden jsi získal ${P.pts} bodů. Odměna: ${weeklyRewardTxt(W)}.</p></div><button class="go sm" type="button" id="claimWeekly">Vyzvednout</button></div></section>`}
 const divBadge=(r,sm)=>{const d=D.DIVISIONS[D.divisionOf(r)];return`<span class="rkb${sm?' sm':''}" style="--c:${d.color}">${d.name}</span>`};
 const seasonRewardTxt=W=>`${num(W.credits)} kreditů${W.minR?` · implantát ${D.RARITIES[W.minR].name.toLowerCase()} nebo lepší`:''}${W.title?` · titul ${W.title}`:''}`;
 // ranked: division, rating, season countdown, the two queues and a waiting season reward
@@ -322,11 +331,20 @@ function rankedPanel(){
 export function netError(msg){const e=$('#netErr');if(e)e.textContent=msg;const l=$('#lobbyErr');if(l)l.textContent=msg;if(msg&&!e&&!l)toast(msg,true)}
 
 // ---------- Přátelé ----------
+function invitePanel(){
+  const p=H.profile;if(!p||H.offline)return'';const R=D.REFERRAL,link=`${location.origin}/?ref=${p.id}&src=pozvi`,r=p.ref||{joined:0,paid:0,log:[]};
+  return`<section class="panel featured"><h3>Pozvi kamaráda</h3>
+    <p class="help">Pošli kamarádovi svůj odkaz. Když si přes něj založí účet a dohraje do ${R.level}. úrovně, dostanete oba ${num(R.credits)} kreditů a vzácný implantát. Odměnu dostaneš nejvýš za ${R.max} kamarádů.</p>
+    <div class="inline"><label class="field" style="flex:1">Tvůj odkaz<input id="refLink" readonly value="${esc(link)}"></label><button class="go" type="button" id="refCopy">Kopírovat odkaz</button>${navigator.share?'<button class="ghost" type="button" id="refShare">Sdílet</button>':''}</div>
+    <p class="help">Přes tvůj odkaz se zaregistrovalo: <b>${r.joined}</b> · odměny: <b>${r.paid} / ${R.max}</b>${r.log.length?` · poslední: ${r.log.slice(0,5).map(x=>esc(x.nick)).join(', ')}`:''}</p></section>`;
+}
 function tabFriends(){
-  $('#hubBody').innerHTML=`<section class="panel"><h3>Přidat přítele</h3>
+  $('#hubBody').innerHTML=`${invitePanel()}<section class="panel"><h3>Přidat přítele</h3>
       <form class="inline" id="frAdd" autocomplete="off"><label class="field">Přezdívka hráče<input id="frNick" maxlength="16" placeholder="Přesná přezdívka"></label><button class="go" type="submit">Poslat žádost</button></form>
       <p class="help">Přátelé vidí, jestli jsi online a co hraješ, můžou se k tobě připojit do otevřené místnosti, pozvat tě do hry a psát ti soukromé zprávy. Hráče můžeš přidat i kliknutím na jeho jméno v chatu.</p></section>
     <div id="frList" class="grid2" style="align-items:start"></div>`;
+  $('#refCopy')&&($('#refCopy').onclick=async()=>{const v=$('#refLink').value;try{await navigator.clipboard.writeText(v)}catch{$('#refLink').select();document.execCommand?.('copy')}toast('Odkaz zkopírován. Pošli ho kamarádovi.')});
+  $('#refShare')&&($('#refShare').onclick=()=>navigator.share({title:'Relikvie Aréna',text:'Zahraj si se mnou Relikvie Arénu, je zdarma v prohlížeči:',url:$('#refLink').value}).catch(()=>{}));
   $('#frAdd').onsubmit=e=>{e.preventDefault();const n=$('#frNick').value.trim();if(!n)return;if(!Social.connected())return toast('Chat a přátelé se teprve připojují, zkus to za chvíli.',true);Social.fr('add',n);$('#frNick').value=''};
   friendList();
 }
@@ -895,7 +913,11 @@ async function tabTop(){
   $('#hubBody').innerHTML='<section class="panel"><h3>Žebříček</h3><p class="help">Načítám…</p></section>';
   try{const j=await api('/api/top');if(H.tab!=='top')return;
     const me=x=>H.profile&&x.nick===H.profile.nick?'mine':'';
-    $('#hubBody').innerHTML=`<section class="panel"><h3>Hodnocená hra · sezóna ${D.seasonName(j.season)}</h3>${j.ranked?.length?`<div class="tbl" style="overflow-x:auto"><table class="st"><thead><tr><th>Hráč</th><th>Divize</th><th>Hodnocení</th><th>Zápasy</th><th>Výhry</th><th>Úspěšnost</th></tr></thead><tbody>
+    const R=D.WEEKLY.rewards;
+    $('#hubBody').innerHTML=`<section class="panel"><h3>Hvězdy týdne</h3><p class="help">Body za každý zápas s účtem: výhra ${D.WEEKLY.win}, remíza ${D.WEEKLY.draw}, prohra ${D.WEEKLY.loss}, MVP +${D.WEEKLY.mvp}. V pondělí dostanou nejlepší (aspoň ${j.weeklyMin} bodů) odměnu: 1. místo ${weeklyRewardTxt(R[0])}; 2.–3. místo ${weeklyRewardTxt(R[1])}; 4.–10. místo ${weeklyRewardTxt(R[2])}.${j.lastWeek?.length?` Minulý týden vyhráli: ${j.lastWeek.map((n,i)=>`${i+1}. ${pname(n)}`).join(', ')}.`:''}</p>
+      ${j.weekly?.length?`<div class="tbl" style="overflow-x:auto"><table class="st"><thead><tr><th>Hráč</th><th>Povolání</th><th>Body</th><th>Výhry</th><th>MVP</th></tr></thead><tbody>
+      ${j.weekly.map((x,i)=>`<tr class="${me(x)}"><td>${i+1}. ${x.tag?`<span class="cg">[${esc(x.tag)}]</span> `:''}${pname(x.nick)}</td><td>${D.CLASSES[x.cls]?.name||''}</td><td><b>${x.pts}</b></td><td>${x.wins}</td><td>${x.mvp}</td></tr>`).join('')}</tbody></table></div>`:'<p class="help">Tento týden zatím nikdo nebodoval. Buď první!</p>'}</section>
+    <section class="panel"><h3>Hodnocená hra · sezóna ${D.seasonName(j.season)}</h3>${j.ranked?.length?`<div class="tbl" style="overflow-x:auto"><table class="st"><thead><tr><th>Hráč</th><th>Divize</th><th>Hodnocení</th><th>Zápasy</th><th>Výhry</th><th>Úspěšnost</th></tr></thead><tbody>
       ${j.ranked.map((x,i)=>`<tr class="${me(x)}"><td>${i+1}. ${pname(x.nick)} <small class="help">${D.CLASSES[x.cls]?.name||''}</small></td><td>${divBadge(x.rating,true)}</td><td>${x.placed?x.rating:`${x.rating} <small class="help">umisťuje se</small>`}</td><td>${x.games}</td><td>${x.wins}</td><td>${pct(x.wins,x.games)}</td></tr>`).join('')}</tbody></table></div>`
       :'<p class="help">V této sezóně zatím nikdo neodehrál hodnocený zápas.</p>'}</section>
     ${j.guildWeek?.length?`<section class="panel"><h3>Klany tohoto týdne</h3><p class="help">Výhry členů klanu od pondělí. Počítají se zápasy, ve kterých člen hrál za klan.</p><div class="tbl" style="overflow-x:auto"><table class="st"><thead><tr><th>Klan</th><th>Zkratka</th><th>Výhry</th><th>Aktivní členové</th><th>Úroveň</th></tr></thead><tbody>
@@ -935,6 +957,8 @@ export function showRewards(m){
     ${m.record?`<div class="lvup">Nový rekord v Nekonečnu · vlna ${m.record}</div>`:''}
     ${m.mvp?'<div class="lvup">MVP zápasu · +15 % zkušeností a kreditů</div>':''}
     ${m.featured?`<div class="lvup">Režim dne · +${Math.round(m.featured*100)} % zkušeností a kreditů (už v odměně)</div>`:''}
+    ${m.refBonus?`<div class="lvup">Bonus za pozvání: +${num(m.refBonus.credits)} kreditů a implantát${m.refBonus.by?` (pozval tě ${esc(m.refBonus.by)}, dostal stejnou odměnu)`:''}</div>`:''}
+    ${m.weekly?`<p class="help">Hvězdy týdne: <b style="color:var(--gold)">+${m.weekly.gain} ${m.weekly.gain<5?'body':'bodů'}</b> · celkem ${m.weekly.pts}${m.weekly.pos?` · ${m.weekly.pos}. místo`:''}</p>`:''}
     ${m.firstWin?`<div class="lvup">První výhra dne · +${num(m.firstWin.xp)} zkušeností a +${num(m.firstWin.cr)} kreditů (už v odměně)</div>`:''}
     ${m.masteryUps?.length?`<p class="help">Mistrovství: ${m.masteryUps.map(x=>`<b style="color:#c08bff">${esc(x.name)} ${x.rank}</b>${x.milestone?' · nový milník':''}`).join(', ')}${m.masteryUps.some(x=>x.milestone)?' · větev si vyber na kartě Mistrovství.':''}</p>`:''}
     ${m.crystals?.length?`<p class="help">Krystal: ${m.crystals.map(k=>`<b style="color:${D.parseCrystal(k)?.C.color}">${D.crystalName(k)}</b>`).join(', ')} · zasadíš ho do zdířky v Inventáři.</p>`:''}

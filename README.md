@@ -177,6 +177,13 @@ Po sedmém dni řada začne znovu. Když hráč den vynechá, začíná znovu od
 - Maskovaný soupeř se teleportem neprozradí.
 - Brány jsou vidět i na minimapě a hra skok ukáže jako skok, ne jako sklouznutí přes mapu.
 
+**Hvězdy týdne** (`WEEKLY` v `data.js`, `rollWeekly` / `weekRanking` / `claimWeekly` v `meta.js`): týdenní žebříček s odměnami.
+- Každý zápas s účtem dává body: výhra 3, remíza 2, prohra 1, MVP +2. Krátké zápasy podle vlastních pravidel nedávají nic, stejně jako u cílů. Body sbírá i host a po registraci mu zůstanou, do pořadí ale host nepatří.
+- Týden začíná v pondělí (pražský čas, stejně jako týdenní cíle). Pořadí minulého týdne se zafixuje, když ho poprvé někdo potřebuje: když se první hráč toho týdne vrátí v novém týdnu, nebo když se otevře žebříček. Uloží se prvních deset (`doc.weeklyRanks`, posledních 6 týdnů). Do pořadí se počítá jen hráč s aspoň 10 body, aby při malém počtu hráčů nedostal odměnu každý za jeden zápas.
+- Odměny: 1. místo 1 500 kreditů, legendární implantát a titul „Hvězda týdne“. 2.–3. místo 900 kreditů a epický nebo lepší implantát. 4.–10. místo 400 kreditů a vzácný nebo lepší implantát. Odměna počká v profilu a na kartě Hrát je panel s tlačítkem Vyzvednout. Vyzvednout jde jen jednou a s plným inventářem nejde.
+- Žebříček má nahoře tabulku „Hvězdy týdne“ (body, výhry, MVP, prvních 20) s pravidly a jmény vítězů minulého týdne. Po zápase se v odměnách ukáže „Hvězdy týdne: +3 body · celkem 27 · 4. místo“.
+- Test (17 kontrol): body za výsledky a MVP, krátký zápas, pořadí, přechod na nový týden, minimum bodů, uložené pořadí, vítěz v žebříčku, vyzvednutí (kredity, implantát, titul), druhé vyzvednutí nejde, místa a odměny, host.
+
 **Režim dne** (`featuredOfDay` v `data.js`, bonus v `rewardsFor` v `meta.js`): každý den má jeden režim bonus +30 % zkušeností a kreditů, v sobotu a neděli +50 %.
 - Režimy se střídají pevně v pořadí Aréna, Ovládnutí, Lov bosse, Eliminace, Únos relikvie, Vlny, Mutace týdne, Souboj, Nekonečno. Den se počítá podle Prahy, pro všechny stejně. Devět režimů se střídá se sedmi dny v týdnu, takže na víkend vychází pokaždé jiný režim.
 - Smysl: dokud je hráčů málo, rozptýlí se po devíti režimech a potkají hlavně boty. Režim dne je stáhne na jedno místo.
@@ -378,6 +385,29 @@ Jak to funguje (`stats.js`):
 - Ukládají se jen souhrnná čísla za den (`doc.stats.days`, posledních 90 dní) ve stejné databázi jako účty.
 - Na jednu adresu se započítá nejvýš 6 hlášení za hodinu. Trénink bez serveru a trailerový režim se nepočítají.
 - Ověřuje to test (návštěvy, noví a vracející se, zápas, max online, přístup jen pro správce, žádné identifikátory v datech).
+
+**Telefon na šířku** (`@media (max-height:520px)` pro `body.touch` v `index.html`, `phoneZoom` v `client.js`): obrazovka telefonu otočeného na šířku je nízká, proto má vlastní rozvržení.
+- Kamera je o 22 % dál, aby se boj kolem hrdiny vešel.
+- Zdraví a energie jsou v malém panelu vlevo nahoře vedle minimapy (72 px), už ne přes půl obrazovky.
+- Menší je skóre, ukazatel bosse, tlačítka schopností (44 px), Útok, joystick, jména nad hrdiny a tlačítka Ping, Zprávy a pauza. Údaj o pingu se na telefonu skrývá.
+- Velké nápisy (vlna, ultimátky, relikvie) jsou menší a v horní části obrazovky, ne přes hrdiny. Stejně tak hláška po pádu.
+- Počítač, tablet a telefon na výšku zůstávají beze změny. Ověřeno v emulaci telefonu 740 × 360 v režimu Vlny.
+
+**Pozvi kamaráda** (`REFERRAL` v `data.js`, `payReferral` v `meta.js`, panel nahoře na kartě Přátelé): každý hráč s účtem má vlastní odkaz `https://…/?ref=<id účtu>&src=pozvi`.
+- Prohlížeč, který přijde přes odkaz, si kód pamatuje 30 dní. Když v něm vznikne účet, server si uloží, kdo pozval, a novému hráči hra ukáže „Pozval tě …“.
+- Když pozvaný poprvé dosáhne 5. úrovně, dostanou oba 500 kreditů a vzácný implantát (označený „Pozvánka“). Zvoucí dostane odměnu nejvýš za 10 kamarádů, pozvaný vždy.
+- Host, který už 5. úroveň má, dostane bonus hned při registraci (postup hosta se přenáší).
+- Na kartě Přátelé je odkaz s tlačítky Kopírovat odkaz a Sdílet (na mobilu nabídka sdílení) a počítadlo: kolik lidí se přes odkaz zaregistrovalo, kolik odměn už přišlo a jména posledních. Po zápase, ve kterém pozvaný dosáhne 5. úrovně, uvidí řádek „Bonus za pozvání“.
+- V počítadle návštěv se tyto návštěvy ukážou jako zdroj „pozvi“. Neplatný nebo neexistující kód se ignoruje a sám sebe pozvat nejde.
+- Test (11 kontrol): registrace přes odkaz, bonus pro oba na 5. úrovni, jen jednou, označený implantát, limit 10, neplatné kódy, host s úrovní 5, vlastní počítadlo nového účtu.
+
+**Vibrace** (`buzz` v `client.js`, přepínač Nastavení → Rozhraní → Vibrace, výchozí zapnuto): na dotykovém zařízení telefon krátce zavibruje.
+- Silný zásah (40 a víc): 25 ms, nejvýš jednou za 250 ms, aby série zásahů byla jedna vibrace.
+- Vlastní pád: delší vzor (90–50–140 ms).
+- Zničení soupeře: 35 ms.
+- Nabitá ultimátka: dvojité ťuknutí.
+- Výhra: pět pulzů.
+- Na počítači se nevibruje nikdy. Prohlížeče na iPhonu vibrace nepodporují, tam se nic nestane. Ověřeno v mobilní emulaci se záznamem vibrací (zásahy, pády, ultimátka), vypínač je zastaví.
 
 **Sdílení výsledku** (tlačítko „Sdílet výsledek“ na obrazovce po zápase, `public/share.js`): hra nakreslí kartu 1200 × 630 (JPEG, asi 100 KB) s výsledkem, režimem a mapou, jménem hráče, hrdinou, čtyřmi čísly (zničení nebo zničení NPC, pády, poškození, léčení), odznakem MVP a výzvou „Hraj zdarma v prohlížeči“ s adresou webu.
 - Na mobilu se otevře systémová nabídka sdílení (WhatsApp, Messenger, Discord…) s obrázkem a textem typu „Vítězství · Modří 20 : 14 Rudí · Neonové jádro · 12 zničení · MVP. Zkus mě porazit: https://…“.

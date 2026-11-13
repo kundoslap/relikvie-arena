@@ -30,6 +30,7 @@ export function createMeta(db,{admins=''}={}){
     p.goals??={day:null,list:[],rerolled:false,bonus:false,week:null,weekly:null};
     p.merchant??={day:null,offers:[],rerolled:false};p.tactic??='dodge';p.builds??=[];p.history??=[];
     p.ranked??={season:null,rating:D.RATING_START,games:0,wins:0,losses:0,peak:D.RATING_START};p.rankedPrev??=null;
+    p.weekly??={week:null,pts:0,wins:0,mvp:0};p.weeklyPrev??=null;p.ref??={joined:0,paid:0,log:[]};
     p.social??={friends:[],inReq:[],outReq:[],blocked:[]};p.social.recent??=[];
     p.mod??={muteUntil:0,banUntil:0,warns:0,banNote:''};
     p.essence??=0;p.frags??=0;p.crystals??={};p.mastery??={};
@@ -50,8 +51,27 @@ export function createMeta(db,{admins=''}={}){
     if(G.week!==wk){const keys=Object.keys(D.WEEKLY_GOALS);G.week=wk;G.weekly={id:keys[Math.floor(Math.random()*keys.length)],prog:0,claimed:false}}
     const c=p.campaign;if(c.week!==wk){c.week=wk;c.weekWins=0;c.weekClaimed=false;c.echoWon=false}
     if(p.merchant.day!==day){p.merchant={day,offers:merchantOffers(p),rerolled:false}}
-    rollSeason(p);rollPass(p);
+    rollSeason(p);rollPass(p);rollWeekly(p);
   }
+  // ---------- Hvězdy týdne ----------
+  // the top ten of a week is fixed the first time anyone needs it (the first player of that week who comes back the
+  // week after, or the leaderboard); at that moment nobody of that week has rolled over yet, so nobody is missing
+  doc.weeklyRanks??={};
+  const weeklyCmp=(a,b)=>b.weekly.pts-a.weekly.pts||b.weekly.wins-a.weekly.wins||b.weekly.mvp-a.weekly.mvp;
+  function weekRanking(week){
+    if(!doc.weeklyRanks[week]){
+      doc.weeklyRanks[week]=Object.values(doc.profiles).filter(p=>p.weekly?.week===week&&p.weekly.pts>=D.WEEKLY.minPts).sort(weeklyCmp).slice(0,10).map(p=>p.id);
+      const ks=Object.keys(doc.weeklyRanks).sort();while(ks.length>6)delete doc.weeklyRanks[ks.shift()];db.touch()}
+    return doc.weeklyRanks[week];
+  }
+  const takeRef=p=>{const r=refJust.get(p.id)||null;refJust.delete(p.id);return r};
+  function rollWeekly(p){
+    const W=p.weekly,now=D.weekKey();if(W.week===now)return;
+    if(W.week&&W.week<now&&W.pts>0&&Object.hasOwn(doc.profiles,p.id)){const pos=weekRanking(W.week).indexOf(p.id)+1;
+      if(D.weeklyReward(pos))p.weeklyPrev={week:W.week,rank:pos,pts:W.pts,claimed:false}}
+    p.weekly={week:now,pts:0,wins:0,mvp:0};
+  }
+  const weeklyPos=p=>p.weekly?.pts>0&&p.weekly.week===D.weekKey()?1+Object.values(doc.profiles).filter(q=>q!==p&&q.weekly?.week===p.weekly.week&&weeklyCmp(p,q)>0).length:0;
   // ---------- season pass ----------
   // a new month starts a new pass; tiers reached but not claimed are paid out automatically (a skin of your current class)
   function rollPass(p){
@@ -99,7 +119,18 @@ export function createMeta(db,{admins=''}={}){
   }
   function grantXp(p,xp){const ups=[];p.xp+=xp;
     while(p.level<D.MAX_LEVEL&&p.xp>=D.xpFor(p.level)){p.xp-=D.xpFor(p.level);p.level++;p.credits+=25*p.level;ups.push(p.level)}
-    if(p.level>=D.MAX_LEVEL)p.xp=0;return ups}
+    if(p.level>=D.MAX_LEVEL)p.xp=0;if(ups.length)payReferral(p);return ups}
+  // ---------- Pozvi kamaráda ----------
+  // paid once, when the invited player first stands at REFERRAL.level; the one who invited gets it for at most max friends
+  const refJust=new Map();
+  function payReferral(p){
+    if(!p.refBy||p.refPaid||p.level<D.REFERRAL.level||!Object.hasOwn(doc.profiles,p.id))return;
+    p.refPaid=true;const R=D.REFERRAL,r=Object.hasOwn(doc.profiles,p.refBy)?migrate(doc.profiles[p.refBy]):null;
+    const give=q=>{q.credits+=R.credits;const it=D.rollItem(q.level,{minR:R.minR,boost:.3});it.name=`${it.name} · Pozvánka`;giveItem(q,it);return it};
+    const item=give(p);
+    if(r&&r.ref.paid<R.max){give(r);r.ref.paid++;r.ref.log.unshift({nick:p.nick,at:Date.now()});r.ref.log.length=Math.min(r.ref.log.length,R.max)}
+    refJust.set(p.id,{credits:R.credits,item,by:r?.nick||null});db.touch();
+  }
   const missionOpen=(p,m)=>{const i=D.MISSIONS.indexOf(m);return p.level>=m.level&&(i===0||p.campaign.cleared.includes(D.MISSIONS[i-1].id))};
   const echoOpen=p=>p.campaign.cleared.includes('m8');
   // checks whether a player may start a campaign mission; returns an error message or null
@@ -133,7 +164,7 @@ export function createMeta(db,{admins=''}={}){
     g.at=Date.now();db.touch();return migrate(g.p);
   }
   const guestSummary=p=>({level:p.level,credits:p.credits,items:p.inv.length,matches:p.stats.matches});
-  async function register(nick,pass,gk){
+  async function register(nick,pass,gk,ref){
     nick=String(nick||'').trim();pass=String(pass||'');
     if(!NICK_RE.test(nick))fail('Přezdívka musí mít 3–16 znaků: písmena, číslice, mezera, tečka, pomlčka nebo podtržítko.');
     if(pass.length<8||pass.length>100)fail('Heslo musí mít alespoň 8 znaků.');
@@ -147,8 +178,11 @@ export function createMeta(db,{admins=''}={}){
     const g=typeof gk==='string'&&GK_RE.test(gk)&&Object.hasOwn(doc.guests,gk)?doc.guests[gk]:null;
     let p=newProfile(id,nick),merged=false;
     if(g?.p){p=migrate(g.p);Object.assign(p,{id,nick,created:Date.now()});p.social={friends:[],inReq:[],outReq:[],blocked:[],recent:[]};p.guild=null;p.guildInv=[];delete doc.guests[gk];merged=true}
-    doc.users[key]=user;doc.profiles[id]=migrate(p);db.touch();
-    return{token:issueToken(user),profile:view(doc.profiles[id]),merged};
+    doc.users[key]=user;doc.profiles[id]=migrate(p);
+    // signed up through a friend's link: remember who invited (a guest who already reached the level is paid now)
+    if(typeof ref==='string'&&D.REF_RE.test(ref)&&ref!==id&&Object.hasOwn(doc.profiles,ref)){p.refBy=ref;migrate(doc.profiles[ref]).ref.joined++;payReferral(p)}
+    db.touch();
+    return{token:issueToken(user),profile:view(doc.profiles[id]),merged,refBy:p.refBy?doc.profiles[p.refBy].nick:null};
   }
   async function login(nick,pass){
     const key=String(nick||'').trim().toLowerCase(),user=Object.hasOwn(doc.users,key)?doc.users[key]:null;
@@ -409,6 +443,14 @@ export function createMeta(db,{admins=''}={}){
       if(p.inv.length>=D.INV_MAX)fail('Inventář je plný.');
       p.campaign.shards[boss]=n-D.SHARDS_FOR_PLAN;const item=D.rollItem(p.level,{minR:4});item.name=`${item.name} · ${B.name}`;p.inv.push(item);return{item};
     },
+    claimWeekly(p){
+      const P=p.weeklyPrev,W=P&&!P.claimed?D.weeklyReward(P.rank):null;if(!W)fail('Žádná odměna za týden nečeká.');
+      if(W.minR&&p.inv.length>=D.INV_MAX)fail('Inventář je plný. Nejdřív něco prodej.');
+      P.claimed=true;p.credits+=W.credits;let item=null;
+      if(W.minR){item=D.rollItem(p.level,{minR:W.minR,boost:.4});item.name=`${item.name} · Hvězdy týdne`;p.inv.push(item)}
+      if(W.title&&!p.titles.includes(W.title))p.titles.push(W.title);
+      return{credits:W.credits,item,title:W.title||null,rank:P.rank};
+    },
     claimSeason(p){
       const P=p.rankedPrev;if(!P||P.claimed)fail('Žádná odměna za sezónu nečeká.');
       const W=D.DIVISIONS[P.div]?.reward||D.DIVISIONS[0].reward;let item=null;
@@ -619,6 +661,10 @@ export function createMeta(db,{admins=''}={}){
         .map(p=>({nick:p.nick,cls:p.cls,rating:p.ranked.rating,div:D.divisionOf(p.ranked.rating),games:p.ranked.games,wins:p.ranked.wins,placed:p.ranked.games>=D.PLACEMENT})),
       guilds:guildList('').slice(0,20),
       // this week's clans by wins (only clans that played this week) and the longest PvP kill streaks
+      // Hvězdy týdne: this week's points and the top three of last week
+      weekly:Object.values(doc.profiles).filter(p=>p.weekly?.week===D.weekKey()&&p.weekly.pts>0).sort(weeklyCmp).slice(0,20)
+        .map(p=>({nick:p.nick,cls:p.cls,pts:p.weekly.pts,wins:p.weekly.wins,mvp:p.weekly.mvp,tag:tagOf(p.id)})),
+      lastWeek:weekRanking(D.weekKey(Date.now()-7*864e5)).slice(0,3).map(id=>doc.profiles[id]?.nick).filter(Boolean),weeklyMin:D.WEEKLY.minPts,
       week:D.weekKey(),guildWeek:Object.values(doc.guilds).filter(g=>g.week?.key===D.weekKey()&&g.week.wins>0).sort((a,b)=>b.week.wins-a.week.wins||b.level-a.level).slice(0,10)
         .map(g=>({...guildCard(g),wins:g.week.wins,active:Object.values(g.members).filter(m=>m.wk>0).length})),
       streaks:Object.values(doc.profiles).filter(p=>(p.stats?.bestStreak|0)>=3).sort((a,b)=>b.stats.bestStreak-a.stats.bestStreak||(b.stats.bestMulti|0)-(a.stats.bestMulti|0)).slice(0,10)
@@ -780,6 +826,9 @@ export function createMeta(db,{admins=''}={}){
     for(const k of crystals)addCrystal(p,k);
     // guild: XP for the guild, the weekly goal and the member bonus
     const guild=guildMatch(p,xp,cr,won);if(guild){xp+=guild.bx;cr+=guild.bc}
+    // Hvězdy týdne: points for the result (short custom matches give none)
+    let weekly=null;if(custom>=D.CUSTOM_GOAL&&D.WEEKLY[res]){rollWeekly(p);const g=D.WEEKLY[res]+(mvp?D.WEEKLY.mvp:0);
+      p.weekly.pts+=g;if(res==='win')p.weekly.wins++;if(mvp)p.weekly.mvp++;weekly={gain:g,pts:p.weekly.pts,pos:Object.hasOwn(doc.profiles,p.id)?weeklyPos(p):0}}
     // first win of the calendar day (Prague): a fixed bonus on top, once a day
     let firstWin=null;if(won&&p.firstWin!==D.dayKey()){p.firstWin=D.dayKey();xp+=D.FIRST_WIN.xp;cr+=D.FIRST_WIN.cr;firstWin={...D.FIRST_WIN}}
     // apply
@@ -798,7 +847,7 @@ export function createMeta(db,{admins=''}={}){
       score:M.D.pvp?[M.score[u.team],M.score[1-u.team]]:null,dur:Math.round(M.time),xp,cr,mvp,rk});
     p.history.length=Math.min(p.history.length,D.HISTORY_MAX);
     db.touch();
-    return{xp,credits:cr,items,res,levelUps,sold,skin,camp,goalsDone:done,record,mvp,guild,pass,crystals,masteryUps,firstWin,featured,achNew:achDiff(p,achBefore)};
+    return{xp,credits:cr,items,res,levelUps,sold,skin,camp,goalsDone:done,record,mvp,guild,pass,crystals,masteryUps,firstWin,featured,weekly,refBonus:takeRef(p),achNew:achDiff(p,achBefore)};
   }
 
   // ---------- achievements ----------

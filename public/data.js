@@ -93,6 +93,17 @@ export const SECONDARY={
   hook:{name:'Trhnutí',cd:6,icon:'hook',desc:'Krátký hák na 9 m: 80 % útoku a přitáhne zasaženého soupeře o 3 m k tobě.'}};
 // "Novinky" in the hub, newest first; id marks what a player has already seen
 export const CHANGELOG=[
+  {id:'2026-12k',title:'Přehlednější hra na telefonu',items:[
+    'Na telefonu na šířku je kamera dál a rozhraní menší: zdraví je vlevo nahoře u minimapy, tlačítka jsou menší a velké nápisy se ukazují nahoře, ne přes hrdiny.']},
+  {id:'2026-12j',title:'Pozvi kamaráda',items:[
+    'Na kartě Přátelé najdeš svůj odkaz pro kamarády. Když si přes něj kamarád založí účet a dohraje do 5. úrovně, dostanete oba 500 kreditů a vzácný implantát.',
+    'Odměnu dostaneš až za 10 pozvaných kamarádů.']},
+  {id:'2026-12i',title:'Vibrace na mobilu',items:[
+    'Na telefonu hra krátce zavibruje při silném zásahu, pádu, zničení soupeře, nabité ultimátce a výhře. Vypnout jde v Nastavení → Rozhraní → Vibrace.']},
+  {id:'2026-12h',title:'Hvězdy týdne',items:[
+    'Nový týdenní žebříček: za každý zápas s účtem dostaneš body (výhra 3, remíza 2, prohra 1, MVP +2).',
+    'V pondělí dostane nejlepší desítka odměnu: vítěz 1 500 kreditů, legendární implantát a titul Hvězda týdne, další místa kredity a implantát. Žebříček najdeš na kartě Žebříček.',
+    'Opraveno: ve Firefoxu se hra po minulé aktualizaci nenačetla (černá obrazovka).']},
   {id:'2026-12g',title:'Nový hrdina: Hákař',items:[
     'Kord Řetězník, jeřábník z neonového přístavu. Bojuje zblízka řetězem: Hák přitáhne soupeře k tobě, Řetězový skok přitáhne tebe k nim, Spoutání soupeře škubne zpátky, když uteče, a Vír řetězů stáhne celou skupinu na jedno místo.',
     'Přitáhni soupeře k týmu, do lávy v Kovárně, pod blesk v Elektrárně nebo dolů z terasy na Citadele. Za každé přitažení dostaneš štít.',
@@ -232,6 +243,14 @@ export const CHANGELOG=[
 ];
 // bonus for the first win of each calendar day (any mode; short custom matches do not count as a win here)
 export const FIRST_WIN={xp:200,cr:120};
+// Pozvi kamaráda: a player who signs up through someone's link and reaches `level` gets a reward, and so does the one
+// who invited them (for at most `max` friends)
+export const REFERRAL={level:5,credits:500,minR:2,max:10};
+export const REF_RE=/^[a-z0-9]{8,14}$/;
+// Hvězdy týdne: points for every match with an account (win 3, draw 2, loss 1, MVP +2; short custom matches give
+// nothing). On Monday the best of the past week (at least minPts) get a reward that waits in their profile.
+export const WEEKLY={win:3,draw:2,loss:1,mvp:2,minPts:10,rewards:[{rank:1,credits:1500,minR:4,title:'Hvězda týdne'},{rank:3,credits:900,minR:3},{rank:10,credits:400,minR:2}]};
+export const weeklyReward=rank=>rank>0?WEEKLY.rewards.find(r=>rank<=r.rank)||null:null;
 // how long the server keeps what a guest earned (it moves into the account when that browser signs up)
 export const GUEST_DAYS=7;
 

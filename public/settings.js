@@ -8,7 +8,7 @@ export const ACTIONS=[['up','Pohyb nahoru'],['down','Pohyb dolů'],['left','Pohy
   ['ult','Ultimátka'],['tac','Taktická akce'],['evade','Úskok'],['sec','Sekundární útok (i pravé tlačítko)'],['ping','Ping (s Alt varování)'],['wheel','Rychlé zprávy'],['score','Skóre (držet)'],['mute','Vypnout zvuk']];
 const DEF_KEYS={up:'KeyW',down:'KeyS',left:'KeyA',right:'KeyD',q:'KeyQ',e:'KeyE',r:'KeyR',ult:'KeyF',tac:'KeyT',evade:'Space',sec:'KeyC',ping:'KeyG',wheel:'KeyV',score:'Tab',mute:'KeyM'};
 // fpsCap: frames per second at most (0 = as fast as the display); menuBg: the live match behind the menu
-const DEF={scale:1,bloom:true,particles:1,shake:true,flash:true,dmgNums:true,names:true,zoom:1,fps:false,teamPal:'std',fpsCap:60,menuBg:true};
+const DEF={scale:1,bloom:true,particles:1,shake:true,flash:true,dmgNums:true,names:true,zoom:1,fps:false,teamPal:'std',fpsCap:60,menuBg:true,vibrate:true};
 export const FPS_CAPS=[[30,'30'],[60,'60'],[0,'Bez omezení']];
 // team colours: [Modří, Rudí]; the alternatives keep the two teams apart for the common kinds of colour blindness
 export const TEAM_PALS={
@@ -28,7 +28,7 @@ if(!('sec' in savedKeys)&&Object.entries(savedKeys).some(([a,c])=>a!=='sec'&&c==
 for(const k of Object.keys(S.keys))if(!(k in DEF_KEYS)||typeof S.keys[k]!=='string')delete S.keys[k];
 const num=(v,a,b,d)=>Number.isFinite(+v)?Math.max(a,Math.min(b,+v)):d;
 S.scale=num(S.scale,.5,1,1);S.particles=num(S.particles,.25,1,1);S.zoom=num(S.zoom,.8,1.3,1);
-for(const k of ['bloom','shake','flash','dmgNums','names','fps','menuBg'])S[k]=typeof S[k]==='boolean'?S[k]:DEF[k];
+for(const k of ['bloom','shake','flash','dmgNums','names','fps','menuBg','vibrate'])S[k]=typeof S[k]==='boolean'?S[k]:DEF[k];
 if(!FPS_CAPS.some(([v])=>v===S.fpsCap))S.fpsCap=DEF.fpsCap;
 if(!Object.hasOwn(TEAM_PALS,S.teamPal))S.teamPal='std';
 export const teamColors=()=>TEAM_PALS[S.teamPal].c;
@@ -84,6 +84,7 @@ function render(){
   if(tab==='ui')el.innerHTML=`<div class="setrow" translate="no"><span>Jazyk · Language</span><div class="seg" id="setLang">${[['cs','Čeština'],['en','English']].map(([k,n])=>`<button type="button" data-lang="${k}" aria-pressed="${k===lang}">${n}</button>`).join('')}</div></div>
     ${tog('dmgNums','Čísla poškození','Létající čísla poškození nad zasaženými.')}
     ${tog('names','Jména nad postavami')}
+    ${tog('vibrate','Vibrace','Na telefonu krátce zavibruje při silném zásahu, pádu, zničení soupeře, nabité ultimátce a výhře. Na iPhonu to prohlížeče nepodporují.')}
     ${rng('zoom','Oddálení kamery',.8,1.3,.05,pct,'Vyšší hodnota ukáže víc z arény.')}
     ${tog('fps','Počítadlo snímků (FPS)')}
     <div class="setrow"><span>Barvy týmů<small>${TEAM_PALS[S.teamPal].help} Platí pro postavy, minimapu, skóre, záznam i chat.</small></span>

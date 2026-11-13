@@ -168,6 +168,26 @@ body.touch #feed{display:none}
 body.touch #mini{width:92px;height:92px}
 body.touch #hud .tl{width:110px}
 body.touch #modeBar{top:calc(var(--gt) + 100px)}
+/* a phone held sideways: little height, so everything gets smaller and moves to the edges, away from the fight */
+@media (max-height:520px){
+  body.touch #hud .tl{width:160px;gap:3px} body.touch #mini{width:72px;height:72px}
+  body.touch #relicInfo{font-size:10px;line-height:1.25} body.touch #netInfo{display:none}
+  body.touch .me{top:var(--gt);left:calc(var(--gl) + 82px);right:auto;width:150px;max-width:none;padding:4px 6px;gap:3px}
+  body.touch .bar{height:10px} body.touch .bar span{font-size:8px} body.touch .bar.en{height:7px} body.touch .bar.en span{display:none}
+  body.touch #hud .top{gap:6px;padding:2px 8px} body.touch .score b{font-size:18px} body.touch .score>span{font-size:10px;letter-spacing:.12em}
+  body.touch .score .mid small{font-size:9px} body.touch .score .mid #clock{font-size:13px}
+  body.touch #modeBar{top:calc(var(--gt) + 40px);width:min(360px,50vw)} body.touch .modeinfo{font-size:10px;padding:2px 8px}
+  body.touch #banner{top:15%} body.touch #banner b{font-size:clamp(16px,7vh,30px)} body.touch #banner small{font-size:11px}
+  body.touch #slots{right:calc(var(--gr) + 78px);grid-template-columns:repeat(2,44px);gap:4px}
+  body.touch .slot{width:44px;height:44px} body.touch .slot svg{width:20px;height:20px} body.touch .slot .c{font-size:9px} body.touch .slot .t{font-size:16px}
+  body.touch #tAtk{width:68px;height:68px;font-size:13px}
+  body.touch #stick{width:96px;height:96px} body.touch #stick i{width:38px;height:38px;margin:-19px 0 0 -19px}
+  body.touch #sigBtns{top:var(--gt)} body.touch #sigBtns button,body.touch #mchatBtn{height:32px;font-size:11px;padding:0 8px} body.touch #mchatBtn{top:var(--gt)}
+  body.touch #pauseBtn{width:32px;height:32px;top:var(--gt)}
+  body.touch #mchat{top:calc(var(--gt) + 40px)}
+  body.touch .ub .n{font-size:9px} body.touch .ub .hb{width:48px;height:5px}
+  body.touch #dead{top:28%;font-size:18px} body.touch #recap{top:calc(28% + 32px);font-size:11.5px;padding:8px 10px}
+}
 @media (max-width:640px){
   #hud .top{gap:8px;padding:4px 10px}.score b{font-size:22px}.score>span{display:none}
   #mini{width:92px;height:92px} #hud .tl{width:110px} #relicInfo{font-size:11px}
