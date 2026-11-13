@@ -27,6 +27,10 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <!-- fonts and three.js are served by our own server from npm packages (see VENDOR in server.js) -->
 <link rel="stylesheet" href="/vendor/fonts.css">
+<!-- the import map must come before any module load or preload, otherwise Firefox ignores it -->
+<script type="importmap">
+{"imports":{"three":"/vendor/three@0.160.0/build/three.module.js","three/addons/":"/vendor/three@0.160.0/examples/jsm/"}}
+</script>
 <link rel="modulepreload" href="/vendor/three@0.160.0/build/three.module.js">
 <style>
 /* Layout: full-bleed 3D arena, HUD pinned to the safe-area corners; hub and menus are scrims over a live bot match. */
@@ -726,9 +730,6 @@ body.trailer>*:not(#stage):not(#trailerTip){display:none!important}
 </div>
 <div id="toast" role="status" hidden></div>
 
-<script type="importmap">
-{"imports":{"three":"/vendor/three@0.160.0/build/three.module.js","three/addons/":"/vendor/three@0.160.0/examples/jsm/"}}
-</script>
 <script type="module" src="client.js"></script>
 <script>
 // When the game code does not start (a file missing on the server, a blocked network, an old browser), say so
