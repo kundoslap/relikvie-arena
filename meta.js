@@ -806,7 +806,7 @@ export function createMeta(db,{admins=''}={}){
         }else if(key){c.shards[key]=(c.shards[key]|0)+D.SHARDS_PER_WIN;camp.shards={boss:key,n:c.shards[key]}}}
     }
     // goals
-    const won=res==='win'&&custom>=D.CUSTOM_GOAL,delta={matches:1,wins:won?1:0,winArena:won&&D.arenaLike(M.mode)?1:0,winControl:won&&M.mode==='control'?1:0,
+    const won=res==='win'&&custom>=D.CUSTOM_GOAL,delta={matches:1,wins:won?1:0,winArena:won&&D.arenaLike(M.mode)?1:0,winControl:won&&M.mode==='control'?1:0,winConvoy:won&&M.mode==='convoy'?1:0,
       kills:M.D.pvp?u.kills:0,npcKills:u.npcKills,bossKills:won&&!M.D.pvp?(M.bossKills||0):0,wave:M.mode==='waves'?M.wave:0,endless:M.D.endless?M.wave:0,relics:u.relics,
       dmg:Math.round(u.dmgDealt),heal:Math.round(u.healDone),campaign:M.mission&&won?1:0};
     const done=[];

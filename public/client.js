@@ -67,7 +67,7 @@ function applyTeamColors(){
   TEAM_COL[0]=n[0];TEAM_COL[1]=n[1];
   for(const v of [...views.values()]){const info=G.roster.get(v.id);dropView(v);if(info)ensureView(info)}
   if(arena){const k=arena.mapKey;arena.dispose();arena=null;setMap(k)}
-  if(G.info)buildFlags(G.info);
+  if(G.info){buildFlags(G.info);buildCart(G.info)}
 }
 
 let arena=null,LV=null;
@@ -219,9 +219,38 @@ function updElimWall(dt,t){
   E.cur+=(r-E.cur)*Math.min(1,dt*5);E.g.visible=E.cur<E.R-.05&&E.cur>.05;
   E.g.scale.set(E.cur,1,E.cur);E.wall.material.opacity=.7+.3*Math.sin(t*5);
 }
+// Konvoj relikvie: the hover cart with the relic, its push ring, and the track between the two ends
+let cartMesh=null;
+function removeCart(){if(!cartMesh)return;scene.remove(cartMesh.g);scene.remove(cartMesh.track);cartMesh=null}
+function buildCart(info){
+  removeCart();if(info.mode!=='convoy')return;
+  const C=S.newCart(MAPS[info.map]),g=new THREE.Group(),track=new THREE.Group();
+  const body=new THREE.Mesh(new THREE.BoxGeometry(2.4,.45,1.5),new THREE.MeshStandardMaterial({color:0x1b2236,metalness:.6,roughness:.35,emissive:0x0c1426}));body.position.y=.75;
+  const rim=new THREE.Mesh(new THREE.BoxGeometry(2.5,.08,1.6),new THREE.MeshBasicMaterial({color:HDR(0xffc66d,2)}));rim.position.y=1;
+  const under=new THREE.Mesh(DISC_GEO,addMat(0xffc66d,1.2));under.rotation.x=-Math.PI/2;under.scale.setScalar(1.3);under.position.y=.12;
+  const relic=new THREE.Group();relic.add(new THREE.Mesh(new THREE.OctahedronGeometry(.45,0),new THREE.MeshBasicMaterial({color:HDR(0xffc66d,2.6)})));
+  relic.add(new THREE.Mesh(new THREE.IcosahedronGeometry(.75,1),new THREE.MeshBasicMaterial({color:HDR(0xffc66d,1.4),wireframe:true,transparent:true,opacity:.5})));relic.position.y=1.85;
+  const ring=new THREE.Mesh(RING_GEO,addMat(0xffc66d,1.4));ring.rotation.x=-Math.PI/2;ring.scale.setScalar(S.CONVOY.r);ring.position.y=.09;
+  const light=new THREE.PointLight(0xffc66d,7,12,1.4);light.position.y=2.2;
+  const hover=new THREE.Group();hover.add(body,rim,relic,light);g.add(hover,under,ring);g.position.set(C.x,gy(C.x,C.z),C.z);scene.add(g);
+  const line=new THREE.Mesh(new THREE.PlaneGeometry(C.L*2,.22),addMat(0xffc66d,.9));line.rotation.x=-Math.PI/2;line.position.set(C.x,.06,C.z);line.material.opacity=.45;track.add(line);
+  // the end next to a team's base is in that team's colour: the enemy pushes the cart there
+  for(const team of [0,1]){const x=C.x+(team?1:-1)*C.dir*C.L,c=TEAM_COL[team];
+    const er=new THREE.Mesh(RING_GEO,addMat(c,1.8));er.rotation.x=-Math.PI/2;er.scale.setScalar(1.8);er.position.set(x,.08,C.z);
+    const beam=new THREE.Mesh(BEAM_GEO,addMat(c,.7));beam.scale.set(.15,8,.15);beam.position.set(x,4,C.z);track.add(er,beam)}
+  for(const k of [-3,-2,-1,1,2,3]){const tick=new THREE.Mesh(new THREE.PlaneGeometry(.12,1.1),addMat(0xffc66d,1));tick.rotation.x=-Math.PI/2;tick.position.set(C.x+k*C.L/4,.07,C.z);track.add(tick)}
+  scene.add(track);cartMesh={g,hover,relic,ring,track,x:C.x,x0:C.x};
+}
+function updCartMesh(dt,t){
+  if(!cartMesh)return;const cv=G.last?.cv;if(!cv)return;const K=cartMesh;
+  K.x+=(cv[0]-K.x)*Math.min(1,dt*10);K.g.position.x=K.x;K.g.position.y=gy(K.x,K.g.position.z);
+  K.hover.position.y=Math.sin(t*2.2)*.1;K.relic.rotation.y+=dt*1.5;
+  const p=cv[1],col=p===0||p===1?TEAM_COL[p]:p===2?0xffffff:0xffc66d;K.ring.material.color.copy(HDR(col,p<0?.9:1.8));K.ring.material.opacity=p===2?.55+.45*Math.sin(t*10):1;
+}
+const cartState=(p,h)=>h>0?`Kontrolní bod · vůz se rozjede za ${h} s`:p===0?'Modří tlačí vůz':p===1?'Rudí tlačí vůz':p===2?'Vůz stojí · obě strany u něj':'Nikdo u vozu';
 const flagText=(f,mine)=>!f?'':f[0]===0?'doma':f[0]===1?`unesena · ${esc(nameOf(f[3]))}`:`leží · vrátí se za ${f[4]} s`;
 function setInfo(info){
-  G.info=info;setMap(info.map);buildFlags(info);buildElimWall(info);
+  G.info=info;setMap(info.map);buildFlags(info);buildElimWall(info);buildCart(info);
   for(const m of pointMeshes)scene.remove(m.g);pointMeshes=[];
   if(info.mode==='control')MAPS[info.map].points.forEach((p,i)=>{
     const g=new THREE.Group();g.position.set(p.x,.08+gy(p.x,p.z),p.z);
@@ -240,7 +269,7 @@ function clearWorld(){
   fxList.forEach(dropFx);fxList=[];parts.length=0;floaters.forEach(f=>f.el.remove());floaters=[];$('#feed').innerHTML='';
   Object.assign(G,{roster:new Map(),snaps:[],last:null,evq:[],stats:[],ended:false,pred:null,show:null,hist:[],pendingCast:[],you:0,slotsFor:'',tut:null});
   tutMarker(null);$('#hud').classList.remove('tut');$('#tut').hidden=true;clearSignals();
-  relicMesh.visible=false;relicLight.intensity=0;
+  relicMesh.visible=false;relicLight.intensity=0;removeCart();
 }
 // Online, everything is placed on the server's clock: snapshots are stamped with server time, and the client keeps an
 // estimate of the offset between the server clock and its own. Network jitter then changes only how full the buffer
@@ -951,6 +980,9 @@ function drawHUD(){
     if(mode==='ctf'&&s.fg){const my=meInfo?.t??0;mb=`<div class="flags">${[my,1-my].map(team=>`<div class="fl${team}"><b>${team===my?'Vaše':'Soupeřova'} relikvie</b> ${flagText(s.fg[team])}</div>`).join('')}</div>`}
     if(mode==='elim'&&s.el){const [n,pause,,a0,a1,shrinkIn]=s.el,my=meInfo?.t??0,size=S.teamSize(mode),dots=(k,t)=>`<span class="t${t}">${'●'.repeat(k)}${'○'.repeat(Math.max(0,size-k))}</span>`;
       mb=`<div class="elimbar"><b>Kolo ${n}</b> ${dots(my?a1:a0,my)} <small>proti</small> ${dots(my?a0:a1,1-my)}<small>${pause?`další kolo za ${pause} s`:shrinkIn?`kruh se zmenší za ${shrinkIn} s`:'aréna se zmenšuje'}</small></div>`}
+    // Konvoj: the track from the blue end (left) to the red end; the cart marker moves right while the blue team pushes
+    if(mode==='convoy'&&s.cv&&cartMesh){const C=S.newCart(MAPS[info.map]),f=Math.max(0,Math.min(1,((s.cv[0]-C.x)*C.dir/C.L+1)/2)),p=s.cv[1];
+      mb=`<div class="cvbar${p===0||p===1?' p'+p:''}"><b>${cartState(p,s.cv[2])}</b><div class="tr"><u style="left:25%"></u><u style="left:50%"></u><u style="left:75%"></u><i style="left:${(f*100).toFixed(1)}%"></i></div></div>`}
     if(mode==='control')mb=`<div class="pts">${s.pt.map(([o,pr],i)=>`<div class="pt${o>=0?' o'+o:''}" style="background:linear-gradient(0deg,color-mix(in srgb,var(--t${pr<0?0:1}) 35%,transparent) ${Math.abs(pr)}%,var(--panel) 0)">${'ABC'[i]}</div>`).join('')}</div>`}
   else{const wv=s.wv,W=MODES[mode]?.waves;setTxt('sL',W?'Vlna':'Životy');setTxt('s0',W?wv?.[0]??0:s.lv);setTxt('sR',W?'Životy':'Boss');
     setTxt('s1',W?s.lv:(s.bs?Math.ceil(s.bs[1]/s.bs[2]*100)+'%':'—'));
@@ -979,7 +1011,7 @@ function drawHUD(){
     if(mu&&mu.d){const html=mode==='elim'?'Vyřazen · sleduješ spoluhráče do konce kola':'Zničen · obnova za <b id="deadT"></b> s';
       if($('#dead').dataset.m!==mode){$('#dead').dataset.m=mode;$('#dead').innerHTML=html}if(mode!=='elim')setTxt('deadT',mu.d)}
   }
-  setTxt('relicInfo',S.arenaLike(mode)?(s.rl[0]?'Relikvie čeká ve středu':`Relikvie za ${s.rl[1]} s`)+(MODES[mode].mutators?' · '+mutNames(info.mods):''):(!MODES[mode].pvp&&me?`Kořist v batohu: ${me.bag}`:''));
+  setTxt('relicInfo',mode==='convoy'?'Stůj u vozu s relikvií a tlač ho k soupeřově základně':S.arenaLike(mode)?(s.rl[0]?'Relikvie čeká ve středu':`Relikvie za ${s.rl[1]} s`)+(MODES[mode].mutators?' · '+mutNames(info.mods):''):(!MODES[mode].pvp&&me?`Kořist v batohu: ${me.bag}`:''));
   // minimap
   const map=MAPS[info.map],W=mini.width,sc=W/((map.r+2)*2),cx=W/2,toM=x=>cx+x*sc;
   mg.clearRect(0,0,W,W);mg.save();mg.beginPath();mg.arc(cx,cx,cx-2,0,Math.PI*2);mg.clip();
@@ -994,6 +1026,8 @@ function drawHUD(){
     mg.strokeStyle='#5dffd8';mg.lineWidth=2;for(const P of map.pads||[]){mg.beginPath();mg.arc(toM(P.x),toM(P.z),Math.max(3,P.r*sc),0,Math.PI*2);mg.stroke()}}
   mg.fillStyle='#2a3350';for(const [x,z,r] of map.pillars){mg.beginPath();mg.arc(toM(x),toM(z),r*sc,0,Math.PI*2);mg.fill()}
   if(mode==='control')map.points.forEach((p,i)=>{const o=s.pt[i]?.[0];mg.strokeStyle=o===0||o===1?teamHex(o):'#ffc66d';mg.lineWidth=4;mg.beginPath();mg.arc(toM(p.x),toM(p.z),4*sc,0,Math.PI*2);mg.stroke()});
+  if(mode==='convoy'&&s.cv){const C=S.newCart(map);mg.strokeStyle='rgba(255,198,109,.5)';mg.lineWidth=2;mg.beginPath();mg.moveTo(toM(C.x-C.L),toM(C.z));mg.lineTo(toM(C.x+C.L),toM(C.z));mg.stroke();
+    const p=s.cv[1];mg.fillStyle=p===0||p===1?teamHex(p):'#ffc66d';mg.save();mg.translate(toM(s.cv[0]),toM(C.z));mg.rotate(Math.PI/4);mg.fillRect(-6,-6,12,12);mg.restore()}
   if(mode==='elim'&&s.el&&s.el[2]<map.r){mg.fillStyle='rgba(255,40,80,.22)';mg.beginPath();mg.arc(cx,cx,cx,0,Math.PI*2);mg.arc(cx,cx,s.el[2]*sc,0,Math.PI*2,true);mg.fill();
     mg.strokeStyle='#ff3f5e';mg.lineWidth=3;mg.beginPath();mg.arc(cx,cx,s.el[2]*sc,0,Math.PI*2);mg.stroke()}
   if(s.rl[0]&&S.arenaLike(mode)){mg.fillStyle='#ffc66d';mg.beginPath();mg.arc(cx,cx,7,0,Math.PI*2);mg.fill()}
@@ -1199,7 +1233,7 @@ function frame(now=performance.now()){
     if(Math.random()<(hiQ?.7:.35)){_c.set(m.userData.c);parts.push({x:m.position.x,y:m.position.y,f:m.userData.h,z:m.position.z,vx:rnd(-.3,.3),vy:rnd(-.2,.2),vz:rnd(-.3,.3),l:.25,m:.25,r:_c.r*2,g:_c.g*2,b:_c.b*2})}}
   for(const m of zoneMeshes.values()){m.material.opacity=.22*Math.min(1,m.userData.t)+.06*Math.sin(t*8);m.rotation.z+=dt*.6;
     if(Math.random()<.6){const a=rnd(0,6.28),r=rnd(0,3.5);burst({x:m.position.x+Math.cos(a)*r,z:m.position.z+Math.sin(a)*r},m.userData.c,1,.6,2.2,.7,0)}}
-  updSignals(t);updFlagMeshes(t);updElimWall(dt,t);
+  updSignals(t);updFlagMeshes(t);updElimWall(dt,t);updCartMesh(dt,t);
   if(tutMark){tutMark.children[0].scale.setScalar(2.4+Math.sin(t*4)*.25);tutMark.children[1].material.opacity=.5+.3*Math.sin(t*6)}
   for(const g of lootMeshes.values()){g.userData.gem.rotation.y+=dt*2;g.userData.gem.position.y=1+Math.sin(t*3)*.15}
   for(const g of beamMeshes.values())g.userData.glow.material.opacity=.5+.3*Math.sin(t*30);

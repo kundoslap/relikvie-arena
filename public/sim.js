@@ -25,18 +25,19 @@ const m=(u,k)=>u.mods[k]||0;
 export const RULES={win:{short:.5,std:1,long:1.5},time:{short:2/3,std:1,long:1.5}};
 export function ruleValues(mode,r){
   const D=MODES[mode];r=r||{};if(!D)return{win:0,time:0,bots:true};
-  return{win:D.pvp?Math.max(1,Math.ceil(D.win*(RULES.win[r.win]||1))):0,time:D.pvp?Math.round((D.time||MATCH_TIME)*(RULES.time[r.time]||1)):0,bots:r.bots!==false};
+  return{win:D.pvp?(D.fixedWin?D.win:Math.max(1,Math.ceil(D.win*(RULES.win[r.win]||1)))):0,time:D.pvp?Math.round((D.time||MATCH_TIME)*(RULES.time[r.time]||1)):0,bots:r.bots!==false};
 }
-export const isCustom=(r,mode)=>!!r&&!!MODES[mode]?.pvp&&((r.win||'std')!=='std'||(r.time||'std')!=='std');
+export const isCustom=(r,mode)=>!!r&&!!MODES[mode]?.pvp&&(((r.win||'std')!=='std'&&!MODES[mode].fixedWin)||(r.time||'std')!=='std');
 export function createMatch(o={}){
   if(typeof o==='string')o={diff:o};
-  const mode=MODES[o.mode]?o.mode:'arena',D=o.win>0&&MODES[mode].pvp?{...MODES[mode],win:o.win|0}:MODES[mode];
+  const mode=MODES[o.mode]?o.mode:'arena',D=o.win>0&&MODES[mode].pvp&&!MODES[mode].fixedWin?{...MODES[mode],win:o.win|0}:MODES[mode];
   const mapKey=MAPS[o.map]&&D.maps.includes(o.map)?o.map:D.maps[0],map=MAPS[mapKey];
   return{mode,D,mapKey,map,units:[],log:[],bossKeys:[],projs:[],zones:[],timers:[],events:[],beams:[],rings:[],loot:[],danger:[],
     score:[0,0],time:0,timeLeft:D.waves?1e9:o.time>0?o.time:D.time||MATCH_TIME,countdown:3,state:'countdown',custom:!!o.custom,
     elim:D.rounds?{n:1,state:'fight',t:0,t0:-1,r:map.r}:null,
     relic:{state:arenaLike(mode)?'wait':'off',t:20},
     points:mode==='control'?map.points.map(p=>({x:p.x,z:p.z,r:4,own:-1,prog:0})):[],
+    cart:mode==='convoy'?newCart(map):null,
     lives:D.lives||0,wave:0,waveState:'break',waveT:6,bossKey:BOSSES[o.boss]?o.boss:'collector',bossId:0,
     last:o.last||D.last||0,waveBoss:BOSSES[o.waveBoss]?o.waveBoss:null,emod:new Set(o.mods||(D.mutators?mutatorsOfWeek():[])),mission:o.mission||null,
     nextId:1,diffKey:DIFF[o.diff]?o.diff:'normal',diff:DIFF[o.diff]||DIFF.normal,winner:null,rosterVer:1,scoreAcc:0};
@@ -154,14 +155,15 @@ function damage(M,t,amt,src,o={}){
   if(src&&!o.dot&&M.map.levels&&heightAt(M.map,src.x,src.z)>heightAt(M.map,t.x,t.z)+1)amt*=LEVEL_DMG;
   if(o.ult&&src)amt*=(1+m(src,'ultDmg')/100)*(src.uniq.has('reactor')?1.3:1);
   if(src&&src.st.relic>0&&src.clsKey==='striker')amt*=1.25;
-  if(src&&src.clsKey==='hook'&&t.hookBy===src.id&&t.hookT>M.time)amt*=1.25;
+  if(src&&src.clsKey==='hook'&&t.hookBy===src.id&&t.hookT>M.time)amt*=1.2;
   if(t.vuln>M.time)amt*=1.25;
   if(src&&src.kind==='hero'&&!o.dot){const bb=basicMastery(src).b;if((bb[1]===1||bb[6]===1)&&myDot(src,t))amt*=1+(bb[1]===1?.06:0)+(bb[6]===1?.05:0)}
   // mastery milestones 30–100: Zesílení / Popravčí on the attacker, Odolnost on the target, Oslabení from basic hits
   if(src){if(src.empT>M.time)amt*=1+src.empK;if(src.exT>M.time&&t.hp<t.maxHp*.35)amt*=1.15;if(src.weakT>M.time)amt*=.9}
   if(t.drT>M.time)amt*=1-t.drK;
   if(t.st.nanite?.rot)amt*=1.1;
-  amt*=1-Math.min(.6,t.C.def+m(t,'def')/100);
+  // Hákař's chain finds the gaps in armour: a target he marked keeps only half of its defence against him
+  amt*=1-Math.min(.6,t.C.def+m(t,'def')/100)*(src&&src.clsKey==='hook'&&t.hookBy===src.id&&t.hookT>M.time?.5:1);
   if(t.st.relic>0&&t.clsKey==='guardian')amt*=.8;
   if(t.mods.lowDR&&t.hp<t.maxHp*.3)amt*=.75;
   amt=Math.max(1,Math.round(amt));
@@ -343,7 +345,7 @@ function basic(M,u,pt){
     const lag=u.ctrl==='human'?u.lag:0;
     for(const e of foes(M,u)){const q=posAt(M,e,lag),dx=q.x-u.x,dz=q.z-u.z,d=Math.hypot(dx,dz);
       if(d<B.range+e.radius+(u.radius-.7)&&(dx*dir.x+dz*dir.z)/(d||1)>.55){damage(M,e,B.dmg*mul,u,{color:col});razor(e);basicHit(M,u,e);hit=true}}
-    if(hit&&u.clsKey==='guardian')addShield(u,6,u);
+    if(hit&&u.clsKey==='guardian')addShield(u,4,u);
   }else if(u.key==='voice'){
     for(const a of [-.18,0,.18]){const ca=Math.cos(a),sa=Math.sin(a);shoot(M,u,{x:dir.x*ca-dir.z*sa,z:dir.x*sa+dir.z*ca},{dmg:B.dmg*mul,speed:B.speed,range:B.range,color:col,size:B.size})}
   }else{
@@ -374,12 +376,12 @@ const SK={
       fx(M,{t:'ban',ti:'Bouřový průraz',col:'var(--amber)',d:1.2,i:u.id})}
   ],
   guardian:[
-    (M,u)=>{addShield(u,90+m(u,'anchorSh'),u);fx(M,{t:'ring',x:r2(u.x),z:r2(u.z),c:0x5dffa8,a:.5,b:5.5,d:.6});fx(M,{t:'dome',x:r2(u.x),z:r2(u.z),c:0x5dffa8,r:1.6,d:.5});for(const e of near(foes(M,u),u,5.5))e.st.slow=Math.max(e.st.slow,2)},
+    (M,u)=>{addShield(u,70+m(u,'anchorSh'),u);fx(M,{t:'ring',x:r2(u.x),z:r2(u.z),c:0x5dffa8,a:.5,b:5.5,d:.6});fx(M,{t:'dome',x:r2(u.x),z:r2(u.z),c:0x5dffa8,r:1.6,d:.5});for(const e of near(foes(M,u),u,5.5))e.st.slow=Math.max(e.st.slow,2)},
     (M,u,pt)=>{const dir=aimDir(u,pt),dist=clamp(d2(u,pt),3,8+m(u,'chargeLen')),stun=.9+m(u,'stunT');
       u.dash={dx:dir.x,dz:dir.z,spd:26,t:dist/26,end:()=>{fx(M,{t:'ring',x:r2(u.x),z:r2(u.z),c:0x5dffa8,a:.5,b:3.2,d:.4});fx(M,{t:'burst',x:r2(u.x),z:r2(u.z),y:0,c:0x5dffa8,n:24,s:8,u:3,l:.5});
         for(const e of near(foes(M,u),u,2.8)){damage(M,e,atk(M,u)*.9,u,{color:0x5dffa8});if(e.kind!=='boss'){e.st.stun=Math.max(e.st.stun,stun);const kx=e.x-u.x,kz=e.z-u.z,l=Math.hypot(kx,kz)||1;e.x+=kx/l*2.5;e.z+=kz/l*2.5;e.kbT=M.time;collide(e,M.map)}}}}},
     (M,u)=>{const sh=55+m(u,'domeSh'),hot=m(u,'domeHeal');fx(M,{t:'dome',x:r2(u.x),z:r2(u.z),c:0x5dffa8,r:7,d:.9});
-      for(const a of near(friends(M,u),u,7)){addShield(a,sh,u);if(hot)a.st.hot={hps:20,t:3,acc:0,src:u};fx(M,{t:'burst',x:r2(a.x),z:r2(a.z),y:1.2,c:0x5dffa8,n:10,s:2,u:3,l:.6})}},
+      for(const a of near(friends(M,u),u,7)){addShield(a,a===u?sh*.5:sh,u);if(hot)a.st.hot={hps:20,t:3,acc:0,src:u};fx(M,{t:'burst',x:r2(a.x),z:r2(a.z),y:1.2,c:0x5dffa8,n:10,s:2,u:3,l:.6})}},
     (M,u)=>{const um=u.prof.ultMod,R=8+m(u,'slamR')+(um?1:0),q=m(u,'quake');addShield(u,120,u);fx(M,{t:'slam',x:r2(u.x),z:r2(u.z),r:R});
       for(const e of near(foes(M,u),u,R)){
         if(um&&e.kind!=='boss'){const kx=u.x-e.x,kz=u.z-e.z,l=Math.hypot(kx,kz)||1,s=Math.min(2,Math.max(0,l-u.radius-e.radius));e.x+=kx/l*s;e.z+=kz/l*s;e.kbT=M.time;collide(e,M.map)}damage(M,e,atk(M,u)*2,u,{color:0x5dffa8,ult:true});if(e.kind!=='boss')e.st.stun=Math.max(e.st.stun,1.4+(q?.5:0));if(q)e.st.slow=Math.max(e.st.slow,3)}
@@ -529,7 +531,7 @@ SK.hook=[
   // Hák: a skillshot; the first enemy hit is pulled in front of you
   (M,u,pt)=>{const dir=aimDir(u,pt);
     shoot(M,u,dir,{dmg:atk(M,u)*.9,speed:44,range:16+m(u,'hookR'),color:0xd4ff4f,size:1.5,onHit:(e,s)=>{if(e.dead)return;chainFx(M,s,e);
-      pullTo(M,e,s,.8);e.st.slow=Math.max(e.st.slow,.8);hookMark(M,e,s);addShield(s,40,s);if(m(s,'hookBleed'))e.st.bleed={dps:10,t:3,acc:0,src:s};
+      pullTo(M,e,s,.8);e.st.slow=Math.max(e.st.slow,.5);hookMark(M,e,s);addShield(s,22,s);if(m(s,'hookBleed'))e.st.bleed={dps:10,t:3,acc:0,src:s};
       fx(M,{t:'txt',x:r2(e.x),z:r2(e.z),s:'Chycen',c:'info'})}})},
   // Řetězový skok: the chain pulls you to the aimed point, a stun where you land
   (M,u,pt)=>{const dir=aimDir(u,pt),dist=clamp(d2(u,pt),2,11),to={x:u.x+dir.x*dist,z:u.z+dir.z*dist};chainFx(M,u,to,.05);
@@ -540,7 +542,7 @@ SK.hook=[
   (M,u,pt)=>{const t=foes(M,u).filter(e=>visibleTo(u,e)&&d2(u,e)<6.5+e.radius).sort((a,b)=>d2(a,pt)-d2(b,pt))[0];if(!t)return false;aimDir(u,t);
     chainFx(M,u,t,.09);damage(M,t,atk(M,u)*.6,u,{color:0xd4ff4f});hookMark(M,t,u);
     if(t.kind==='boss'){t.st.slow=Math.max(t.st.slow,2);return}
-    t.st.tether={src:u,t:2.5+m(u,'tetherT'),r:6.5,stun:.8+m(u,'tetherStun'),dmg:atk(M,u)*.5,fx:0};fx(M,{t:'txt',x:r2(t.x),z:r2(t.z),s:'Spoután',c:'info'})},
+    t.st.tether={src:u,t:2.5+m(u,'tetherT'),r:6.5,stun:.55+m(u,'tetherStun'),dmg:atk(M,u)*.5,fx:0};fx(M,{t:'txt',x:r2(t.x),z:r2(t.z),s:'Spoután',c:'info'})},
   // Vír řetězů: every enemy around is dragged in, then a hit and a stun (Dvojitý vír: once more a second later)
   (M,u)=>{const um=u.prof.ultMod,R=9+(um?2:0),T=1+(um?.4:0);
     const spin=(mul,first)=>{if(u.dead||M.state!=='play')return;const got=near(foes(M,u),u,R);fx(M,{t:'ring',x:r2(u.x),z:r2(u.z),c:0xd4ff4f,a:R,b:1,d:.35});
@@ -706,7 +708,7 @@ function secondary(M,u,pt){
     if(d<R+e.radius&&(dx*dir.x+dz*dir.z)/(d||1)>dot&&!blocked(M.map,u,q))fn(e,dx/(d||1),dz/(d||1))}};
   switch(u.clsKey){
     case 'striker':shoot(M,u,dir,{dmg:atk(M,u)*1.1,speed:55,range:26,color:0xffe9a8,size:1.5,pierce:true});break;
-    case 'guardian':fx(M,{t:'arc',x:r2(u.x),z:r2(u.z),f:r2(u.face),c:0x5dffa8,r:3.5});addShield(u,30,u);
+    case 'guardian':fx(M,{t:'arc',x:r2(u.x),z:r2(u.z),f:r2(u.face),c:0x5dffa8,r:3.5});addShield(u,20,u);
       cone(3.5,.45,(e,nx,nz)=>{damage(M,e,atk(M,u)*1.1,u,{color:0x5dffa8});e.st.slow=Math.max(e.st.slow,1);
         if(e.kind!=='boss'){e.x+=nx*3.5;e.z+=nz*3.5;e.kbT=M.time;collide(e,M.map)}});break;
     case 'technician':shoot(M,u,dir,{dmg:tech(M,u)*1.1*mul,speed:42,range:18,color:0x9fe8ff,size:1.3,onHit:(e,s)=>{
@@ -943,7 +945,7 @@ function updStatus(M,u,dt){
     if(s.burn&&s.burn.t<=0)s.burn=null}
   if(s.tether){const T=s.tether,src=T.src;T.t-=dt;
     if(!src||src.dead||u.dead||T.t<=0||s.decon>0)s.tether=null;
-    else if(d2(u,src)>T.r+u.radius){s.tether=null;chainFx(M,src,u,.12);pullTo(M,u,src,1.2);addShield(src,40,src);s.stun=Math.max(s.stun,T.stun);damage(M,u,T.dmg,src,{color:0xd4ff4f});hookMark(M,u,src);
+    else if(d2(u,src)>T.r+u.radius){s.tether=null;chainFx(M,src,u,.12);pullTo(M,u,src,1.2);addShield(src,22,src);s.stun=Math.max(s.stun,T.stun);damage(M,u,T.dmg,src,{color:0xd4ff4f});hookMark(M,u,src);
       fx(M,{t:'txt',x:r2(u.x),z:r2(u.z),s:'Škubnutí',c:'info'})}
     else{T.fx-=dt;if(T.fx<=0){T.fx=.25;chainFx(M,src,u,.04)}}}
   if(u.dead)return;
@@ -1053,6 +1055,8 @@ function botUpdate(M,u,dt){
     const p=want[0]||M.points[(u.id+Math.floor(M.time/20))%M.points.length];
     if(d2(u,p)>2.5)goal=p;
   }
+  // Konvoj: stay with the cart, spread a little behind it on the own side; a fight far from it is left
+  else if(M.cart&&(!t||d>6||d2(u,M.cart)>CONVOY.r+1.5)){const sp=cartSpot(M.cart,u.team),spot={x:sp.x,z:sp.z+((u.id%3)-1)*1.6};if(d2(u,spot)>1.5)goal=spot}
   if(M.flags&&!u.bomb){const g=ctfGoal(M,u,t,d);if(g){goal=g.p;if(g.target)ai.target=g.target}}
   if(!goal&&!ai.retreat&&ping&&!ping.tg&&ping.k==='here'&&(!t||d>8)&&d2(u,ping)>3)goal=ping;
   if(!goal&&!ai.retreat&&ping&&ping.k==='danger'&&d2(u,ping)<6){const dx=u.x-ping.x,dz=u.z-ping.z,l=Math.hypot(dx,dz)||1;goal=inArena(M,{x:u.x+dx/l*6,z:u.z+dz/l*6},2)}
@@ -1382,6 +1386,31 @@ function updPoints(M,dt){
   M.scoreAcc+=dt;while(M.scoreAcc>=2){M.scoreAcc-=2;for(const p of M.points)if(p.own>=0)M.score[p.own]++}
   checkWin(M);
 }
+// Konvoj relikvie: a hover cart starts in the middle and rides on the line between the bases. It moves towards a team's
+// enemy base while that team has more heroes within `r` (faster by the difference, slower while enemies are there too),
+// stops while both have as many, and after
+// `idle` seconds alone drifts back towards the middle. The score is how far it got on each side (100 = the end, a win);
+// at the time limit the side it stands on wins. It slows down the further it gets (`slow` at the very end). Every 25 %
+// is a checkpoint: announced, a capture for the pushers, and the cart stands still for `hold` s so the defenders can regroup.
+export const CONVOY={r:4,spd:.45,extra:.2,contest:.6,slow:.35,hold:6,back:.25,idle:6,margin:6};
+export function newCart(map){const b=map.bases;return{x:(b[0].x+b[1].x)/2,z:(b[0].z+b[1].z)/2,L:Math.abs(b[1].x-b[0].x)/2-CONVOY.margin,dir:Math.sign(b[1].x-b[0].x)||1,push:-1,idle:0,hold:0,cp:[0,0]}}
+// the point a team pushes from: just behind the cart on its own side
+export const cartSpot=(C,team,off=1.6)=>({x:C.x-(team?-C.dir:C.dir)*off,z:C.z});
+function updCart(M,dt){
+  const C=M.cart;if(M.state!=='play')return;
+  const c=[0,0];for(const u of M.units)if(u.kind==='hero'&&!u.dead&&d2(u,C)<CONVOY.r)c[u.team]++;
+  C.push=c[0]>c[1]?0:c[1]>c[0]?1:c[0]?2:-1;
+  if(C.hold>0){C.hold-=dt;C.idle=0}
+  else if(C.push===0||C.push===1){const t=C.push,k=c[t]-c[1-t],prog=Math.max(0,C.x*(t?-C.dir:C.dir)/C.L);C.idle=0;
+    C.x=clamp(C.x+(t?-C.dir:C.dir)*CONVOY.spd*(1+CONVOY.extra*(k-1))*(c[1-t]?CONVOY.contest:1)*(1-CONVOY.slow*prog)*dt,-C.L,C.L)}
+  else if(C.push<0){C.idle+=dt;if(C.idle>CONVOY.idle&&Math.abs(C.x)>.01)C.x-=Math.sign(C.x)*Math.min(Math.abs(C.x),CONVOY.back*dt)}
+  else C.idle=0;
+  const p=C.x*C.dir/C.L;M.score[0]=Math.round(Math.max(0,p)*100);M.score[1]=Math.round(Math.max(0,-p)*100);
+  for(const t of [0,1]){const k=Math.floor(M.score[t]/25);if(k>C.cp[t]&&k<4){C.cp[t]=k;C.hold=CONVOY.hold;
+    for(const u of M.units)if(u.kind==='hero'&&!u.dead&&u.team===t&&d2(u,C)<CONVOY.r)u.caps=(u.caps||0)+1;
+    fx(M,{t:'ban',ti:`Konvoj ${k*25} %`,sub:(t?'Rudí tlačí k modré základně':'Modří tlačí k rudé základně')+` · kontrolní bod, vůz ${CONVOY.hold} s stojí`,col:`var(--t${t})`,d:1.6})}}
+  checkWin(M);
+}
 // Eliminace: rounds without respawns. A team that has nobody standing loses the round. After `shrinkAt` seconds the
 // arena closes in to nothing over `shrinkTime`; outside the circle heroes burn for `burn` of their max HP per second,
 // so every round ends. Between rounds the survivors are untouchable and everyone comes back for the next one.
@@ -1462,6 +1491,7 @@ export function step(M,dt=TICK){
   }
   separate(M);if(M.map.portals)updPortals(M,dt);if(M.map.levels)updLevels(M,dt);if(M.map.storm)updStorm(M,dt);recordHist(M);updProjs(M,dt);updZones(M,dt);updRings(M,dt);updBeams(M,dt);updRelic(M,dt);updLoot(M,dt);
   if(M.mode==='control')updPoints(M,dt);
+  if(M.cart)updCart(M,dt);
   if(M.flags)updFlags(M,dt);
   if(M.elim)updElim(M,dt);
   if(M.D.waves)updWaves(M,dt);
@@ -1482,7 +1512,7 @@ export function snapshotFor(M,uid,events){
   const boss=M.units.find(u=>u.kind==='boss');
   return{type:'s',t:r2(M.time),st:M.state,cd:r2(M.countdown),tl:Math.ceil(M.timeLeft),sc:M.score,
     rl:[M.relic.state==='up'?1:0,Math.ceil(M.relic.t)],
-    pt:M.points.map(p=>[p.own,Math.round(p.prog)]),lv:M.lives,
+    pt:M.points.map(p=>[p.own,Math.round(p.prog)]),lv:M.lives,cv:M.cart?[r2(M.cart.x),M.cart.push,Math.ceil(M.cart.hold)]:null,
     fg:M.flags?M.flags.map(f=>[{home:0,carried:1,dropped:2}[f.state],r2(f.x),r2(f.z),f.carrier,Math.ceil(f.t)]):null,
     el:M.elim?[M.elim.n,M.elim.state==='pause'?Math.ceil(M.elim.t):0,r2(M.elim.r),heroesOf(M,0).length,heroesOf(M,1).length,Math.max(0,Math.ceil(M.elim.t0+ELIM.shrinkAt-M.time))]:null,
     wv:M.D.waves?[M.wave,M.waveState==='break'?Math.ceil(M.waveT):0,M.units.filter(u=>u.team===1).length]:null,

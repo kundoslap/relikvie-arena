@@ -11,11 +11,11 @@ export const CLASSES={
     ult:{name:'Bouřový průraz',icon:'bolt',desc:'Tři blesky v linii před tebou, každý 170 % útoku.'},
     relic:'Bouřová relikvie: +25 % poškození na 20 s.',bars:[.45,.9,.25,.95]},
   guardian:{name:'Strážce',hero:'Bor Ocelštít',lore:'Bývalý strážce trezoru relikvií. Kde stojí on, tudy se neprojde.',role:'Výdrž a obrana',color:0x5dffa8,css:'#5dffa8',hp:385,speed:7.9,def:.22,atk:30,tech:16,pref:2.2,
-    talent:'Bastion',talentDesc:'Každý zásah na blízko přidá 6 bodů štítu.',
+    talent:'Bastion',talentDesc:'Každý zásah na blízko přidá 4 body štítu.',
     basic:{type:'melee',name:'Pancéřový úder',dmg:30,rate:.62,range:3.4,dot:{kind:'poison',dps:4,t:3}},
-    skills:[{name:'Kotva',cost:25,cd:8,icon:'anchor',desc:'Štít 90 a zpomalení nepřátel do 5,5 m o 40 %.'},
+    skills:[{name:'Kotva',cost:25,cd:8,icon:'anchor',desc:'Štít 70 a zpomalení nepřátel do 5,5 m o 40 %.'},
             {name:'Náraz',cost:30,cd:9,icon:'charge',desc:'Výpad až 8 m, omráčení 0,9 s a odhození.'},
-            {name:'Štítová kupole',cost:35,cd:14,icon:'dome',desc:'Ty a spojenci do 7 m získáte štít 55.'}],
+            {name:'Štítová kupole',cost:35,cd:14,icon:'dome',desc:'Spojenci do 7 m získají štít 55, ty sám 28.'}],
     ult:{name:'Titánův val',icon:'slam',desc:'Úder do země do 8 m: 200 % útoku, omráčení 1,4 s, štít 120.'},
     relic:'Titánova relikvie: štít 150 a −20 % přijatého poškození na 20 s.',bars:[1,.6,.35,.55]},
   technician:{name:'Technik',hero:'Ina Signálová',lore:'Inženýrka signálové sítě. Spojence opraví, soupeřům spojení přeruší.',role:'Energie a obnova',color:0x6acbff,css:'#6acbff',hp:245,speed:8.4,def:.1,atk:24,tech:35,pref:12,
@@ -42,12 +42,12 @@ export const CLASSES={
             {name:'Kryomina',cost:30,cd:10,icon:'icemine',desc:'Mina dopadne až 14 m daleko a po 0,7 s vybuchne do 3 m: 90 % TECH a zmrazení na 0,7 s.'}],
     ult:{name:'Absolutní nula',icon:'freeze',desc:'Mrazivá bouře v místě až 14 m daleko: po 0,55 s zasáhne vše do 7,5 m za 165 % TECH a zmrazí na 1,2 s.'},
     relic:'Relikvie mrazu: každý zásah základním útokem zpomalí a čekání schopností je o 20 % kratší na 20 s.',bars:[.65,.5,.75,.9]},
-  hook:{name:'Hákař',hero:'Kord Řetězník',lore:'Jeřábník z neonového přístavu. Co chytí řetězem, to nepustí.',role:'Přitažení a kontrola',color:0xd4ff4f,css:'#d4ff4f',hp:330,speed:8.7,def:.18,atk:32,tech:16,pref:4.5,
-    talent:'Napnutý řetěz',talentDesc:'Soupeř, kterého přitáhneš nebo spoutáš, od tebe 3 s dostává o 25 % víc poškození. Každé přitažení Hákem nebo škubnutím ti dá štít 40, Vír řetězů 30 za každého soupeře.',
+  hook:{name:'Hákař',hero:'Kord Řetězník',lore:'Jeřábník z neonového přístavu. Co chytí řetězem, to nepustí.',role:'Přitažení a kontrola',color:0xd4ff4f,css:'#d4ff4f',hp:345,speed:8.7,def:.18,atk:32,tech:16,pref:4.5,
+    talent:'Napnutý řetěz',talentDesc:'Soupeř, kterého přitáhneš nebo spoutáš, od tebe 3 s dostává o 20 % víc poškození a má proti tobě jen polovinu obrany. Každé přitažení Hákem nebo škubnutím ti dá štít 22, Vír řetězů 30 za každého soupeře.',
     basic:{type:'melee',name:'Švih řetězem',dmg:31,rate:.52,range:4.5,dot:{kind:'bleed',dps:4,t:3}},
-    skills:[{name:'Hák',cost:25,cd:8,icon:'hook',desc:'Hák na 16 m chytí prvního soupeře v dráze a přitáhne ho k tobě: 90 % útoku a zpomalení na 0,8 s.'},
+    skills:[{name:'Hák',cost:25,cd:8,icon:'hook',desc:'Hák na 16 m chytí prvního soupeře v dráze a přitáhne ho k tobě: 90 % útoku a zpomalení na 0,5 s.'},
             {name:'Řetězový skok',cost:25,cd:9,icon:'chainleap',desc:'Řetěz tě přitáhne až o 11 m. Po dopadu soupeři do 2,5 m dostanou 80 % útoku a omráčení 0,5 s.'},
-            {name:'Spoutání',cost:30,cd:11,icon:'shackle',desc:'Připoutá soupeře do 6,5 m na 2,5 s (60 % útoku). Když uteče dál, řetěz ho škubne zpátky: 50 % útoku a omráčení 0,8 s.'}],
+            {name:'Spoutání',cost:30,cd:11,icon:'shackle',desc:'Připoutá soupeře do 6,5 m na 2,5 s (60 % útoku). Když uteče dál, řetěz ho škubne zpátky: 50 % útoku a omráčení 0,55 s.'}],
     ult:{name:'Vír řetězů',icon:'vortex',desc:'Stáhne všechny soupeře do 9 m k sobě, pak 150 % útoku a omráčení na 1 s.'},
     relic:'Relikvie řetězů: Hák a Spoutání mají o 40 % kratší čekání na 20 s.',bars:[.75,.7,.3,.7]}
 };
@@ -86,13 +86,24 @@ export const EVADES={
 // Sekundární útok (right mouse button): every hero's second attack, no energy, a short cooldown
 export const SECONDARY={
   striker:{name:'Průrazná střela',cd:7,icon:'arrow',desc:'Rychlá střela na 26 m, která proletí všemi soupeři v řadě: 110 % útoku.'},
-  guardian:{name:'Úder štítem',cd:5,icon:'bulwark',desc:'Úder do 3,5 m před tebou: 110 % útoku, odhození o 3,5 m a zpomalení na 1 s. Dá ti štít 30. Na citadele shodí soupeře z okraje.'},
+  guardian:{name:'Úder štítem',cd:5,icon:'bulwark',desc:'Úder do 3,5 m před tebou: 110 % útoku, odhození o 3,5 m a zpomalení na 1 s. Dá ti štít 20. Na citadele shodí soupeře z okraje.'},
   technician:{name:'Odsávač',cd:7,icon:'pulse',desc:'Výboj na 18 m: 110 % TECH a vyléčí tě o polovinu toho. Zasaženému hrdinovi vezme 20 energie a dá ji tobě.'},
   pyro:{name:'Plamenomet',cd:4,icon:'flame',desc:'Proud ohně do 5,5 m před tebou: 95 % TECH a hoření 10 HP/s na 2 s.'},
   cryo:{name:'Ledový hrot',cd:6,icon:'freeze',desc:'Hrot na 20 m: 60 % TECH a zpomalení na 1,5 s.'},
   hook:{name:'Trhnutí',cd:6,icon:'hook',desc:'Krátký hák na 9 m: 80 % útoku a přitáhne zasaženého soupeře o 3 m k tobě.'}};
 // "Novinky" in the hub, newest first; id marks what a player has already seen
 export const CHANGELOG=[
+  {id:'2026-12n',title:'Nový režim: Konvoj relikvie',items:[
+    'Ve středu arény čeká vznášející se vůz s relikvií. Když má u něj tvůj tým víc hrdinů, jede k soupeřově základně, čím víc vás je, tím rychleji.',
+    'Na 25, 50 a 75 % je kontrolní bod: vůz tam 6 s stojí, aby se obránci stihli vrátit. Kdo vůz dotlačí na konec, vyhrává, jinak po vypršení času vyhrává strana, na které vůz stojí.',
+    'Hraje se 3 proti 3 na Neonovém jádru, v Rezavé kovárně, Ledovém archivu, Hvězdné observatoři a v Bouřkové elektrárně. Nový denní cíl: vyhraj zápas v Konvoji.']},
+  {id:'2026-12m',title:'Strážce bez nekonečných štítů',items:[
+    'Strážce v soubojích vyhrával skoro tři ze čtyř, protože se pořád obnovoval štíty.',
+    'Kotva dává štít 70 místo 90, Štítová kupole dá Strážci samotnému 28 (spojencům dál 55), talent Bastion 4 body za zásah místo 6 a Úder štítem štít 20 místo 30.']},
+  {id:'2026-12l',title:'Vyváženější Hákař',items:[
+    'Hák zpomalí na 0,5 s místo 0,8 s a škubnutí Spoutání omráčí na 0,55 s místo 0,8 s, takže Kryonik a Technik mají víc šancí utéct.',
+    'Štít za přitažení je 22 místo 40 a talent přidává 20 % poškození místo 25 %.',
+    'Zato označený soupeř má proti Hákaři jen polovinu obrany, takže Hákař víc zraní Strážce. Hákař má 345 zdraví místo 330.']},
   {id:'2026-12k',title:'Přehlednější hra na telefonu',items:[
     'Na telefonu na šířku je kamera dál a rozhraní menší: zdraví je vlevo nahoře u minimapy, tlačítka jsou menší a velké nápisy se ukazují nahoře, ne přes hrdiny.']},
   {id:'2026-12j',title:'Pozvi kamaráda',items:[
@@ -740,6 +751,7 @@ export const GOALS={
   win2:{name:'Vyhraj 2 zápasy',stat:'wins',target:2,xp:220,cr:90},
   arena1:{name:'Vyhraj zápas v Aréně',stat:'winArena',target:1,xp:200,cr:80},
   control1:{name:'Vyhraj zápas v Ovládnutí',stat:'winControl',target:1,xp:200,cr:80},
+  convoy1:{name:'Vyhraj zápas v Konvoji relikvie',stat:'winConvoy',target:1,xp:200,cr:80},
   kills12:{name:'Znič 12 soupeřů v PvP',stat:'kills',target:12,xp:220,cr:90},
   npc40:{name:'Znič 40 NPC',stat:'npcKills',target:40,xp:200,cr:80},
   boss1:{name:'Poraz bosse',stat:'bossKills',target:1,xp:260,cr:110},
@@ -765,7 +777,7 @@ export function weekKey(t=Date.now()){
 }
 // Režim dne: one mode a day gives more experience and credits (more on Saturday and Sunday), so the few players online
 // tend to meet in the same mode. The order is fixed and the same for everyone (Prague days); campaign missions do not count.
-export const FEATURED_MODES=['arena','control','boss','elim','ctf','waves','mutant','duel','endless'];
+export const FEATURED_MODES=['arena','control','boss','elim','ctf','waves','mutant','duel','endless','convoy'];
 export const FEATURED={bonus:.3,weekend:.5};
 export function featuredOfDay(t=Date.now()){
   const d=new Date(dayKey(t)+'T00:00:00Z'),wd=d.getUTCDay(),weekend=wd===0||wd===6;
@@ -881,6 +893,7 @@ export const onPeak=(map,u)=>{const P=map.levels?.find(L=>L.peak);return!!P&&hei
 export const MODES={
   arena:{name:'Aréna',desc:'3 proti 3. Body za zničení soupeřů a za relikvii ve středu. Vyhrává 20 bodů.',pvp:true,maps:['core','forge','archive','observ','citadel','storm'],max:6,win:20},
   control:{name:'Ovládnutí',desc:'3 proti 3 o tři body. Každý držený bod přidává skóre, vyhrává 100.',pvp:true,maps:['core','forge','archive','observ','citadel','storm'],max:6,win:100},
+  convoy:{name:'Konvoj relikvie',desc:'3 proti 3 o vznášející se vůz s relikvií ve středu. Vůz jede k soupeřově základně, když má u něj tvůj tým víc hrdinů. Vyhrává, kdo ho dotlačí na konec, jinak ten, na čí straně stojí, když dojde čas.',pvp:true,maps:['core','forge','archive','observ','storm'],max:6,win:100,fixedWin:true},
   ctf:{name:'Únos relikvie',desc:'3 proti 3 v Pevnosti relikvií. Ukradni soupeřovu relikvii a dones ji ke své, která musí být doma. Vyhrávají 3 únosy.',pvp:true,maps:['bastion'],max:6,win:3},
   mutant:{name:'Mutace týdne',desc:'3 proti 3 podle pravidel Arény, ale s dvěma mutacemi, které se mění každé pondělí. Vyhrává 20 bodů.',pvp:true,mutators:true,maps:['core','forge','archive','observ','citadel','storm'],max:6,win:20},
   elim:{name:'Eliminace',desc:'3 proti 3 na kola bez oživení. Kolo vyhrává tým, který zůstane stát. Po 40 s se aréna začne zmenšovat a mimo kruh to pálí. Vyhrávají 4 kola.',pvp:true,rounds:true,maps:['core','forge','archive','observ','citadel','storm'],max:6,win:4,time:900},

@@ -551,6 +551,12 @@ body.nonames .ub .n{display:none}
 .elimbar b{font-family:var(--display);letter-spacing:.06em;color:var(--gold)}.elimbar span{letter-spacing:2px;font-size:14px}
 .elimbar .t0{color:var(--t0)}.elimbar .t1{color:var(--t1)}.elimbar small{color:var(--muted)}
 /* capture the relic */
+.cvbar{width:min(420px,60vw);background:var(--panel);border:1px solid var(--line);border-radius:3px;padding:4px 12px 7px;font-size:12px;color:var(--ink);text-align:center}
+.cvbar b{font-weight:600}.cvbar.p0 b{color:var(--t0)}.cvbar.p1 b{color:var(--t1)}
+.cvbar .tr{position:relative;height:8px;margin-top:5px;border-radius:4px;background:linear-gradient(90deg,var(--t0),color-mix(in srgb,var(--t0) 15%,transparent) 42%,color-mix(in srgb,var(--t1) 15%,transparent) 58%,var(--t1))}
+.cvbar .tr u{position:absolute;top:-2px;bottom:-2px;width:2px;margin-left:-1px;background:rgba(255,255,255,.3)}
+.cvbar .tr i{position:absolute;top:50%;width:13px;height:13px;margin:-6.5px 0 0 -6.5px;border-radius:2px;background:var(--gold);box-shadow:0 0 10px var(--gold);transform:rotate(45deg);transition:left .25s linear}
+body.touch .cvbar{padding:2px 8px 5px;font-size:10px}
 .flags{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
 .flags>div{background:var(--panel);border:1px solid var(--line);border-radius:3px;padding:4px 10px;font-size:12px;color:var(--ink)}
 .flags b{font-weight:600}.flags .fl0 b{color:var(--blue)}.flags .fl1 b{color:var(--red)}
