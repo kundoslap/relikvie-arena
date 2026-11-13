@@ -420,7 +420,11 @@ h2.sec{margin:0;font-family:var(--display);font-size:26px;font-weight:800;letter
 .cb b{text-align:right}
 .tline{display:grid;gap:3px;font-size:13px;max-height:190px;overflow-y:auto}
 .tline div{display:grid;grid-template-columns:42px 1fr;gap:6px}.tline small{color:var(--muted)}.tline .t0{color:var(--t0)}.tline .t1{color:var(--t1)}
-@media (max-width:640px){.deb{grid-template-columns:1fr}.cb{grid-template-columns:96px 1fr 42px}}
+.sgraph{margin:10px 0 0;padding:12px 14px;border:1px solid var(--line);border-radius:3px;background:rgba(10,14,28,.6);display:grid;gap:6px}
+.sgraph h4{margin:0;font-family:var(--display);letter-spacing:.1em;text-transform:uppercase;font-size:13px;color:var(--muted)}
+.sgraph svg{width:100%;height:90px;display:block;overflow:visible}
+.sgl{display:flex;justify-content:space-between;gap:8px;font-size:12px;color:var(--muted)}.sgl .t0{color:var(--t0)}.sgl .t1{color:var(--t1)}
+@media (max-width:640px){.deb{grid-template-columns:1fr}.cb{grid-template-columns:96px 1fr 42px}.sgraph svg{height:70px}}
 .rank{display:flex;gap:14px;align-items:center;flex-wrap:wrap}
 .rank b{font-family:var(--display);font-size:26px;font-weight:800;letter-spacing:.04em;display:block}
 .rkb{display:inline-grid;place-items:center;min-width:96px;padding:10px 14px;border:1px solid var(--c);color:var(--c);background:color-mix(in srgb,var(--c) 12%,transparent);

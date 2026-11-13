@@ -93,6 +93,14 @@ export const SECONDARY={
   hook:{name:'Trhnutí',cd:6,icon:'hook',desc:'Krátký hák na 9 m: 80 % útoku a přitáhne zasaženého soupeře o 3 m k tobě.'}};
 // "Novinky" in the hub, newest first; id marks what a player has already seen
 export const CHANGELOG=[
+  {id:'2026-12q',title:'Úspěchy Konvoje relikvie',items:[
+    'Strojvůdce: vyhraj 3, 15 a 50 zápasů v Konvoji relikvie. Zlato dá titul Strojvůdce.',
+    'Až na konec: vyhraj Konvoj tak, že vůz dotlačíš až k soupeřově základně (1, 5 a 20krát). Výhra na čas se nepočítá. Zlato dá titul Nezastavitelný konvoj.']},
+  {id:'2026-12p',title:'Vůz v Konvoji objíždí sloupy',items:[
+    'Na všech mapách Konvoje stály dva sloupy přímo na trati a vůz jimi projížděl. Trať se teď před sloupem plynule stočí stranou a za ním se vrátí, vůz se natáčí ve směru jízdy a zakřivenou trať ukazuje i minimapa.']},
+  {id:'2026-12o',title:'Nový graf: Skóre v čase',items:[
+    'Po každém zápase týmu proti týmu ukazuje výsledková obrazovka graf, jak se vyvíjelo skóre obou týmů. V Konvoji relikvie je to jedna čára: kde vůz zrovna byl.',
+    'Konvoj relikvie jde nově i v trailerovém režimu (?trailer&mode=convoy).']},
   {id:'2026-12n',title:'Nový režim: Konvoj relikvie',items:[
     'Ve středu arény čeká vznášející se vůz s relikvií. Když má u něj tvůj tým víc hrdinů, jede k soupeřově základně, čím víc vás je, tím rychleji.',
     'Na 25, 50 a 75 % je kontrolní bod: vůz tam 6 s stojí, aby se obránci stihli vrátit. Kdo vůz dotlačí na konec, vyhrává, jinak po vypršení času vyhrává strana, na které vůz stojí.',
@@ -1068,6 +1076,8 @@ export const ACH=[
   {id:'multi',cat:'fight',name:'Smršť',desc:'Znič víc soupeřů rychle po sobě: dvojité, trojité a čtyřnásobné zničení.',t:[2,3,4],v:p=>st(p).bestMulti|0,title:'Smršť'},
   {id:'elim',cat:'fight',name:'Poslední stojící',desc:'Vyhraj zápasy v Eliminaci.',t:[3,15,50],v:p=>st(p).byMode?.elim?.w|0,title:'Poslední stojící'},
   {id:'mutant',cat:'fight',name:'Mutant',desc:'Vyhraj zápasy v Mutaci týdne.',t:[3,15,50],v:p=>st(p).byMode?.mutant?.w|0,title:'Mutant'},
+  {id:'convoy',cat:'fight',name:'Strojvůdce',desc:'Vyhraj zápasy v Konvoji relikvie.',t:[3,15,50],v:p=>st(p).byMode?.convoy?.w|0,title:'Strojvůdce'},
+  {id:'convoyEnd',cat:'fight',name:'Až na konec',desc:'Vyhraj Konvoj relikvie tak, že vůz dotlačíš až k soupeřově základně.',t:[1,5,20],v:p=>st(p).convoyEnds|0,title:'Nezastavitelný konvoj'},
   {id:'modes',cat:'fight',name:'Všude doma',desc:'Vyhraj v různých režimech.',t:[2,4,6],v:p=>Object.entries(st(p).byMode||{}).filter(([k,x])=>k!=='campaign'&&x.w>0).length,title:'Všudybyl'},
   {id:'npc',cat:'coop',name:'Vyhlazovač',desc:'Znič nepřátelská NPC.',t:[200,2000,10000],v:p=>st(p).npcKills|0,title:'Vyhlazovač'},
   {id:'bosses',cat:'coop',name:'Přemožitel',desc:'Poraz bosse.',t:[5,50,250],v:p=>st(p).bossKills|0,title:'Přemožitel bossů'},

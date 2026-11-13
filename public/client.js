@@ -233,17 +233,21 @@ function buildCart(info){
   const ring=new THREE.Mesh(RING_GEO,addMat(0xffc66d,1.4));ring.rotation.x=-Math.PI/2;ring.scale.setScalar(S.CONVOY.r);ring.position.y=.09;
   const light=new THREE.PointLight(0xffc66d,7,12,1.4);light.position.y=2.2;
   const hover=new THREE.Group();hover.add(body,rim,relic,light);g.add(hover,under,ring);g.position.set(C.x,gy(C.x,C.z),C.z);scene.add(g);
-  const line=new THREE.Mesh(new THREE.PlaneGeometry(C.L*2,.22),addMat(0xffc66d,.9));line.rotation.x=-Math.PI/2;line.position.set(C.x,.06,C.z);line.material.opacity=.45;track.add(line);
+  // the track as a thin ribbon along the bent path
+  const pos=[],idx=[],N=Math.ceil(C.L*2/.4);for(let i=0;i<=N;i++){const x=C.x-C.L+i*C.L*2/N,z=S.cartZAt(C,x),dz=(S.cartZAt(C,x+.05)-S.cartZAt(C,x-.05))/.1,l=Math.hypot(1,dz),nx=-dz/l*.11,nz=1/l*.11;
+    pos.push(x+nx,.06,z+nz,x-nx,.06,z-nz);if(i)idx.push(2*i-2,2*i-1,2*i,2*i-1,2*i+1,2*i)}
+  const rg=new THREE.BufferGeometry();rg.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));rg.setIndex(idx);
+  const line=new THREE.Mesh(rg,addMat(0xffc66d,.9));line.material.opacity=.45;track.add(line);
   // the end next to a team's base is in that team's colour: the enemy pushes the cart there
-  for(const team of [0,1]){const x=C.x+(team?1:-1)*C.dir*C.L,c=TEAM_COL[team];
-    const er=new THREE.Mesh(RING_GEO,addMat(c,1.8));er.rotation.x=-Math.PI/2;er.scale.setScalar(1.8);er.position.set(x,.08,C.z);
-    const beam=new THREE.Mesh(BEAM_GEO,addMat(c,.7));beam.scale.set(.15,8,.15);beam.position.set(x,4,C.z);track.add(er,beam)}
-  for(const k of [-3,-2,-1,1,2,3]){const tick=new THREE.Mesh(new THREE.PlaneGeometry(.12,1.1),addMat(0xffc66d,1));tick.rotation.x=-Math.PI/2;tick.position.set(C.x+k*C.L/4,.07,C.z);track.add(tick)}
-  scene.add(track);cartMesh={g,hover,relic,ring,track,x:C.x,x0:C.x};
+  for(const team of [0,1]){const x=C.x+(team?1:-1)*C.dir*C.L,ez=S.cartZAt(C,x),c=TEAM_COL[team];
+    const er=new THREE.Mesh(RING_GEO,addMat(c,1.8));er.rotation.x=-Math.PI/2;er.scale.setScalar(1.8);er.position.set(x,.08,ez);
+    const beam=new THREE.Mesh(BEAM_GEO,addMat(c,.7));beam.scale.set(.15,8,.15);beam.position.set(x,4,ez);track.add(er,beam)}
+  for(const k of [-3,-2,-1,1,2,3]){const tick=new THREE.Mesh(new THREE.PlaneGeometry(.12,1.1),addMat(0xffc66d,1));tick.rotation.x=-Math.PI/2;const tx=C.x+k*C.L/4;tick.position.set(tx,.07,S.cartZAt(C,tx));track.add(tick)}
+  scene.add(track);cartMesh={g,hover,relic,ring,track,x:C.x,x0:C.x,C};
 }
 function updCartMesh(dt,t){
   if(!cartMesh)return;const cv=G.last?.cv;if(!cv)return;const K=cartMesh;
-  K.x+=(cv[0]-K.x)*Math.min(1,dt*10);K.g.position.x=K.x;K.g.position.y=gy(K.x,K.g.position.z);
+  K.x+=(cv[0]-K.x)*Math.min(1,dt*10);const z=S.cartZAt(K.C,K.x);K.g.position.set(K.x,gy(K.x,z),z);K.hover.rotation.y=-Math.atan2(S.cartZAt(K.C,K.x+.3)-S.cartZAt(K.C,K.x-.3),.6);
   K.hover.position.y=Math.sin(t*2.2)*.1;K.relic.rotation.y+=dt*1.5;
   const p=cv[1],col=p===0||p===1?TEAM_COL[p]:p===2?0xffffff:0xffc66d;K.ring.material.color.copy(HDR(col,p<0?.9:1.8));K.ring.material.opacity=p===2?.55+.45*Math.sin(t*10):1;
 }
@@ -525,12 +529,12 @@ function startAttract(){
 // ---------- trailer mode (?trailer) ----------
 // For recording videos: a hard bot match with no interface at all and a camera that cuts between shots like a film:
 // following a hero in the thick of it, a low dramatic orbit, and a wide view of the arena. ?map=… picks the arena,
-// ?mode=control the mode. Keys: Space next shot, N next arena, P pause, Esc back to the game.
+// ?mode=control or ?mode=convoy the mode. Keys: Space next shot, N next arena, P pause, Esc back to the game.
 const TRAILER_MAPS=['storm','citadel','core','observ','forge','archive'];
 function startTrailer(){
   const q=new URLSearchParams(location.search),T=G.trailer||(G.trailer={mi:0,kind:-1,cut:0,ang:0,focus:0,fixed:MAPS[q.get('map')]&&!MAPS[q.get('map')].ctfOnly?q.get('map'):null});
   G.mode='menu';G.solo=false;G.paused=false;
-  const M=newLocalMatch({mode:q.get('mode')==='control'?'control':'arena',map:T.fixed||TRAILER_MAPS[T.mi%TRAILER_MAPS.length],diff:'hard'},null);M.state='play';
+  const M=newLocalMatch({mode:['control','convoy'].includes(q.get('mode'))?q.get('mode'):'arena',map:T.fixed||TRAILER_MAPS[T.mi%TRAILER_MAPS.length],diff:'hard'},null);M.state='play';
   document.body.classList.add('trailer');T.cut=0;
 }
 // the hero with the most others close by: where the action is
@@ -912,6 +916,30 @@ function debriefHTML(m,pve){
       ${you?`<h4 style="margin-top:6px">Tvůj podíl v týmu</h4>${bars}`:''}</div>
     <div><h4>Průběh</h4><div class="tline">${tl.map(([t,s])=>`<div><small>${mm(t)}</small><span>${s}</span></div>`).join('')||'<small>Bez zaznamenaných událostí.</small>'}</div></div></div>`;
 }
+// Skóre v čase: the score of both teams sampled once a second during a PvP match, drawn on the end screen.
+// A new match is recognised by the countdown or by the clock going back. Konvoj draws one line: where the cart is.
+function sampleScore(s){
+  const H=G.scoreHist;
+  if(s.st==='countdown'||!H||s.t<H.t-2||H.mode!==G.info.mode){G.scoreHist={mode:G.info.mode,t:s.t,pts:[]};if(s.st!=='play')return}
+  const h=G.scoreHist;if(s.st!=='play'||!MODES[h.mode]?.pvp)return;
+  if(!h.pts.length||s.t-h.pts[h.pts.length-1][0]>=1){h.pts.push([s.t,s.sc[0],s.sc[1]]);if(h.pts.length>1200)h.pts=h.pts.filter((_,i)=>i%2===0)}
+  h.t=s.t;
+}
+function scoreGraphHTML(m){
+  const h=G.scoreHist,mode=m.mode||G.info.mode;if(!h||h.mode!==mode||!MODES[mode]?.pvp||h.pts.length<5)return'';
+  const pts=[...h.pts,[h.t+.5,m.score[0],m.score[1]]],t0=pts[0][0],t1=pts[pts.length-1][0]-t0||1,W=300,Hh=80,X=t=>((t-t0)/t1*W).toFixed(1);
+  const cv=mode==='convoy',top=cv?100:Math.max(G.info?.win||MODES[mode].win,...pts.map(p=>Math.max(p[1],p[2])),1);
+  const mm=s=>`${Math.floor(s/60)}:${String(Math.round(s)%60).padStart(2,'0')}`;
+  let body;
+  if(cv){const Y=v=>(Hh/2-v/top*(Hh/2-2)).toFixed(1),d=pts.map((p,i)=>`${i?'L':'M'}${X(p[0])},${Y(p[1]-p[2])}`).join('');
+    body=`<defs><clipPath id="sgUp"><rect x="0" y="0" width="${W}" height="${Hh/2}"/></clipPath><clipPath id="sgDn"><rect x="0" y="${Hh/2}" width="${W}" height="${Hh/2}"/></clipPath></defs>
+      <path d="${d}L${W},${Hh/2}L0,${Hh/2}Z" fill="var(--t0)" opacity=".25" clip-path="url(#sgUp)"/><path d="${d}L${W},${Hh/2}L0,${Hh/2}Z" fill="var(--t1)" opacity=".25" clip-path="url(#sgDn)"/>
+      <line x1="0" x2="${W}" y1="${Hh/2}" y2="${Hh/2}" stroke="var(--line)" stroke-dasharray="3 3" vector-effect="non-scaling-stroke"/><path d="${d}" fill="none" stroke="var(--gold)" stroke-width="2" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>`}
+  else{const Y=v=>(Hh-v/top*(Hh-2)).toFixed(1),line=k=>pts.map((p,i)=>`${i?'L':'M'}${X(p[0])},${Y(p[k])}`).join('');
+    body=`<line x1="0" x2="${W}" y1="${Y(top)}" y2="${Y(top)}" stroke="var(--line)" stroke-dasharray="3 3" vector-effect="non-scaling-stroke"/>${[1,2].map(k=>`<path d="${line(k)}" fill="none" stroke="var(--t${k-1})" stroke-width="2" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>`).join('')}`}
+  return`<div class="sgraph"><h4>Skóre v čase</h4><svg viewBox="0 0 ${W} ${Hh}" preserveAspectRatio="none" role="img" aria-label="Skóre v čase">${body}</svg>
+    <div class="sgl"><small>${mm(0)}</small><small>${cv?`<span class="t0">▲ ${TEAM_NAME[0]} tlačí k rudým</span> · <span class="t1">▼ ${TEAM_NAME[1]} tlačí k modrým</span>`:`<span class="t0">${TEAM_NAME[0]}</span> · <span class="t1">${TEAM_NAME[1]}</span> · čára = cíl ${top}`}</small><small>${mm(t1)}</small></div></div>`;
+}
 function showEnd(m){
   G.ended=true;mouseDown=false;touchAtk=false;
   const me=G.roster.get(G.you),myTeam=me?me.t:0,w=m.winner,pve=!MODES[m.mode||G.info.mode]?.pvp;
@@ -923,7 +951,7 @@ function showEnd(m){
   Snd.play(endless?(m.wave>=S.ENDLESS_WIN?'win':'lose'):w===myTeam?'win':'lose',null,{ui:true,dur:2.5});
   if(endless?m.wave>=S.ENDLESS_WIN:w===myTeam)buzz([40,40,40,40,120]);
   $('#endTable').innerHTML=boardHTML(m.stats);
-  $('#endDebrief').innerHTML=debriefHTML(m,pve);
+  $('#endDebrief').innerHTML=scoreGraphHTML(m)+debriefHTML(m,pve);
   const room=G.mode==='on'&&!G.solo;
   $('#endNote').textContent=room?'Za chvíli se všichni vrátíte do místnosti.':'';
   $('#againBtn').hidden=room;$('#menuBtn').textContent=room?'Opustit místnost':'Zpět do hubu';
@@ -973,6 +1001,7 @@ const mini=$('#mini'),mg=mini.getContext('2d');
 const setTxt=(id,t)=>{const e=$('#'+id);if(e.textContent!==String(t))e.textContent=t};
 function drawHUD(){
   const s=G.last;if(!s||$('#hud').hidden)return;
+  sampleScore(s);
   const info=G.info,mode=info.mode,meInfo=G.roster.get(G.you),sk=mySkills();if(sk&&G.slotsFor!==sk.key)buildSlots();
   const clock=s.tl>1e6?'':`${Math.floor(s.tl/60)}:${String(s.tl%60).padStart(2,'0')}`;
   let mb='';
@@ -1026,8 +1055,8 @@ function drawHUD(){
     mg.strokeStyle='#5dffd8';mg.lineWidth=2;for(const P of map.pads||[]){mg.beginPath();mg.arc(toM(P.x),toM(P.z),Math.max(3,P.r*sc),0,Math.PI*2);mg.stroke()}}
   mg.fillStyle='#2a3350';for(const [x,z,r] of map.pillars){mg.beginPath();mg.arc(toM(x),toM(z),r*sc,0,Math.PI*2);mg.fill()}
   if(mode==='control')map.points.forEach((p,i)=>{const o=s.pt[i]?.[0];mg.strokeStyle=o===0||o===1?teamHex(o):'#ffc66d';mg.lineWidth=4;mg.beginPath();mg.arc(toM(p.x),toM(p.z),4*sc,0,Math.PI*2);mg.stroke()});
-  if(mode==='convoy'&&s.cv){const C=S.newCart(map);mg.strokeStyle='rgba(255,198,109,.5)';mg.lineWidth=2;mg.beginPath();mg.moveTo(toM(C.x-C.L),toM(C.z));mg.lineTo(toM(C.x+C.L),toM(C.z));mg.stroke();
-    const p=s.cv[1];mg.fillStyle=p===0||p===1?teamHex(p):'#ffc66d';mg.save();mg.translate(toM(s.cv[0]),toM(C.z));mg.rotate(Math.PI/4);mg.fillRect(-6,-6,12,12);mg.restore()}
+  if(mode==='convoy'&&s.cv){const C=S.newCart(map);mg.strokeStyle='rgba(255,198,109,.5)';mg.lineWidth=2;mg.beginPath();for(let x=C.x-C.L;x<=C.x+C.L+.01;x+=1)x===C.x-C.L?mg.moveTo(toM(x),toM(S.cartZAt(C,x))):mg.lineTo(toM(x),toM(S.cartZAt(C,x)));mg.stroke();
+    const p=s.cv[1];mg.fillStyle=p===0||p===1?teamHex(p):'#ffc66d';mg.save();mg.translate(toM(s.cv[0]),toM(S.cartZAt(C,s.cv[0])));mg.rotate(Math.PI/4);mg.fillRect(-6,-6,12,12);mg.restore()}
   if(mode==='elim'&&s.el&&s.el[2]<map.r){mg.fillStyle='rgba(255,40,80,.22)';mg.beginPath();mg.arc(cx,cx,cx,0,Math.PI*2);mg.arc(cx,cx,s.el[2]*sc,0,Math.PI*2,true);mg.fill();
     mg.strokeStyle='#ff3f5e';mg.lineWidth=3;mg.beginPath();mg.arc(cx,cx,s.el[2]*sc,0,Math.PI*2);mg.stroke()}
   if(s.rl[0]&&S.arenaLike(mode)){mg.fillStyle='#ffc66d';mg.beginPath();mg.arc(cx,cx,7,0,Math.PI*2);mg.fill()}

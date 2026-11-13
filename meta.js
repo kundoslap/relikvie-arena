@@ -841,6 +841,8 @@ export function createMeta(db,{admins=''}={}){
     if(res==='win')for(const b of M.bossKeys||[])st.byBoss[b]=(st.byBoss[b]|0)+1;
     st.dmg+=Math.round(u.dmgDealt);st.heal+=Math.round(u.healDone);st.time+=Math.round(M.time-(u.joinedAt||0));if(mvp)st.mvp++;
     if(M.D.pvp){st.bestStreak=Math.max(st.bestStreak|0,u.bestStreak|0);st.bestMulti=Math.max(st.bestMulti|0,u.bestMulti|0)}
+    // Konvoj relikvie: a win by pushing the cart all the way (not just on the clock)
+    if(res==='win'&&M.mode==='convoy'&&M.score[u.team]>=100)st.convoyEnds=(st.convoyEnds|0)+1;
     st.relics+=u.relics|0;st.legendary+=items.filter(it=>it.r===4).length;
     p.history.unshift({at:Date.now(),mode:M.mode,map:M.mapKey,boss:M.mode==='boss'?M.bossKey:null,mission:M.mission,res,cls:u.clsKey,
       ki:u.kills,de:u.deaths,nk:u.npcKills,dm:Math.round(u.dmgDealt),he:Math.round(u.healDone),wave:M.D.waves?M.wave:0,

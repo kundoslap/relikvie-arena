@@ -2414,4 +2414,16 @@ export default {"Neonová aréna 3 proti 3, kooperace proti bossům, hodnocená 
 "Rudí tlačí k modré základně · kontrolní bod, vůz {} s stojí":"Red pushes towards the blue base · checkpoint, the cart stops for {} s",
 "Modří tlačí k rudé základně · kontrolní bod, vůz {} s stojí":"Blue pushes towards the red base · checkpoint, the cart stops for {} s",
 "Rudí tlačí k modré základně":"Red pushes towards the blue base",
-"Modří tlačí k rudé základně":"Blue pushes towards the red base"};
+"Modří tlačí k rudé základně":"Blue pushes towards the red base",
+"Skóre v čase":"Score over time",
+"▲ Modří tlačí k rudým":"▲ Blue pushes towards Red",
+"▼ Rudí tlačí k modrým":"▼ Red pushes towards Blue",
+"čára = cíl {}":"line = target {}",
+"Nový graf: Skóre v čase":"New chart: Score over time",
+"Vůz v Konvoji objíždí sloupy":"The Convoy cart drives around pillars",
+"Strojvůdce":"Engine Driver",
+"Vyhraj zápasy v Konvoji relikvie.":"Win matches in Relic Convoy.",
+"Až na konec":"All the Way",
+"Vyhraj Konvoj relikvie tak, že vůz dotlačíš až k soupeřově základně.":"Win Relic Convoy by pushing the cart all the way to the enemy base.",
+"Nezastavitelný konvoj":"Unstoppable Convoy",
+"Úspěchy Konvoje relikvie":"Relic Convoy achievements"};

@@ -1393,9 +1393,13 @@ function updPoints(M,dt){
 // at the time limit the side it stands on wins. It slows down the further it gets (`slow` at the very end). Every 25 %
 // is a checkpoint: announced, a capture for the pushers, and the cart stands still for `hold` s so the defenders can regroup.
 export const CONVOY={r:4,spd:.45,extra:.2,contest:.6,slow:.35,hold:6,back:.25,idle:6,margin:6};
-export function newCart(map){const b=map.bases;return{x:(b[0].x+b[1].x)/2,z:(b[0].z+b[1].z)/2,L:Math.abs(b[1].x-b[0].x)/2-CONVOY.margin,dir:Math.sign(b[1].x-b[0].x)||1,push:-1,idle:0,hold:0,cp:[0,0]}}
+// the track bends smoothly around pillars standing on the line between the bases (always to the same side, so it stays mirror-fair)
+export function newCart(map){const b=map.bases,x=(b[0].x+b[1].x)/2,z=(b[0].z+b[1].z)/2,L=Math.abs(b[1].x-b[0].x)/2-CONVOY.margin;
+  const bumps=(map.pillars||[]).filter(([px,pz,r])=>Math.abs(pz-z)<r+1.6&&Math.abs(px-x)<L+r+4).map(([px,pz,r])=>({x:px,c:r+1.6+(pz-z),w:r+4.5}));
+  const C={x,z,z0:z,L,bumps,dir:Math.sign(b[1].x-b[0].x)||1,push:-1,idle:0,hold:0,cp:[0,0]};C.z=cartZAt(C,x);return C}
+export function cartZAt(C,x){let o=0;for(const B of C.bumps){const d=Math.abs(x-B.x);if(d<B.w)o=Math.max(o,B.c*(.5+.5*Math.cos(Math.PI*d/B.w)))}return C.z0+o}
 // the point a team pushes from: just behind the cart on its own side
-export const cartSpot=(C,team,off=1.6)=>({x:C.x-(team?-C.dir:C.dir)*off,z:C.z});
+export const cartSpot=(C,team,off=1.6)=>{const x=C.x-(team?-C.dir:C.dir)*off;return{x,z:cartZAt(C,x)}};
 function updCart(M,dt){
   const C=M.cart;if(M.state!=='play')return;
   const c=[0,0];for(const u of M.units)if(u.kind==='hero'&&!u.dead&&d2(u,C)<CONVOY.r)c[u.team]++;
@@ -1405,6 +1409,7 @@ function updCart(M,dt){
     C.x=clamp(C.x+(t?-C.dir:C.dir)*CONVOY.spd*(1+CONVOY.extra*(k-1))*(c[1-t]?CONVOY.contest:1)*(1-CONVOY.slow*prog)*dt,-C.L,C.L)}
   else if(C.push<0){C.idle+=dt;if(C.idle>CONVOY.idle&&Math.abs(C.x)>.01)C.x-=Math.sign(C.x)*Math.min(Math.abs(C.x),CONVOY.back*dt)}
   else C.idle=0;
+  C.z=cartZAt(C,C.x);
   const p=C.x*C.dir/C.L;M.score[0]=Math.round(Math.max(0,p)*100);M.score[1]=Math.round(Math.max(0,-p)*100);
   for(const t of [0,1]){const k=Math.floor(M.score[t]/25);if(k>C.cp[t]&&k<4){C.cp[t]=k;C.hold=CONVOY.hold;
     for(const u of M.units)if(u.kind==='hero'&&!u.dead&&u.team===t&&d2(u,C)<CONVOY.r)u.caps=(u.caps||0)+1;
