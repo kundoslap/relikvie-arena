@@ -93,6 +93,14 @@ export const SECONDARY={
   hook:{name:'Trhnutí',cd:6,icon:'hook',desc:'Krátký hák na 9 m: 80 % útoku a přitáhne zasaženého soupeře o 3 m k tobě.'}};
 // "Novinky" in the hub, newest first; id marks what a player has already seen
 export const CHANGELOG=[
+  {id:'2026-12s',title:'Nový režim: Relikviobal',items:[
+    'Fotbal s relikvií na novém dlouhém hřišti Neonový stadion. Seber relikvii ve středu a doběhni s ní do soupeřovy branky, nebo ji sekundárním útokem (pravé tlačítko, C) hoď. Hozená relikvie v brance je taky gól, i vlastní.',
+    'Kdo relikvii nese, je o 10 % pomalejší, nemůže se maskovat a pustí ji, když padne nebo ho něco omráčí. Omráčení je tedy skluz.',
+    'Na hřišti jsou sloupy, zdi, láva ve středu a dvě otáčivá laserová ramena před brankami: zasáhnou, odhodí a omráčí.',
+    'Hraje se do 5 gólů (v místnosti lze nastavit 3 nebo 8). Při remíze po čase přijde prodloužení na 90 s a první gól vyhrává. Nový denní cíl: vyhraj zápas v Relikviobalu.']},
+  {id:'2026-12r',title:'Konvoj bez výhody spawnu',items:[
+    'Trať Konvoje vedla rovně ke spawnu soupeře, takže obránci se oživovali hned u svého konce a čím blíž byl vůz cíli, tím snáz ho zastavili. Teď vede trať napříč arénou a oba konce jsou od obou spawnů stejně daleko.',
+    'Každý tým má cíl na jednom konci trati, označený jeho barvou. Ve zkušebních zápasech botů teď vůz dojede až na konec zhruba v každém čtvrtém zápase, dřív nikdy.']},
   {id:'2026-12q',title:'Úspěchy Konvoje relikvie',items:[
     'Strojvůdce: vyhraj 3, 15 a 50 zápasů v Konvoji relikvie. Zlato dá titul Strojvůdce.',
     'Až na konec: vyhraj Konvoj tak, že vůz dotlačíš až k soupeřově základně (1, 5 a 20krát). Výhra na čas se nepočítá. Zlato dá titul Nezastavitelný konvoj.']},
@@ -760,6 +768,7 @@ export const GOALS={
   arena1:{name:'Vyhraj zápas v Aréně',stat:'winArena',target:1,xp:200,cr:80},
   control1:{name:'Vyhraj zápas v Ovládnutí',stat:'winControl',target:1,xp:200,cr:80},
   convoy1:{name:'Vyhraj zápas v Konvoji relikvie',stat:'winConvoy',target:1,xp:200,cr:80},
+  ball1:{name:'Vyhraj zápas v Relikviobalu',stat:'winBall',target:1,xp:200,cr:80},
   kills12:{name:'Znič 12 soupeřů v PvP',stat:'kills',target:12,xp:220,cr:90},
   npc40:{name:'Znič 40 NPC',stat:'npcKills',target:40,xp:200,cr:80},
   boss1:{name:'Poraz bosse',stat:'bossKills',target:1,xp:260,cr:110},
@@ -785,7 +794,7 @@ export function weekKey(t=Date.now()){
 }
 // Režim dne: one mode a day gives more experience and credits (more on Saturday and Sunday), so the few players online
 // tend to meet in the same mode. The order is fixed and the same for everyone (Prague days); campaign missions do not count.
-export const FEATURED_MODES=['arena','control','boss','elim','ctf','waves','mutant','duel','endless','convoy'];
+export const FEATURED_MODES=['arena','control','boss','elim','ctf','waves','mutant','duel','endless','convoy','relicball'];
 export const FEATURED={bonus:.3,weekend:.5};
 export function featuredOfDay(t=Date.now()){
   const d=new Date(dayKey(t)+'T00:00:00Z'),wd=d.getUTCDay(),weekend=wd===0||wd===6;
@@ -796,6 +805,24 @@ export function featuredOfDay(t=Date.now()){
 // pillars: [x,z,r]; hazards hurt anyone inside; points are capture zones for Ovládnutí.
 // Pevnost relikvií: walls are rows of overlapping pillars. The layout is mirrored left/right (the two teams) and
 // top/bottom, so neither side has a shorter way. Three lanes (north, middle, south) are linked by gaps; no dead ends.
+// Neonový stadion (Relikviobal): a long field hx × hz with a goal niche in each end wall. Walls are rows of overlapping
+// pillars marked with a 4th value 1 (collision as usual; the arena draws them as solid walls from `walls`).
+// Everything is symmetric through the middle, so both teams play the same field.
+const PITCH={hx:38,hz:16,goal:4.5,depth:3.5};
+function pitchMap(){
+  const {hx,hz,goal,depth}=PITCH,pillars=[],walls=[];
+  const wall=(x1,z1,x2,z2,r=1.15)=>{walls.push([x1,z1,x2,z2]);const L=Math.hypot(x2-x1,z2-z1),n=Math.max(1,Math.round(L/1.6));
+    for(let i=0;i<=n;i++)pillars.push([Math.round((x1+(x2-x1)*i/n)*10)/10,Math.round((z1+(z2-z1)*i/n)*10)/10,r,1])};
+  wall(-hx,-hz,hx,-hz);wall(-hx,hz,hx,hz);
+  for(const s of [-1,1]){
+    wall(s*hx,-hz,s*hx,-goal);wall(s*hx,goal,s*hx,hz);                         // end wall with the goal mouth
+    wall(s*hx,-goal,s*(hx+depth),-goal);wall(s*hx,goal,s*(hx+depth),goal);wall(s*(hx+depth),-goal,s*(hx+depth),goal); // the niche
+    wall(s*20,8,s*20,13);wall(s*20,-8,s*20,-13);                               // flank barriers
+  }
+  // obstacles: the middle, the lanes and the flanks in front of each goal
+  pillars.push([0,-9,1.5],[0,9,1.5],[-14,-6,1.4],[14,6,1.4],[-14,6,1.4],[14,-6,1.4],[-28,-7,1.3],[28,7,1.3],[-28,7,1.3],[28,-7,1.3]);
+  return{pillars,walls};
+}
 function bastionPillars(){
   const out=[],wall=(x1,z1,x2,z2,r=1.15)=>{const L=Math.hypot(x2-x1,z2-z1),n=Math.max(1,Math.round(L/1.7));
     for(let i=0;i<=n;i++)out.push([Math.round((x1+(x2-x1)*i/n)*10)/10,Math.round((z1+(z2-z1)*i/n)*10)/10,r])};
@@ -847,6 +874,12 @@ export const MAPS={
     pillars:bastionPillars(),
     hazards:[],bases:[{x:-40,z:0},{x:40,z:0}],flags:[{x:-30,z:0},{x:30,z:0}],points:[{x:0,z:0},{x:0,z:-20},{x:0,z:20}],bossAt:{x:0,z:0},
     theme:{floor:0x0c0a18,gridA:[.35,.5,1],gridB:[1,.3,.6],accent:0xc9a0ff,fog:0x06040e,sky:[0x06040e,0x1c0f3a],pillar:'wall',amb:'motes',ambColor:0xc9a0ff,rim:0xc9a0ff,skyline:[0x3fb8ff,0xff3f8e,0xc9a0ff,0xffc66d]}},
+  // Neonový stadion: only for Relikviobal. Lava in the middle lane, two rotating laser arms (sweepers) in front of the goals.
+  pitch:{name:'Neonový stadion',desc:'Dlouhé hřiště s brankami na koncích, lávou ve středu a dvěma otáčivými laserovými rameny. Jen pro Relikviobal.',r:44,ballOnly:true,
+    field:{hx:PITCH.hx,hz:PITCH.hz},goals:{x:PITCH.hx,w:PITCH.goal,depth:PITCH.depth},...pitchMap(),
+    sweepers:[{x:-22,z:0,len:6,spd:.9,ph:0,dps:45},{x:22,z:0,len:6,spd:.9,ph:Math.PI,dps:45}],
+    hazards:[{x:-9,z:0,r:2.2,dps:30},{x:9,z:0,r:2.2,dps:30}],bases:[{x:-32,z:-12},{x:32,z:12}],points:[{x:0,z:0},{x:0,z:-10},{x:0,z:10}],bossAt:{x:0,z:0},
+    theme:{floor:0x07101a,gridA:[.3,1,.7],gridB:[1,.35,.65],accent:0x7dffb0,fog:0x03070c,sky:[0x03070c,0x0a2230],pillar:'hex',amb:'motes',ambColor:0x9dffcf,rim:0x7dffb0,skyline:[0x7dffb0,0x3fb8ff,0xff3f8e,0xffc66d]}},
   // Bouřková elektrárna: warned lightning strikes (STORM below); four generators around the centre, open flanks
   storm:{name:'Bouřková elektrárna',desc:'Do arény bijí ohlášené blesky. Uhni, nebo zásah přežij a nabij si ultimátku.',r:34,storm:true,
     pillars:[[-8,-8,2],[8,8,2],[-8,8,2],[8,-8,2],[-18,0,2.2],[18,0,2.2],[0,-19,1.8],[0,19,1.8],[-22,-15,1.5],[22,15,1.5],[-22,15,1.5],[22,-15,1.5]],
@@ -901,7 +934,8 @@ export const onPeak=(map,u)=>{const P=map.levels?.find(L=>L.peak);return!!P&&hei
 export const MODES={
   arena:{name:'Aréna',desc:'3 proti 3. Body za zničení soupeřů a za relikvii ve středu. Vyhrává 20 bodů.',pvp:true,maps:['core','forge','archive','observ','citadel','storm'],max:6,win:20},
   control:{name:'Ovládnutí',desc:'3 proti 3 o tři body. Každý držený bod přidává skóre, vyhrává 100.',pvp:true,maps:['core','forge','archive','observ','citadel','storm'],max:6,win:100},
-  convoy:{name:'Konvoj relikvie',desc:'3 proti 3 o vznášející se vůz s relikvií ve středu. Vůz jede k soupeřově základně, když má u něj tvůj tým víc hrdinů. Vyhrává, kdo ho dotlačí na konec, jinak ten, na čí straně stojí, když dojde čas.',pvp:true,maps:['core','forge','archive','observ','storm'],max:6,win:100,fixedWin:true},
+  convoy:{name:'Konvoj relikvie',desc:'3 proti 3 o vznášející se vůz s relikvií ve středu. Trať vede napříč arénou a každý tým má na jednom jejím konci svůj cíl. Vůz jede k cíli toho týmu, který má u vozu víc hrdinů. Vyhrává, kdo ho dotlačí na konec, jinak ten, na čí straně stojí, když dojde čas.',pvp:true,maps:['core','forge','archive','observ','storm'],max:6,win:100,fixedWin:true},
+  relicball:{name:'Relikviobal',desc:'3 proti 3 na dlouhém hřišti plném překážek, lávy a otáčivých laserů. Seber relikvii ve středu a doběhni s ní do soupeřovy branky, nebo ji pravým tlačítkem hoď. Kdo ji nese, pustí ji, když padne nebo ho něco omráčí. Vyhrává 5 gólů.',pvp:true,maps:['pitch'],max:6,win:5},
   ctf:{name:'Únos relikvie',desc:'3 proti 3 v Pevnosti relikvií. Ukradni soupeřovu relikvii a dones ji ke své, která musí být doma. Vyhrávají 3 únosy.',pvp:true,maps:['bastion'],max:6,win:3},
   mutant:{name:'Mutace týdne',desc:'3 proti 3 podle pravidel Arény, ale s dvěma mutacemi, které se mění každé pondělí. Vyhrává 20 bodů.',pvp:true,mutators:true,maps:['core','forge','archive','observ','citadel','storm'],max:6,win:20},
   elim:{name:'Eliminace',desc:'3 proti 3 na kola bez oživení. Kolo vyhrává tým, který zůstane stát. Po 40 s se aréna začne zmenšovat a mimo kruh to pálí. Vyhrávají 4 kola.',pvp:true,rounds:true,maps:['core','forge','archive','observ','citadel','storm'],max:6,win:4,time:900},

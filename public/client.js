@@ -234,27 +234,58 @@ function buildCart(info){
   const light=new THREE.PointLight(0xffc66d,7,12,1.4);light.position.y=2.2;
   const hover=new THREE.Group();hover.add(body,rim,relic,light);g.add(hover,under,ring);g.position.set(C.x,gy(C.x,C.z),C.z);scene.add(g);
   // the track as a thin ribbon along the bent path
-  const pos=[],idx=[],N=Math.ceil(C.L*2/.4);for(let i=0;i<=N;i++){const x=C.x-C.L+i*C.L*2/N,z=S.cartZAt(C,x),dz=(S.cartZAt(C,x+.05)-S.cartZAt(C,x-.05))/.1,l=Math.hypot(1,dz),nx=-dz/l*.11,nz=1/l*.11;
-    pos.push(x+nx,.06,z+nz,x-nx,.06,z-nz);if(i)idx.push(2*i-2,2*i-1,2*i,2*i-1,2*i+1,2*i)}
+  const pos=[],idx=[],N=Math.ceil(C.L*2/.4);for(let i=0;i<=N;i++){const q=-C.L+i*C.L*2/N,p=S.cartAt(C,q),p1=S.cartAt(C,q+.05),p0=S.cartAt(C,q-.05),tx=p1.x-p0.x,tz=p1.z-p0.z,l=Math.hypot(tx,tz)||1,nx=-tz/l*.11,nz=tx/l*.11;
+    pos.push(p.x+nx,.06,p.z+nz,p.x-nx,.06,p.z-nz);if(i)idx.push(2*i-2,2*i-1,2*i,2*i-1,2*i+1,2*i)}
   const rg=new THREE.BufferGeometry();rg.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));rg.setIndex(idx);
   const line=new THREE.Mesh(rg,addMat(0xffc66d,.9));line.material.opacity=.45;track.add(line);
-  // the end next to a team's base is in that team's colour: the enemy pushes the cart there
-  for(const team of [0,1]){const x=C.x+(team?1:-1)*C.dir*C.L,ez=S.cartZAt(C,x),c=TEAM_COL[team];
-    const er=new THREE.Mesh(RING_GEO,addMat(c,1.8));er.rotation.x=-Math.PI/2;er.scale.setScalar(1.8);er.position.set(x,.08,ez);
-    const beam=new THREE.Mesh(BEAM_GEO,addMat(c,.7));beam.scale.set(.15,8,.15);beam.position.set(x,4,ez);track.add(er,beam)}
-  for(const k of [-3,-2,-1,1,2,3]){const tick=new THREE.Mesh(new THREE.PlaneGeometry(.12,1.1),addMat(0xffc66d,1));tick.rotation.x=-Math.PI/2;const tx=C.x+k*C.L/4;tick.position.set(tx,.07,S.cartZAt(C,tx));track.add(tick)}
-  scene.add(track);cartMesh={g,hover,relic,ring,track,x:C.x,x0:C.x,C};
+  // each end in the colour of the team that scores by pushing the cart there (team 0 pushes to +L)
+  for(const team of [0,1]){const e=S.cartAt(C,team?-C.L:C.L),c=TEAM_COL[team];
+    const er=new THREE.Mesh(RING_GEO,addMat(c,1.8));er.rotation.x=-Math.PI/2;er.scale.setScalar(1.8);er.position.set(e.x,.08,e.z);
+    const beam=new THREE.Mesh(BEAM_GEO,addMat(c,.7));beam.scale.set(.15,8,.15);beam.position.set(e.x,4,e.z);track.add(er,beam)}
+  for(const k of [-3,-2,-1,1,2,3]){const tick=new THREE.Mesh(new THREE.PlaneGeometry(1.1,.12),addMat(0xffc66d,1));tick.rotation.x=-Math.PI/2;const p=S.cartAt(C,k*C.L/4);tick.position.set(p.x,.07,p.z);track.add(tick)}
+  scene.add(track);cartMesh={g,hover,relic,ring,track,s:0,C};
 }
 function updCartMesh(dt,t){
   if(!cartMesh)return;const cv=G.last?.cv;if(!cv)return;const K=cartMesh;
-  K.x+=(cv[0]-K.x)*Math.min(1,dt*10);const z=S.cartZAt(K.C,K.x);K.g.position.set(K.x,gy(K.x,z),z);K.hover.rotation.y=-Math.atan2(S.cartZAt(K.C,K.x+.3)-S.cartZAt(K.C,K.x-.3),.6);
+  K.s+=(cv[0]-K.s)*Math.min(1,dt*10);const p=S.cartAt(K.C,K.s),p1=S.cartAt(K.C,K.s+.3),p0=S.cartAt(K.C,K.s-.3);
+  K.g.position.set(p.x,gy(p.x,p.z),p.z);K.hover.rotation.y=-Math.atan2(p1.z-p0.z,p1.x-p0.x);
   K.hover.position.y=Math.sin(t*2.2)*.1;K.relic.rotation.y+=dt*1.5;
-  const p=cv[1],col=p===0||p===1?TEAM_COL[p]:p===2?0xffffff:0xffc66d;K.ring.material.color.copy(HDR(col,p<0?.9:1.8));K.ring.material.opacity=p===2?.55+.45*Math.sin(t*10):1;
+  const q=cv[1],col=q===0||q===1?TEAM_COL[q]:q===2?0xffffff:0xffc66d;K.ring.material.color.copy(HDR(col,q<0?.9:1.8));K.ring.material.opacity=q===2?.55+.45*Math.sin(t*10):1;
 }
+// Relikviobal: the relic (over its carrier's head or loose on the floor) and the map's rotating laser arms
+let ballMesh=null,sweepMeshes=[],sweepT=0;
+function removeBall(){if(ballMesh){scene.remove(ballMesh.g);scene.remove(ballMesh.mark);ballMesh=null}for(const W of sweepMeshes)scene.remove(W.g);sweepMeshes=[]}
+function buildBall(info){
+  removeBall();const map=MAPS[info.map];
+  for(const W of map.sweepers||[]){const g=new THREE.Group();g.position.set(W.x,0,W.z);
+    const hub=new THREE.Mesh(new THREE.CylinderGeometry(.9,1.1,1.3,12),new THREE.MeshStandardMaterial({color:0x13202a,metalness:.7,roughness:.35}));hub.position.y=.65;
+    const cap=new THREE.Mesh(new THREE.CylinderGeometry(.5,.5,.12,12),new THREE.MeshBasicMaterial({color:HDR(0x7dffb0,2)}));cap.position.y=1.36;
+    const arm=new THREE.Group(),beam=new THREE.Mesh(new THREE.BoxGeometry(W.len*2,.3,.3),new THREE.MeshBasicMaterial({color:HDR(0x7dffb0,2.6)}));beam.position.y=.95;
+    const glow=new THREE.Mesh(new THREE.PlaneGeometry(W.len*2,1.8),addMat(0x7dffb0,.8));glow.rotation.x=-Math.PI/2;glow.position.y=.06;glow.material.opacity=.3;
+    arm.add(beam,glow);const ring=new THREE.Mesh(RING_GEO,addMat(0x7dffb0,.7));ring.rotation.x=-Math.PI/2;ring.scale.setScalar(W.len+.9);ring.position.y=.05;ring.material.opacity=.3;
+    g.add(hub,cap,arm,ring);scene.add(g);sweepMeshes.push({g,arm,W})}
+  if(info.mode!=='relicball')return;
+  const g=new THREE.Group();g.add(new THREE.Mesh(new THREE.OctahedronGeometry(.55,0),new THREE.MeshBasicMaterial({color:HDR(0xffc66d,2.8)})));
+  g.add(new THREE.Mesh(new THREE.IcosahedronGeometry(.95,1),new THREE.MeshBasicMaterial({color:HDR(0xffc66d,1.4),wireframe:true,transparent:true,opacity:.5})));
+  g.add(new THREE.PointLight(0xffc66d,8,12,1.4));const mark=new THREE.Mesh(RING_GEO,addMat(0xffc66d,1.6));mark.rotation.x=-Math.PI/2;mark.scale.setScalar(S.BALL.pick);
+  scene.add(g,mark);ballMesh={g,mark,x:0,z:0};
+}
+function updBallMesh(dt,t){
+  // the arms turn on the match clock (smoothed between snapshots)
+  const st=G.last?.t;if(st!=null){sweepT+=dt;if(Math.abs(sweepT-st)>.35)sweepT=st;else sweepT+=(st-sweepT)*Math.min(1,dt*2)}
+  for(const M of sweepMeshes)M.arm.rotation.y=-S.sweepAngle(M.W,sweepT);
+  if(!ballMesh)return;const b=G.last?.bl,K=ballMesh;if(!b){K.g.visible=K.mark.visible=false;return}
+  const [st2,x,z,car]=b,v=st2===1?views.get(car):null;K.g.visible=st2!==2;K.mark.visible=st2===0;
+  K.g.scale.setScalar(v&&!v.dead?.6:1);
+  if(v&&!v.dead){K.x=v.x;K.z=v.z;K.g.position.set(v.x,(v.gy||0)+3.4+Math.sin(t*4)*.12,v.z)}
+  else{K.x+=(x-K.x)*Math.min(1,dt*14);K.z+=(z-K.z)*Math.min(1,dt*14);K.g.position.set(K.x,.9+Math.sin(t*2.5)*.15,K.z);K.mark.position.set(K.x,.07,K.z);K.mark.material.opacity=.6+.3*Math.sin(t*5)}
+  K.g.rotation.y+=dt*2;
+}
+const ballText=(b,me)=>!b?'':b[0]===2?`Gól! Relikvie se vrátí do středu za ${b[4]} s`:b[0]===1?(b[3]===me?'Neseš relikvii · doběhni do soupeřovy branky, nebo ji hoď sekundárním útokem':`Relikvii nese ${esc(nameOf(b[3]))} (${TEAM_NAME[G.roster.get(b[3])?.t??0]})`):'Relikvie je volná · seber ji';
 const cartState=(p,h)=>h>0?`Kontrolní bod · vůz se rozjede za ${h} s`:p===0?'Modří tlačí vůz':p===1?'Rudí tlačí vůz':p===2?'Vůz stojí · obě strany u něj':'Nikdo u vozu';
 const flagText=(f,mine)=>!f?'':f[0]===0?'doma':f[0]===1?`unesena · ${esc(nameOf(f[3]))}`:`leží · vrátí se za ${f[4]} s`;
 function setInfo(info){
-  G.info=info;setMap(info.map);buildFlags(info);buildElimWall(info);buildCart(info);
+  G.info=info;setMap(info.map);buildFlags(info);buildElimWall(info);buildCart(info);buildBall(info);
   for(const m of pointMeshes)scene.remove(m.g);pointMeshes=[];
   if(info.mode==='control')MAPS[info.map].points.forEach((p,i)=>{
     const g=new THREE.Group();g.position.set(p.x,.08+gy(p.x,p.z),p.z);
@@ -273,7 +304,7 @@ function clearWorld(){
   fxList.forEach(dropFx);fxList=[];parts.length=0;floaters.forEach(f=>f.el.remove());floaters=[];$('#feed').innerHTML='';
   Object.assign(G,{roster:new Map(),snaps:[],last:null,evq:[],stats:[],ended:false,pred:null,show:null,hist:[],pendingCast:[],you:0,slotsFor:'',tut:null});
   tutMarker(null);$('#hud').classList.remove('tut');$('#tut').hidden=true;clearSignals();
-  relicMesh.visible=false;relicLight.intensity=0;removeCart();
+  relicMesh.visible=false;relicLight.intensity=0;removeCart();removeBall();
 }
 // Online, everything is placed on the server's clock: snapshots are stamped with server time, and the client keeps an
 // estimate of the offset between the server clock and its own. Network jitter then changes only how full the buffer
@@ -534,7 +565,7 @@ const TRAILER_MAPS=['storm','citadel','core','observ','forge','archive'];
 function startTrailer(){
   const q=new URLSearchParams(location.search),T=G.trailer||(G.trailer={mi:0,kind:-1,cut:0,ang:0,focus:0,fixed:MAPS[q.get('map')]&&!MAPS[q.get('map')].ctfOnly?q.get('map'):null});
   G.mode='menu';G.solo=false;G.paused=false;
-  const M=newLocalMatch({mode:['control','convoy'].includes(q.get('mode'))?q.get('mode'):'arena',map:T.fixed||TRAILER_MAPS[T.mi%TRAILER_MAPS.length],diff:'hard'},null);M.state='play';
+  const M=newLocalMatch({mode:['control','convoy','relicball'].includes(q.get('mode'))?q.get('mode'):'arena',map:T.fixed||TRAILER_MAPS[T.mi%TRAILER_MAPS.length],diff:'hard'},null);M.state='play';
   document.body.classList.add('trailer');T.cut=0;
 }
 // the hero with the most others close by: where the action is
@@ -938,7 +969,7 @@ function scoreGraphHTML(m){
   else{const Y=v=>(Hh-v/top*(Hh-2)).toFixed(1),line=k=>pts.map((p,i)=>`${i?'L':'M'}${X(p[0])},${Y(p[k])}`).join('');
     body=`<line x1="0" x2="${W}" y1="${Y(top)}" y2="${Y(top)}" stroke="var(--line)" stroke-dasharray="3 3" vector-effect="non-scaling-stroke"/>${[1,2].map(k=>`<path d="${line(k)}" fill="none" stroke="var(--t${k-1})" stroke-width="2" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>`).join('')}`}
   return`<div class="sgraph"><h4>Skóre v čase</h4><svg viewBox="0 0 ${W} ${Hh}" preserveAspectRatio="none" role="img" aria-label="Skóre v čase">${body}</svg>
-    <div class="sgl"><small>${mm(0)}</small><small>${cv?`<span class="t0">▲ ${TEAM_NAME[0]} tlačí k rudým</span> · <span class="t1">▼ ${TEAM_NAME[1]} tlačí k modrým</span>`:`<span class="t0">${TEAM_NAME[0]}</span> · <span class="t1">${TEAM_NAME[1]}</span> · čára = cíl ${top}`}</small><small>${mm(t1)}</small></div></div>`;
+    <div class="sgl"><small>${mm(0)}</small><small>${cv?`<span class="t0">▲ vůz blíž cíli modrých</span> · <span class="t1">▼ vůz blíž cíli rudých</span>`:`<span class="t0">${TEAM_NAME[0]}</span> · <span class="t1">${TEAM_NAME[1]}</span> · čára = cíl ${top}`}</small><small>${mm(t1)}</small></div></div>`;
 }
 function showEnd(m){
   G.ended=true;mouseDown=false;touchAtk=false;
@@ -1010,8 +1041,9 @@ function drawHUD(){
     if(mode==='elim'&&s.el){const [n,pause,,a0,a1,shrinkIn]=s.el,my=meInfo?.t??0,size=S.teamSize(mode),dots=(k,t)=>`<span class="t${t}">${'●'.repeat(k)}${'○'.repeat(Math.max(0,size-k))}</span>`;
       mb=`<div class="elimbar"><b>Kolo ${n}</b> ${dots(my?a1:a0,my)} <small>proti</small> ${dots(my?a0:a1,1-my)}<small>${pause?`další kolo za ${pause} s`:shrinkIn?`kruh se zmenší za ${shrinkIn} s`:'aréna se zmenšuje'}</small></div>`}
     // Konvoj: the track from the blue end (left) to the red end; the cart marker moves right while the blue team pushes
-    if(mode==='convoy'&&s.cv&&cartMesh){const C=S.newCart(MAPS[info.map]),f=Math.max(0,Math.min(1,((s.cv[0]-C.x)*C.dir/C.L+1)/2)),p=s.cv[1];
+    if(mode==='convoy'&&s.cv&&cartMesh){const C=S.newCart(MAPS[info.map]),f=Math.max(0,Math.min(1,(1-s.cv[0]/C.L)/2)),p=s.cv[1];
       mb=`<div class="cvbar${p===0||p===1?' p'+p:''}"><b>${cartState(p,s.cv[2])}</b><div class="tr"><u style="left:25%"></u><u style="left:50%"></u><u style="left:75%"></u><i style="left:${(f*100).toFixed(1)}%"></i></div></div>`}
+    if(mode==='relicball'&&s.bl){const b=s.bl,tm=b[0]===1?G.roster.get(b[3])?.t:null;mb=`<div class="flags"><div${tm!=null?` class="fl${tm}"`:''}>${ballText(b,G.you)}</div></div>`}
     if(mode==='control')mb=`<div class="pts">${s.pt.map(([o,pr],i)=>`<div class="pt${o>=0?' o'+o:''}" style="background:linear-gradient(0deg,color-mix(in srgb,var(--t${pr<0?0:1}) 35%,transparent) ${Math.abs(pr)}%,var(--panel) 0)">${'ABC'[i]}</div>`).join('')}</div>`}
   else{const wv=s.wv,W=MODES[mode]?.waves;setTxt('sL',W?'Vlna':'Životy');setTxt('s0',W?wv?.[0]??0:s.lv);setTxt('sR',W?'Životy':'Boss');
     setTxt('s1',W?s.lv:(s.bs?Math.ceil(s.bs[1]/s.bs[2]*100)+'%':'—'));
@@ -1026,7 +1058,7 @@ function drawHUD(){
     $('#hpFill').style.width=(mv.h/mv.mh*100)+'%';$('#shFill').style.width=Math.min(100,mv.s/mv.mh*100)+'%';
     setTxt('hpText',`${Math.max(0,Math.ceil(mv.h))} / ${mv.mh}${mv.s>1?` · štít ${Math.round(mv.s)}`:''}`);
     $('#enFill').style.width=me.e+'%';setTxt('enText',`energie ${me.e}`);
-    const f=mv.fl,tags=[];if(me.rt>0)tags.push(`relikvie ${me.rt} s`);if(me.dr)tags.push(`průnik ×${me.dr}`);if(f&32)tags.push('maskování');if(me.am)tags.push('přepad');if(f&1)tags.push('omráčen');if(f&2)tags.push('umlčen');if(f&8)tags.push('zpomalen');if(f&4)tags.push('krvácíš');if(f&16384)tags.push('hoříš');if(f&32768)tags.push('otrávený · léčení −30 %');if(f&65536)tags.push('šok');if(f&1024)tags.push('BŘEMENO · uteč od týmu');if(f&2048)tags.push(`mor nanitů · ${me.nn} zásahů${me.tc?.[0]==='decon'?' · T: Dekontaminace':''}`);if(f&4096)tags.push('dekontaminace');if(f&8192)tags.push('označen');
+    const f=mv.fl,tags=[];if(s.bl&&s.bl[0]===1&&s.bl[3]===G.you)tags.push('NESEŠ RELIKVII · sekundární útok = hod');if(me.rt>0)tags.push(`relikvie ${me.rt} s`);if(me.dr)tags.push(`průnik ×${me.dr}`);if(f&32)tags.push('maskování');if(me.am)tags.push('přepad');if(f&1)tags.push('omráčen');if(f&2)tags.push('umlčen');if(f&8)tags.push('zpomalen');if(f&4)tags.push('krvácíš');if(f&16384)tags.push('hoříš');if(f&32768)tags.push('otrávený · léčení −30 %');if(f&65536)tags.push('šok');if(f&1024)tags.push('BŘEMENO · uteč od týmu');if(f&2048)tags.push(`mor nanitů · ${me.nn} zásahů${me.tc?.[0]==='decon'?' · T: Dekontaminace':''}`);if(f&4096)tags.push('dekontaminace');if(f&8192)tags.push('označen');
     setTxt('meStatus',tags.join(' · ')||C.talent);
     document.querySelectorAll('#slots .slot').forEach((el,i)=>{
       if(i===6){const sc=me.sc||0,cd=S.SECONDARY[meInfo.k]?.cd||6;el.style.setProperty('--cd',Math.min(1,sc/cd).toFixed(3));el.querySelector('.t').textContent=sc>0?Math.ceil(sc):''}
@@ -1040,11 +1072,13 @@ function drawHUD(){
     if(mu&&mu.d){const html=mode==='elim'?'Vyřazen · sleduješ spoluhráče do konce kola':'Zničen · obnova za <b id="deadT"></b> s';
       if($('#dead').dataset.m!==mode){$('#dead').dataset.m=mode;$('#dead').innerHTML=html}if(mode!=='elim')setTxt('deadT',mu.d)}
   }
-  setTxt('relicInfo',mode==='convoy'?'Stůj u vozu s relikvií a tlač ho k soupeřově základně':S.arenaLike(mode)?(s.rl[0]?'Relikvie čeká ve středu':`Relikvie za ${s.rl[1]} s`)+(MODES[mode].mutators?' · '+mutNames(info.mods):''):(!MODES[mode].pvp&&me?`Kořist v batohu: ${me.bag}`:''));
+  setTxt('relicInfo',mode==='relicball'?'Dones nebo hoď relikvii do soupeřovy branky':mode==='convoy'?'Stůj u vozu s relikvií a tlač ho do cíle svého týmu (konec trati v barvě tvého týmu)':S.arenaLike(mode)?(s.rl[0]?'Relikvie čeká ve středu':`Relikvie za ${s.rl[1]} s`)+(MODES[mode].mutators?' · '+mutNames(info.mods):''):(!MODES[mode].pvp&&me?`Kořist v batohu: ${me.bag}`:''));
   // minimap
   const map=MAPS[info.map],W=mini.width,sc=W/((map.r+2)*2),cx=W/2,toM=x=>cx+x*sc;
   mg.clearRect(0,0,W,W);mg.save();mg.beginPath();mg.arc(cx,cx,cx-2,0,Math.PI*2);mg.clip();
-  mg.strokeStyle='rgba(143,166,255,.5)';mg.lineWidth=3;mg.beginPath();mg.arc(cx,cx,map.r*sc,0,Math.PI*2);mg.stroke();
+  mg.strokeStyle='rgba(143,166,255,.5)';mg.lineWidth=3;mg.beginPath();if(map.field)mg.rect(toM(-map.field.hx),toM(-map.field.hz),2*map.field.hx*sc,2*map.field.hz*sc);else mg.arc(cx,cx,map.r*sc,0,Math.PI*2);mg.stroke();
+  if(map.goals){const Gl=map.goals;for(const sd of [-1,1]){mg.fillStyle=teamHex(sd<0?0:1);mg.fillRect(toM(sd<0?-Gl.x-Gl.depth:Gl.x),toM(-Gl.w),Gl.depth*sc,2*Gl.w*sc)}}
+  for(const W of map.sweepers||[]){const a=S.sweepAngle(W,sweepT),dx=Math.cos(a)*W.len,dz=Math.sin(a)*W.len;mg.strokeStyle='#7dffb0';mg.lineWidth=3;mg.beginPath();mg.moveTo(toM(W.x-dx),toM(W.z-dz));mg.lineTo(toM(W.x+dx),toM(W.z+dz));mg.stroke()}
   map.bases.forEach((b,i)=>{mg.globalAlpha=.25;mg.fillStyle=teamHex(i);mg.beginPath();mg.arc(toM(b.x),toM(b.z),4*sc,0,Math.PI*2);mg.fill();mg.globalAlpha=1});
   mg.fillStyle='rgba(255,106,26,.45)';for(const h of map.hazards){mg.beginPath();mg.arc(toM(h.x),toM(h.z),h.r*sc,0,Math.PI*2);mg.fill()}
   (map.portals||[]).forEach((pair,i)=>{mg.strokeStyle=i?'#ff7de9':'#7df9ff';mg.lineWidth=3;for(const p of pair){mg.beginPath();mg.arc(toM(p.x),toM(p.z),Math.max(3,1.6*sc),0,Math.PI*2);mg.stroke()}});
@@ -1055,10 +1089,12 @@ function drawHUD(){
     mg.strokeStyle='#5dffd8';mg.lineWidth=2;for(const P of map.pads||[]){mg.beginPath();mg.arc(toM(P.x),toM(P.z),Math.max(3,P.r*sc),0,Math.PI*2);mg.stroke()}}
   mg.fillStyle='#2a3350';for(const [x,z,r] of map.pillars){mg.beginPath();mg.arc(toM(x),toM(z),r*sc,0,Math.PI*2);mg.fill()}
   if(mode==='control')map.points.forEach((p,i)=>{const o=s.pt[i]?.[0];mg.strokeStyle=o===0||o===1?teamHex(o):'#ffc66d';mg.lineWidth=4;mg.beginPath();mg.arc(toM(p.x),toM(p.z),4*sc,0,Math.PI*2);mg.stroke()});
-  if(mode==='convoy'&&s.cv){const C=S.newCart(map);mg.strokeStyle='rgba(255,198,109,.5)';mg.lineWidth=2;mg.beginPath();for(let x=C.x-C.L;x<=C.x+C.L+.01;x+=1)x===C.x-C.L?mg.moveTo(toM(x),toM(S.cartZAt(C,x))):mg.lineTo(toM(x),toM(S.cartZAt(C,x)));mg.stroke();
-    const p=s.cv[1];mg.fillStyle=p===0||p===1?teamHex(p):'#ffc66d';mg.save();mg.translate(toM(s.cv[0]),toM(S.cartZAt(C,s.cv[0])));mg.rotate(Math.PI/4);mg.fillRect(-6,-6,12,12);mg.restore()}
+  if(mode==='convoy'&&s.cv){const C=S.newCart(map);mg.strokeStyle='rgba(255,198,109,.5)';mg.lineWidth=2;mg.beginPath();for(let q=-C.L;q<=C.L+.01;q+=1){const p=S.cartAt(C,q);q===-C.L?mg.moveTo(toM(p.x),toM(p.z)):mg.lineTo(toM(p.x),toM(p.z))}mg.stroke();
+    for(const team of [0,1]){const e=S.cartAt(C,team?-C.L:C.L);mg.strokeStyle=teamHex(team);mg.lineWidth=3;mg.beginPath();mg.arc(toM(e.x),toM(e.z),5,0,Math.PI*2);mg.stroke()}
+    const p=s.cv[1];mg.fillStyle=p===0||p===1?teamHex(p):'#ffc66d';mg.save();{const p=S.cartAt(C,s.cv[0]);mg.translate(toM(p.x),toM(p.z))}mg.rotate(Math.PI/4);mg.fillRect(-6,-6,12,12);mg.restore()}
   if(mode==='elim'&&s.el&&s.el[2]<map.r){mg.fillStyle='rgba(255,40,80,.22)';mg.beginPath();mg.arc(cx,cx,cx,0,Math.PI*2);mg.arc(cx,cx,s.el[2]*sc,0,Math.PI*2,true);mg.fill();
     mg.strokeStyle='#ff3f5e';mg.lineWidth=3;mg.beginPath();mg.arc(cx,cx,s.el[2]*sc,0,Math.PI*2);mg.stroke()}
+  if(s.bl&&s.bl[0]!==2){mg.fillStyle='#ffc66d';mg.save();mg.translate(toM(ballMesh?ballMesh.x:s.bl[1]),toM(ballMesh?ballMesh.z:s.bl[2]));mg.rotate(Math.PI/4);mg.fillRect(-6,-6,12,12);mg.restore()}
   if(s.rl[0]&&S.arenaLike(mode)){mg.fillStyle='#ffc66d';mg.beginPath();mg.arc(cx,cx,7,0,Math.PI*2);mg.fill()}
   for(const L of s.lt){mg.fillStyle=RARITIES[L[3]].color;mg.fillRect(toM(L[1])-4,toM(L[2])-4,8,8)}
   if(mode==='ctf'&&s.fg)s.fg.forEach(([st,x,z],team)=>{const h=(map.flags||map.bases)[team];mg.strokeStyle=teamHex(team);mg.lineWidth=3;mg.beginPath();mg.arc(toM(h.x),toM(h.z),9,0,Math.PI*2);mg.stroke();
@@ -1187,7 +1223,7 @@ function unitVisual(v,st,dt,t){
   const s=toScreen(v,v.gy+M.height+.8);if(s.off){b.el.style.display='none';return}
   b.el.style.display='';b.el.style.transform=`translate(${s.x-38}px,${s.y-30}px)`;
   b.h.style.width=Math.max(0,st.h/v.mh*100)+'%';b.s.style.width=Math.min(100,st.s/v.mh*100)+'%';
-  const f=st.fl;b.em.textContent=G.last?.fg?.some(x=>x[0]===1&&x[3]===v.id)?'NESE RELIKVII':f&1024?'BŘEMENO':f&2048?'NAKAŽEN':f&8192?'OZNAČEN':f&131072?'ZMRAŽEN':f&1?'OMRÁČEN':f&2?'UMLČEN':f&4?'KRVÁCÍ':f&16384?'HOŘÍ':f&32768?'OTRÁVEN':f&65536?'ŠOK':f&8?'ZPOMALEN':f&16?'RELIKVIE':'';
+  const f=st.fl;b.em.textContent=G.last?.fg?.some(x=>x[0]===1&&x[3]===v.id)||G.last?.bl?.[0]===1&&G.last.bl[3]===v.id?'NESE RELIKVII':f&1024?'BŘEMENO':f&2048?'NAKAŽEN':f&8192?'OZNAČEN':f&131072?'ZMRAŽEN':f&1?'OMRÁČEN':f&2?'UMLČEN':f&4?'KRVÁCÍ':f&16384?'HOŘÍ':f&32768?'OTRÁVEN':f&65536?'ŠOK':f&8?'ZPOMALEN':f&16?'RELIKVIE':'';
 }
 
 // ---------- hero preview for the hub ----------
@@ -1262,7 +1298,7 @@ function frame(now=performance.now()){
     if(Math.random()<(hiQ?.7:.35)){_c.set(m.userData.c);parts.push({x:m.position.x,y:m.position.y,f:m.userData.h,z:m.position.z,vx:rnd(-.3,.3),vy:rnd(-.2,.2),vz:rnd(-.3,.3),l:.25,m:.25,r:_c.r*2,g:_c.g*2,b:_c.b*2})}}
   for(const m of zoneMeshes.values()){m.material.opacity=.22*Math.min(1,m.userData.t)+.06*Math.sin(t*8);m.rotation.z+=dt*.6;
     if(Math.random()<.6){const a=rnd(0,6.28),r=rnd(0,3.5);burst({x:m.position.x+Math.cos(a)*r,z:m.position.z+Math.sin(a)*r},m.userData.c,1,.6,2.2,.7,0)}}
-  updSignals(t);updFlagMeshes(t);updElimWall(dt,t);updCartMesh(dt,t);
+  updSignals(t);updFlagMeshes(t);updElimWall(dt,t);updCartMesh(dt,t);updBallMesh(dt,t);
   if(tutMark){tutMark.children[0].scale.setScalar(2.4+Math.sin(t*4)*.25);tutMark.children[1].material.opacity=.5+.3*Math.sin(t*6)}
   for(const g of lootMeshes.values()){g.userData.gem.rotation.y+=dt*2;g.userData.gem.position.y=1+Math.sin(t*3)*.15}
   for(const g of beamMeshes.values())g.userData.glow.material.opacity=.5+.3*Math.sin(t*30);

@@ -37,7 +37,7 @@ export function createMatch(o={}){
     elim:D.rounds?{n:1,state:'fight',t:0,t0:-1,r:map.r}:null,
     relic:{state:arenaLike(mode)?'wait':'off',t:20},
     points:mode==='control'?map.points.map(p=>({x:p.x,z:p.z,r:4,own:-1,prog:0})):[],
-    cart:mode==='convoy'?newCart(map):null,
+    cart:mode==='convoy'?newCart(map):null,ball:mode==='relicball'?newBall():null,
     lives:D.lives||0,wave:0,waveState:'break',waveT:6,bossKey:BOSSES[o.boss]?o.boss:'collector',bossId:0,
     last:o.last||D.last||0,waveBoss:BOSSES[o.waveBoss]?o.waveBoss:null,emod:new Set(o.mods||(D.mutators?mutatorsOfWeek():[])),mission:o.mission||null,
     nextId:1,diffKey:DIFF[o.diff]?o.diff:'normal',diff:DIFF[o.diff]||DIFF.normal,winner:null,rosterVer:1,scoreAcc:0};
@@ -101,7 +101,7 @@ export function startMatch(M){if(M.mode==='boss')spawnBoss(M,M.bossKey,1);if(M.m
 
 const atk=(M,u)=>u.C.atk*(1+m(u,'atk')/100)*(u.ctrl==='bot'?M.diff.dmg:1)*u.dmgScale;
 const tech=(M,u)=>u.C.tech*(1+m(u,'tech')/100)*(u.ctrl==='bot'?M.diff.dmg:1);
-export const speedOf=u=>u.spd??u.C.speed*(1+(u.mods?.speed||0)/100)*(u.st.slow>0?.6:1)*(u.st.cloak>0?1.12:1)*(u.st.haste>0?u.st.hasteK||1.2:1)*(u.carry!=null?.85:1);
+export const speedOf=u=>u.spd??u.C.speed*(1+(u.mods?.speed||0)/100)*(u.st.slow>0?.6:1)*(u.st.cloak>0?1.12:1)*(u.st.haste>0?u.st.hasteK||1.2:1)*(u.carry!=null?.85:1)*(u.ball?BALL.slow:1);
 const pw=(M,u)=>Math.max(atk(M,u),tech(M,u));
 const maxShield=u=>u.maxHp*.7;
 // on a map with levels a unit deep on a higher top cannot be reached from below (see LEVEL_EDGE)
@@ -701,6 +701,7 @@ function evade(M,u,dir){
 // ---------- sekundární útok (right mouse button) ----------
 function secondary(M,u,pt){
   if(u.kind!=='hero'||u.dead||(u.scd||0)>0||u.dash||u.st.stun>0||u.st.silence>0||M.state!=='play')return false;
+  if(u.ball&&M.ball?.carrier===u.id)return throwBall(M,u,pt);
   const D=SECONDARY[u.clsKey];if(!D)return false;
   const dir=aimDir(u,pt),lag=u.ctrl==='human'?u.lag:0,C=u.C.color,mul=u.dmgScale;
   // a cone in front of the hero: every reachable enemy within R and the angle, not behind a pillar
@@ -1056,8 +1057,9 @@ function botUpdate(M,u,dt){
     if(d2(u,p)>2.5)goal=p;
   }
   // Konvoj: stay with the cart, spread a little behind it on the own side; a fight far from it is left
-  else if(M.cart&&(!t||d>6||d2(u,M.cart)>CONVOY.r+1.5)){const sp=cartSpot(M.cart,u.team),spot={x:sp.x,z:sp.z+((u.id%3)-1)*1.6};if(d2(u,spot)>1.5)goal=spot}
+  else if(M.cart&&(!t||d>6||d2(u,M.cart)>CONVOY.r+1.5)){const sp=cartSpot(M.cart,u.team),spot={x:sp.x+((u.id%3)-1)*1.6,z:sp.z};if(d2(u,spot)>1.5)goal=spot}
   if(M.flags&&!u.bomb){const g=ctfGoal(M,u,t,d);if(g){goal=g.p;if(g.target)ai.target=g.target}}
+  if(M.ball&&(!ai.retreat||M.ball.carrier===u.id)){const g=ballGoal(M,u,t,d);if(g){goal=g.p;if(g.target)ai.target=g.target}}
   if(!goal&&!ai.retreat&&ping&&!ping.tg&&ping.k==='here'&&(!t||d>8)&&d2(u,ping)>3)goal=ping;
   if(!goal&&!ai.retreat&&ping&&ping.k==='danger'&&d2(u,ping)<6){const dx=u.x-ping.x,dz=u.z-ping.z,l=Math.hypot(dx,dz)||1;goal=inArena(M,{x:u.x+dx/l*6,z:u.z+dz/l*6},2)}
   // carrying Nositel's burden: run away from the rest of the team
@@ -1386,35 +1388,117 @@ function updPoints(M,dt){
   M.scoreAcc+=dt;while(M.scoreAcc>=2){M.scoreAcc-=2;for(const p of M.points)if(p.own>=0)M.score[p.own]++}
   checkWin(M);
 }
-// Konvoj relikvie: a hover cart starts in the middle and rides on the line between the bases. It moves towards a team's
-// enemy base while that team has more heroes within `r` (faster by the difference, slower while enemies are there too),
-// stops while both have as many, and after
+// Konvoj relikvie: a hover cart starts in the middle. Its track runs across the arena, from the middle towards z = ±L
+// (the line between the bases is the other way), so each end is equally far from both spawns and the defenders get no
+// spawn advantage near their end. Team 0 pushes towards +L, team 1 towards −L. The cart moves while a team has more heroes
+// within `r` (faster by the difference, slower while enemies are there too), stops while both have as many, and after
 // `idle` seconds alone drifts back towards the middle. The score is how far it got on each side (100 = the end, a win);
 // at the time limit the side it stands on wins. It slows down the further it gets (`slow` at the very end). Every 25 %
 // is a checkpoint: announced, a capture for the pushers, and the cart stands still for `hold` s so the defenders can regroup.
-export const CONVOY={r:4,spd:.45,extra:.2,contest:.6,slow:.35,hold:6,back:.25,idle:6,margin:6};
-// the track bends smoothly around pillars standing on the line between the bases (always to the same side, so it stays mirror-fair)
-export function newCart(map){const b=map.bases,x=(b[0].x+b[1].x)/2,z=(b[0].z+b[1].z)/2,L=Math.abs(b[1].x-b[0].x)/2-CONVOY.margin;
-  const bumps=(map.pillars||[]).filter(([px,pz,r])=>Math.abs(pz-z)<r+1.6&&Math.abs(px-x)<L+r+4).map(([px,pz,r])=>({x:px,c:r+1.6+(pz-z),w:r+4.5}));
-  const C={x,z,z0:z,L,bumps,dir:Math.sign(b[1].x-b[0].x)||1,push:-1,idle:0,hold:0,cp:[0,0]};C.z=cartZAt(C,x);return C}
-export function cartZAt(C,x){let o=0;for(const B of C.bumps){const d=Math.abs(x-B.x);if(d<B.w)o=Math.max(o,B.c*(.5+.5*Math.cos(Math.PI*d/B.w)))}return C.z0+o}
-// the point a team pushes from: just behind the cart on its own side
-export const cartSpot=(C,team,off=1.6)=>{const x=C.x-(team?-C.dir:C.dir)*off;return{x,z:cartZAt(C,x)}};
+export const CONVOY={r:4,spd:.45,extra:.2,contest:.6,slow:.35,hold:6,back:.25,idle:6,margin:12};
+// The track bends smoothly around pillars standing on it: a pillar in the +z half pushes it to +x, one in the −z half
+// to −x, so the track is the same for both teams (the maps are symmetric through the middle).
+export function newCart(map){const b=map.bases,x0=(b[0].x+b[1].x)/2,z0=(b[0].z+b[1].z)/2,L=map.r-CONVOY.margin;
+  const bumps=(map.pillars||[]).filter(([px,pz,r])=>Math.abs(px-x0)<r+1.6&&Math.abs(pz-z0)<L+r+5).map(([px,pz,r])=>{const side=Math.sign(pz-z0)||1;return{s:pz-z0,side,c:side*(px-x0)+r+1.6,w:r+4.5}});
+  const C={x0,z0,L,bumps,s:0,x:x0,z:z0,push:-1,idle:0,hold:0,cp:[0,0]};cartAt(C,0,C);return C}
+// world position of the track at progress s (−L … L)
+export function cartAt(C,s,out={}){let o=0,side=1;for(const B of C.bumps){const d=Math.abs(s-B.s);if(d<B.w){const v=B.c*(.5+.5*Math.cos(Math.PI*d/B.w));if(v>o){o=v;side=B.side}}}
+  out.x=C.x0+side*o;out.z=C.z0+s;return out}
+// the point a team pushes from: just behind the cart on its own side of the track
+export const cartSpot=(C,team,off=1.6)=>cartAt(C,C.s-(team?-1:1)*off);
 function updCart(M,dt){
   const C=M.cart;if(M.state!=='play')return;
   const c=[0,0];for(const u of M.units)if(u.kind==='hero'&&!u.dead&&d2(u,C)<CONVOY.r)c[u.team]++;
   C.push=c[0]>c[1]?0:c[1]>c[0]?1:c[0]?2:-1;
   if(C.hold>0){C.hold-=dt;C.idle=0}
-  else if(C.push===0||C.push===1){const t=C.push,k=c[t]-c[1-t],prog=Math.max(0,C.x*(t?-C.dir:C.dir)/C.L);C.idle=0;
-    C.x=clamp(C.x+(t?-C.dir:C.dir)*CONVOY.spd*(1+CONVOY.extra*(k-1))*(c[1-t]?CONVOY.contest:1)*(1-CONVOY.slow*prog)*dt,-C.L,C.L)}
-  else if(C.push<0){C.idle+=dt;if(C.idle>CONVOY.idle&&Math.abs(C.x)>.01)C.x-=Math.sign(C.x)*Math.min(Math.abs(C.x),CONVOY.back*dt)}
+  else if(C.push===0||C.push===1){const t=C.push,sg=t?-1:1,k=c[t]-c[1-t],prog=Math.max(0,C.s*sg/C.L);C.idle=0;
+    C.s=clamp(C.s+sg*CONVOY.spd*(1+CONVOY.extra*(k-1))*(c[1-t]?CONVOY.contest:1)*(1-CONVOY.slow*prog)*dt,-C.L,C.L)}
+  else if(C.push<0){C.idle+=dt;if(C.idle>CONVOY.idle&&Math.abs(C.s)>.01)C.s-=Math.sign(C.s)*Math.min(Math.abs(C.s),CONVOY.back*dt)}
   else C.idle=0;
-  C.z=cartZAt(C,C.x);
-  const p=C.x*C.dir/C.L;M.score[0]=Math.round(Math.max(0,p)*100);M.score[1]=Math.round(Math.max(0,-p)*100);
+  cartAt(C,C.s,C);
+  const p=C.s/C.L;M.score[0]=Math.round(Math.max(0,p)*100);M.score[1]=Math.round(Math.max(0,-p)*100);
   for(const t of [0,1]){const k=Math.floor(M.score[t]/25);if(k>C.cp[t]&&k<4){C.cp[t]=k;C.hold=CONVOY.hold;
     for(const u of M.units)if(u.kind==='hero'&&!u.dead&&u.team===t&&d2(u,C)<CONVOY.r)u.caps=(u.caps||0)+1;
-    fx(M,{t:'ban',ti:`Konvoj ${k*25} %`,sub:(t?'Rudí tlačí k modré základně':'Modří tlačí k rudé základně')+` · kontrolní bod, vůz ${CONVOY.hold} s stojí`,col:`var(--t${t})`,d:1.6})}}
+    fx(M,{t:'ban',ti:`Konvoj ${k*25} %`,sub:(t?'Rudí tlačí vůz ke svému cíli':'Modří tlačí vůz ke svému cíli')+` · kontrolní bod, vůz ${CONVOY.hold} s stojí`,col:`var(--t${t})`,d:1.6})}}
   checkWin(M);
+}
+// Relikviobal: one relic waits in the middle. A hero who touches it carries it (a little slower, cannot cloak) and scores
+// by running into the enemy goal; with the secondary attack the carrier throws it instead, and a thrown relic that lands in
+// a goal scores too (also an own goal). The carrier drops it when killed or stunned, so stuns are tackles. After a goal the
+// relic comes back to the middle in `reset` s. Team 0 defends the goal at −x and attacks the one at +x.
+export const BALL={pick:1.5,throwSpd:24,fric:2.2,drop:3,reset:3,noPickSelf:1,noPickThrow:.45,noPickOther:.12,slow:.9,throwCd:1.2,overtime:90};
+const newBall=()=>({state:'wait',x:0,z:0,vx:0,vz:0,carrier:0,t:0,last:0,np:{}});
+// which team's goal a point is in (−1 outside both)
+export function goalOf(map,x,z){const G=map.goals;if(!G||Math.abs(z)>=G.w)return -1;return x<=-G.x+.3?0:x>=G.x-.3?1:-1}
+function dropBall(M,B,c){B.state='loose';B.carrier=0;
+  if(c){c.ball=false;B.x=c.x;B.z=c.z;const a=rnd(0,Math.PI*2);B.vx=Math.cos(a)*BALL.drop;B.vz=Math.sin(a)*BALL.drop;B.np={[c.id]:M.time+BALL.noPickSelf};
+    fx(M,{t:'txt',x:r2(c.x),z:r2(c.z),s:'Relikvie vypadla',c:'info'})}}
+function throwBall(M,u,pt){const B=M.ball,dir=aimDir(u,pt);B.state='loose';B.carrier=0;u.ball=false;
+  B.x=u.x+dir.x*.9;B.z=u.z+dir.z*.9;B.vx=dir.x*BALL.throwSpd;B.vz=dir.z*BALL.throwSpd;B.last=u.id;B.np={};
+  for(const h of M.units)if(h.kind==='hero')B.np[h.id]=M.time+(h===u?BALL.noPickThrow:BALL.noPickOther);
+  u.scd=BALL.throwCd;fx(M,{t:'atk',i:u.id,s:6});fx(M,{t:'burst',x:r2(u.x),z:r2(u.z),y:1.4,c:0xffc66d,n:14,s:5,u:2,l:.4});return true}
+function ballGoalScored(M,B,team,by,how){
+  M.score[team]++;B.state='reset';B.t=BALL.reset;B.vx=B.vz=0;
+  if(B.carrier){const c=M.units.find(u=>u.id===B.carrier);if(c)c.ball=false}B.carrier=0;
+  const u=M.units.find(x=>x.id===by);if(u&&u.team===team)u.caps=(u.caps||0)+1;
+  fx(M,{t:'ban',ti:'GÓL!',sub:`${team?'Rudí':'Modří'}${u?' · '+u.name:''}${how==='shot'?' · hodem':''} · ${M.score[0]} : ${M.score[1]}`,col:`var(--t${team})`,d:2.4});
+  fx(M,{t:'ring',x:r2(B.x),z:r2(B.z),c:team?0xff3f8e:0x3fb8ff,a:.5,b:8,d:.6});
+  if(M.overtime){endMatch(M,team);return}
+  checkWin(M);
+}
+function updBall(M,dt){
+  const B=M.ball;if(M.state!=='play')return;
+  if(B.state==='wait')B.state='loose';
+  if(B.state==='reset'){B.t-=dt;if(B.t<=0){B.state='loose';B.x=0;B.z=0;B.vx=B.vz=0;B.np={};fx(M,{t:'ban',ti:'Relikvie je zpět ve středu',col:'var(--gold)',d:1.3})}return}
+  if(B.state==='carried'){const c=M.units.find(u=>u.id===B.carrier);
+    if(!c||c.dead||c.remove||c.st.stun>0){dropBall(M,B,c);if(!c)B.state='loose'}
+    else{B.x=c.x;B.z=c.z;c.st.cloak=0;const g=goalOf(M.map,c.x,c.z);if(g>=0&&g!==c.team)ballGoalScored(M,B,c.team,c.id,'carry');return}}
+  if(B.state!=='loose')return;
+  // a loose relic slides, slows down and bounces off pillars and walls
+  const sp=Math.hypot(B.vx,B.vz);
+  if(sp>.15){const n=Math.ceil(sp*dt/.35),h=dt/n;
+    for(let i=0;i<n;i++){B.x+=B.vx*h;B.z+=B.vz*h;
+      for(const [px,pz,pr] of M.map.pillars){const dx=B.x-px,dz=B.z-pz,l=Math.hypot(dx,dz),min=pr+.35;if(l>=min||l<1e-6)continue;
+        const nx=dx/l,nz=dz/l,vn=B.vx*nx+B.vz*nz;B.x=px+nx*min;B.z=pz+nz*min;if(vn<0){B.vx-=1.6*vn*nx;B.vz-=1.6*vn*nz}}
+      const l=Math.hypot(B.x,B.z),R=M.map.r-1;if(l>R){B.x*=R/l;B.z*=R/l;B.vx=-B.vx*.6;B.vz=-B.vz*.6}}
+    const k=Math.exp(-BALL.fric*dt);B.vx*=k;B.vz*=k}
+  else B.vx=B.vz=0;
+  const g=goalOf(M.map,B.x,B.z);if(g>=0){const u=M.units.find(x=>x.id===B.last);ballGoalScored(M,B,1-g,u&&u.team===1-g?u.id:0,'shot');return}
+  for(const u of M.units){if(u.kind!=='hero'||u.dead||u.st.stun>0||u.ball||(B.np[u.id]||0)>M.time||d2(u,B)>BALL.pick)continue;
+    B.state='carried';B.carrier=u.id;B.last=u.id;u.ball=true;u.st.cloak=0;fx(M,{t:'txt',x:r2(u.x),z:r2(u.z),s:'Má relikvii',c:'info'});break}
+}
+// rotating laser arms of a map (`sweepers`): a bar 2 × len long turning at spd rad/s; a touch deals dps, throws the unit
+// 3 m along the arm's motion and stuns it for a moment (a carrier drops the relic), then 1 s of grace
+export const SWEEP={w:.9,kb:3,stun:.4,grace:1};
+export const sweepAngle=(S,t)=>S.ph+S.spd*t;
+function updSweepers(M,dt){
+  if(M.state!=='play')return;
+  for(const S of M.map.sweepers){const a=sweepAngle(S,M.time),cx=Math.cos(a),cz=Math.sin(a);
+    for(const u of M.units){if(u.dead||u.kind==='boss'||(u.swT||0)>M.time||u.st.inv>0&&u.dash)continue;
+      const dx=u.x-S.x,dz=u.z-S.z,along=dx*cx+dz*cz;if(Math.abs(along)>S.len)continue;
+      const off=-dx*cz+dz*cx;if(Math.abs(off)>SWEEP.w+u.radius)continue;
+      u.swT=M.time+SWEEP.grace;const sg=Math.sign(along)*Math.sign(S.spd)||1,tx=-cz*sg,tz=cx*sg;
+      damage(M,u,S.dps,null,{color:0x7dffb0});if(u.dead)continue;
+      u.x+=tx*SWEEP.kb;u.z+=tz*SWEEP.kb;u.kbT=M.time;collide(u,M.map);if(u.kind==='hero')u.st.stun=Math.max(u.st.stun,SWEEP.stun);
+      fx(M,{t:'burst',x:r2(u.x),z:r2(u.z),y:1,c:0x7dffb0,n:16,s:5,u:2,l:.4})}}
+}
+// Relikviobal bots: the carrier runs for the goal and throws from close; mates run ahead of it; against an enemy carrier
+// the two nearest chase it and one guards the goal; a loose relic draws the nearest two (three in the own half)
+function ballGoal(M,u,t,d){
+  const B=M.ball,G=M.map.goals,atk=u.team?-1:1,enemyGoal={x:atk*(G.x+1.2),z:0},ownGoal={x:-atk*(G.x-3),z:0},mates=heroesOf(M,u.team).filter(x=>!x.dead);
+  const nearest=p=>mates.slice().sort((a,b)=>d2(a,p)-d2(b,p)).indexOf(u);
+  if(B.state==='carried'&&B.carrier===u.id){
+    if(d2(u,enemyGoal)<13&&!blocked(M.map,u,enemyGoal,.3)&&!(u.scd>0)&&Math.random()<.08)secondary(M,u,{x:enemyGoal.x,z:rnd(-2.5,2.5)});
+    return{p:enemyGoal}}
+  if(B.state==='carried'){const c=M.units.find(x=>x.id===B.carrier);if(!c)return null;
+    if(c.team===u.team){if(t&&d<6)return null;return{p:{x:c.x+atk*5,z:c.z+((u.id%3)-1)*4}}}
+    if(nearest(c)<2)return{p:c,target:visibleTo(u,c)?c:null};
+    return d2(u,ownGoal)>3?{p:ownGoal}:null}
+  if(B.state==='loose'){const role=mates.filter(x=>x.ctrl==='bot').sort((a,b)=>a.id-b.id).indexOf(u),n=nearest(B);
+    if(n<2||B.x*atk<0&&n<3)return{p:{x:B.x,z:B.z}};
+    if(role===0)return d2(u,ownGoal)>3?{p:ownGoal}:null;
+    return{p:{x:B.x*.5-atk*4,z:B.z*.5}}}
+  return{p:{x:-atk*6,z:((u.id%3)-1)*5}};
 }
 // Eliminace: rounds without respawns. A team that has nobody standing loses the round. After `shrinkAt` seconds the
 // arena closes in to nothing over `shrinkTime`; outside the circle heroes burn for `burn` of their max HP per second,
@@ -1486,7 +1570,10 @@ export function step(M,dt=TICK){
   M.time+=dt;
   if(M.state==='countdown'){M.countdown-=dt;if(M.countdown<=0){M.state='play';
     if(M.D.mutators)fx(M,{t:'ban',ti:'Mutace týdne',sub:[...M.emod].map(k=>MUTATORS[k]?.name).join(' + '),col:'var(--gold)',d:3.5})}}
-  else if(M.state==='play'){M.timeLeft-=dt;if(M.timeLeft<=0){endMatch(M,M.D.pvp?undefined:1);return}}
+  else if(M.state==='play'){M.timeLeft-=dt;if(M.timeLeft<=0){
+    // Relikviobal: a draw on the clock goes to overtime, the next goal wins (BALL.overtime s, then a draw)
+    if(M.ball&&!M.overtime&&M.score[0]===M.score[1]){M.overtime=true;M.timeLeft=BALL.overtime;fx(M,{t:'ban',ti:'Prodloužení',sub:'Další gól vyhrává',col:'var(--gold)',d:2.4})}
+    else{endMatch(M,M.D.pvp?undefined:1);return}}}
   for(let i=M.timers.length-1;i>=0;i--){const T=M.timers[i];T.t-=dt;if(T.t<=0){M.timers.splice(i,1);T.fn()}}
   M.danger=M.danger.filter(g=>g.until>M.time);
   for(const u of M.units){
@@ -1497,6 +1584,8 @@ export function step(M,dt=TICK){
   separate(M);if(M.map.portals)updPortals(M,dt);if(M.map.levels)updLevels(M,dt);if(M.map.storm)updStorm(M,dt);recordHist(M);updProjs(M,dt);updZones(M,dt);updRings(M,dt);updBeams(M,dt);updRelic(M,dt);updLoot(M,dt);
   if(M.mode==='control')updPoints(M,dt);
   if(M.cart)updCart(M,dt);
+  if(M.ball)updBall(M,dt);
+  if(M.map.sweepers)updSweepers(M,dt);
   if(M.flags)updFlags(M,dt);
   if(M.elim)updElim(M,dt);
   if(M.D.waves)updWaves(M,dt);
@@ -1517,7 +1606,8 @@ export function snapshotFor(M,uid,events){
   const boss=M.units.find(u=>u.kind==='boss');
   return{type:'s',t:r2(M.time),st:M.state,cd:r2(M.countdown),tl:Math.ceil(M.timeLeft),sc:M.score,
     rl:[M.relic.state==='up'?1:0,Math.ceil(M.relic.t)],
-    pt:M.points.map(p=>[p.own,Math.round(p.prog)]),lv:M.lives,cv:M.cart?[r2(M.cart.x),M.cart.push,Math.ceil(M.cart.hold)]:null,
+    pt:M.points.map(p=>[p.own,Math.round(p.prog)]),lv:M.lives,cv:M.cart?[r2(M.cart.s),M.cart.push,Math.ceil(M.cart.hold)]:null,
+    bl:M.ball?[{wait:0,loose:0,carried:1,reset:2}[M.ball.state],r2(M.ball.x),r2(M.ball.z),M.ball.carrier,Math.ceil(M.ball.t)]:null,
     fg:M.flags?M.flags.map(f=>[{home:0,carried:1,dropped:2}[f.state],r2(f.x),r2(f.z),f.carrier,Math.ceil(f.t)]):null,
     el:M.elim?[M.elim.n,M.elim.state==='pause'?Math.ceil(M.elim.t):0,r2(M.elim.r),heroesOf(M,0).length,heroesOf(M,1).length,Math.max(0,Math.ceil(M.elim.t0+ELIM.shrinkAt-M.time))]:null,
     wv:M.D.waves?[M.wave,M.waveState==='break'?Math.ceil(M.waveT):0,M.units.filter(u=>u.team===1).length]:null,

@@ -323,16 +323,16 @@ export function buildArena(scene,mapKey,hiQ){
   g.add(sun,sun.target);
   map.bases.forEach((b,i)=>{const l=new THREE.PointLight(TEAM_COL[i],14,22,1.2);l.position.set(b.x,3,b.z);g.add(l)});
   // floor and grid
-  const floor=new THREE.Mesh(new THREE.CircleGeometry(R+2,96),new THREE.MeshStandardMaterial({color:T.floor,metalness:.6,roughness:.45,envMapIntensity:.15}));
+  const F=map.field,floor=new THREE.Mesh(F?new THREE.PlaneGeometry(2*(F.hx+(map.goals?.depth||0))+4,2*F.hz+4):new THREE.CircleGeometry(R+2,96),new THREE.MeshStandardMaterial({color:T.floor,metalness:.6,roughness:.45,envMapIntensity:.15}));
   floor.rotation.x=-Math.PI/2;floor.receiveShadow=true;g.add(floor);
   const gu={t:{value:0},R:{value:R},cA:{value:new THREE.Vector3(...T.gridA)},cB:{value:new THREE.Vector3(...T.gridB)},acc:{value:new THREE.Color(T.accent)},b0:{value:new THREE.Vector2(map.bases[0].x,-map.bases[0].z)},b1:{value:new THREE.Vector2(map.bases[1].x,-map.bases[1].z)}};
-  const grid=new THREE.Mesh(new THREE.PlaneGeometry(R*2+12,R*2+12),new THREE.ShaderMaterial({uniforms:gu,transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,
+  const grid=new THREE.Mesh(F?new THREE.PlaneGeometry(2*(F.hx+(map.goals?.depth||0))+2,2*F.hz+2):new THREE.PlaneGeometry(R*2+12,R*2+12),new THREE.ShaderMaterial({uniforms:gu,transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,
     vertexShader:`varying vec2 vP;void main(){vP=position.xy;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}`,fragmentShader:gridFrag}));
   grid.rotation.x=-Math.PI/2;grid.position.y=.02;g.add(grid);updaters.push((dt,t)=>gu.t.value=t);
   map.bases.forEach((b,i)=>{const d=new THREE.Mesh(new THREE.CircleGeometry(4,48),new THREE.MeshBasicMaterial({color:TEAM_COL[i],transparent:true,opacity:.08,blending:THREE.AdditiveBlending,depthWrite:false}));d.rotation.x=-Math.PI/2;d.position.set(b.x,.03,b.z);g.add(d)});
   // pillars
   const pm=new THREE.MeshStandardMaterial({color:0x161c2c,metalness:.8,roughness:.3,envMapIntensity:.6});
-  for(const [x,z,r] of map.pillars){
+  for(const [x,z,r,isWall] of map.pillars){if(isWall)continue;
     const c=x<-1?TEAM_COL[0]:x>1?TEAM_COL[1]:T.accent;let geo,m,h=5;
     if(T.pillar==='box'){h=4.4;geo=new THREE.BoxGeometry(r*1.5,h,r*1.5);m=new THREE.Mesh(geo,new THREE.MeshStandardMaterial({color:0x2a1d16,metalness:.7,roughness:.55}));m.rotation.y=Math.PI/4}
     else if(T.pillar==='crystal'){h=6;geo=new THREE.CylinderGeometry(r*.45,r,h,5);m=new THREE.Mesh(geo,new THREE.MeshStandardMaterial({color:0x9fd8ff,metalness:.1,roughness:.08,transparent:true,opacity:.55,emissive:0x15354a}))}
@@ -394,9 +394,28 @@ export function buildArena(scene,mapKey,hiQ){
       const inner=new THREE.Mesh(new THREE.TorusGeometry(.8,.05,6,40),new THREE.MeshBasicMaterial({color:HDR(col,1.6),transparent:true,opacity:.7}));inner.position.copy(ring.position);g.add(inner);
       const l=new THREE.PointLight(col,5,9,1.5);l.position.set(p.x,1.4,p.z);g.add(l);
       updaters.push((dt,t)=>{ring.rotation.y=t*1.4+pi;inner.rotation.x=t*2.1;inner.rotation.y=-t*.9;disc.material.opacity=.28+Math.sin(t*3+pi)*.08})}});
+  // Neonový stadion: solid walls along `walls` (the pillars under them only collide), goal frames in the defending team's colour
+  if(F){const wm=new THREE.MeshStandardMaterial({color:0x101a26,metalness:.7,roughness:.35}),H=2.4;
+    for(const [x1,z1,x2,z2] of map.walls){const L=Math.hypot(x2-x1,z2-z1),geo=new THREE.BoxGeometry(L+2.3,H,2.3),m=new THREE.Mesh(geo,wm);
+      m.position.set((x1+x2)/2,H/2,(z1+z2)/2);m.rotation.y=-Math.atan2(z2-z1,x2-x1);m.castShadow=m.receiveShadow=true;g.add(m);
+      const e=new THREE.LineSegments(new THREE.EdgesGeometry(geo),new THREE.LineBasicMaterial({color:HDR(T.accent,1.2)}));e.position.copy(m.position);e.rotation.copy(m.rotation);g.add(e);
+      const top=new THREE.Mesh(new THREE.BoxGeometry(L+2.32,.1,.25),new THREE.MeshBasicMaterial({color:HDR(T.accent,1.1)}));top.position.set(m.position.x,H+.05,m.position.z);top.rotation.y=m.rotation.y;g.add(top)}
+    // the field lines: the halfway line, the centre circle and a box in front of each goal
+    const lm=new THREE.MeshBasicMaterial({color:HDR(T.accent,.9),transparent:true,opacity:.35,depthWrite:false,blending:THREE.AdditiveBlending});
+    const strip=(x,z,w,d)=>{const m=new THREE.Mesh(new THREE.PlaneGeometry(w,d),lm);m.rotation.x=-Math.PI/2;m.position.set(x,.04,z);g.add(m)};
+    strip(0,0,.18,2*F.hz);const cc=new THREE.Mesh(new THREE.RingGeometry(4.4,4.6,64),lm);cc.rotation.x=-Math.PI/2;cc.position.y=.04;g.add(cc);
+    if(map.goals){const G=map.goals;
+      for(const sd of [-1,1]){const team=sd<0?0:1,c=TEAM_COL[team],gx=sd*G.x;
+        strip(sd*(G.x-6),0,.18,2*(G.w+3));strip(sd*(G.x-3),-(G.w+3),6,.18);strip(sd*(G.x-3),G.w+3,6,.18);
+        const net=new THREE.Mesh(new THREE.PlaneGeometry(G.depth,2*G.w),new THREE.MeshBasicMaterial({color:HDR(c,1),transparent:true,opacity:.22,depthWrite:false,blending:THREE.AdditiveBlending}));
+        net.rotation.x=-Math.PI/2;net.position.set(gx+sd*G.depth/2,.05,0);g.add(net);updaters.push((dt,t)=>net.material.opacity=.16+.08*Math.sin(t*2+sd));
+        const pm2=new THREE.MeshBasicMaterial({color:HDR(c,2.2)});
+        for(const z of [-G.w,G.w]){const post=new THREE.Mesh(new THREE.CylinderGeometry(.18,.18,3.6,10),pm2);post.position.set(gx,1.8,z);g.add(post)}
+        const bar=new THREE.Mesh(new THREE.CylinderGeometry(.16,.16,2*G.w,10),pm2);bar.rotation.x=Math.PI/2;bar.position.set(gx,3.6,0);g.add(bar);
+        const l=new THREE.PointLight(c,10,14,1.3);l.position.set(gx+sd*1.5,2.5,0);g.add(l)}}}
   // wall, rim, skyline, sky
-  const wall=new THREE.Mesh(new THREE.CylinderGeometry(R+1.6,R+1.6,1.4,96,1,true),new THREE.MeshStandardMaterial({color:0x10162a,metalness:.7,roughness:.4,side:THREE.DoubleSide}));wall.position.y=.7;wall.receiveShadow=true;g.add(wall);
-  const rim=new THREE.Mesh(new THREE.TorusGeometry(R+1.6,.07,6,128),new THREE.MeshBasicMaterial({color:HDR(T.rim,1.6)}));rim.rotation.x=Math.PI/2;rim.position.y=1.4;g.add(rim);
+  if(!F){const wall=new THREE.Mesh(new THREE.CylinderGeometry(R+1.6,R+1.6,1.4,96,1,true),new THREE.MeshStandardMaterial({color:0x10162a,metalness:.7,roughness:.4,side:THREE.DoubleSide}));wall.position.y=.7;wall.receiveShadow=true;g.add(wall);
+  const rim=new THREE.Mesh(new THREE.TorusGeometry(R+1.6,.07,6,128),new THREE.MeshBasicMaterial({color:HDR(T.rim,1.6)}));rim.rotation.x=Math.PI/2;rim.position.y=1.4;g.add(rim)}
   const bm=new THREE.MeshStandardMaterial({color:0x0a0e18,metalness:.5,roughness:.6});
   for(let i=0;i<64;i++){const a=i/64*Math.PI*2+rnd(-.04,.04),r=rnd(R+18,R+54),h=rnd(6,34),w=rnd(3,8);
     const geo=new THREE.BoxGeometry(w,h,w),m=new THREE.Mesh(geo,bm);m.position.set(Math.cos(a)*r,h/2-1,Math.sin(a)*r);m.rotation.y=-a;g.add(m);
