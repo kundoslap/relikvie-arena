@@ -93,6 +93,16 @@ export const SECONDARY={
   hook:{name:'Trhnutí',cd:6,icon:'hook',desc:'Krátký hák na 9 m: 80 % útoku a přitáhne zasaženého soupeře o 3 m k tobě.'}};
 // "Novinky" in the hub, newest first; id marks what a player has already seen
 export const CHANGELOG=[
+  {id:'2026-12v',title:'Prodloužení v Únosu relikvie',items:[
+    'Ve 120 zápasech botů končil Únos relikvie remízou skoro ve čtvrtině případů.',
+    'Když je po čase nerozhodně, hraje se 90 s prodloužení. První únos vyhrává a v prodloužení se počítá, i když vaše relikvie zrovna doma není.',
+    'Pod skóre je během prodloužení vidět nápis „prodloužení“, platí to i pro Relikviobal.',
+    'Remíz je teď asi 11 %.']},
+  {id:'2026-12u',title:'Vyváženější Konvoj a Relikviobal',items:[
+    'Ve 120 zápasech botů na režim vyhrával Strážce v Konvoji 86 % a v Relikviobalu 66 %, střelci jen kolem 30 %.',
+    'Konvoj: u vozu se počítá každý do 6 m (dřív 4 m) a pole vozu tlumí štíty: kdo stojí u vozu, dostane ze štítu jen polovinu. Boti-střelci zůstávají u vozu a střílí odtud.',
+    'Relikviobal: nositel relikvie dostává o 10 % víc poškození a ze štítů jen polovinu, zato je zpomalený jen o 5 %. Relikvii pustí i tehdy, když během 2,5 s ztratí 45 % zdraví, takže ji vyrazí i soustředěná palba střelců.',
+    'Strážce teď v Konvoji vyhrává asi 65 % a v Relikviobalu asi 60 %. V obou režimech pořád víc vyhrávají hrdinové na blízko, další ladění podle skutečných zápasů.']},
   {id:'2026-12t',title:'Epický zásobník a setové implantáty',items:[
     'V Obchodě je nový Epický zásobník za 2 400 kreditů (od úrovně 10): vždy nejméně epický implantát, asi 10% šance na legendární.',
     'Setové implantáty: tři sady (Strážce trezoru, Lovec signálu, Ozvěnový mág), každá má kus do každého slotu. 2 kusy jedné sady dají bonus, 3 kusy silnější bonus se zvláštním efektem.',
@@ -966,8 +976,8 @@ export const MODES={
   arena:{name:'Aréna',desc:'3 proti 3. Body za zničení soupeřů a za relikvii ve středu. Vyhrává 20 bodů.',pvp:true,maps:['core','forge','archive','observ','citadel','storm'],max:6,win:20},
   control:{name:'Ovládnutí',desc:'3 proti 3 o tři body. Každý držený bod přidává skóre, vyhrává 100.',pvp:true,maps:['core','forge','archive','observ','citadel','storm'],max:6,win:100},
   convoy:{name:'Konvoj relikvie',desc:'3 proti 3 o vznášející se vůz s relikvií ve středu. Trať vede napříč arénou a každý tým má na jednom jejím konci svůj cíl. Vůz jede k cíli toho týmu, který má u vozu víc hrdinů. Vyhrává, kdo ho dotlačí na konec, jinak ten, na čí straně stojí, když dojde čas.',pvp:true,maps:['core','forge','archive','observ','storm'],max:6,win:100,fixedWin:true},
-  relicball:{name:'Relikviobal',desc:'3 proti 3 na dlouhém hřišti plném překážek, lávy a otáčivých laserů. Seber relikvii ve středu a doběhni s ní do soupeřovy branky, nebo ji pravým tlačítkem hoď. Kdo ji nese, pustí ji, když padne nebo ho něco omráčí. Vyhrává 5 gólů.',pvp:true,maps:['pitch'],max:6,win:5},
-  ctf:{name:'Únos relikvie',desc:'3 proti 3 v Pevnosti relikvií. Ukradni soupeřovu relikvii a dones ji ke své, která musí být doma. Vyhrávají 3 únosy.',pvp:true,maps:['bastion'],max:6,win:3},
+  relicball:{name:'Relikviobal',desc:'3 proti 3 na dlouhém hřišti plném překážek, lávy a otáčivých laserů. Seber relikvii ve středu a doběhni s ní do soupeřovy branky, nebo ji pravým tlačítkem hoď. Kdo ji nese, pustí ji, když padne, když ho něco omráčí, nebo když rychle ztratí velký kus zdraví. Vyhrává 5 gólů.',pvp:true,maps:['pitch'],max:6,win:5},
+  ctf:{name:'Únos relikvie',desc:'3 proti 3 v Pevnosti relikvií. Ukradni soupeřovu relikvii a dones ji ke své, která musí být doma. Vyhrávají 3 únosy, při remíze rozhodne prodloužení.',pvp:true,maps:['bastion'],max:6,win:3},
   mutant:{name:'Mutace týdne',desc:'3 proti 3 podle pravidel Arény, ale s dvěma mutacemi, které se mění každé pondělí. Vyhrává 20 bodů.',pvp:true,mutators:true,maps:['core','forge','archive','observ','citadel','storm'],max:6,win:20},
   elim:{name:'Eliminace',desc:'3 proti 3 na kola bez oživení. Kolo vyhrává tým, který zůstane stát. Po 40 s se aréna začne zmenšovat a mimo kruh to pálí. Vyhrávají 4 kola.',pvp:true,rounds:true,maps:['core','forge','archive','observ','citadel','storm'],max:6,win:4,time:900},
   duel:{name:'Souboj',desc:'1 proti 1 bez relikvie a bodů. Vyhrává, kdo první pětkrát zničí soupeře.',pvp:true,team:1,maps:['archive','core','sanctum'],max:2,win:5},

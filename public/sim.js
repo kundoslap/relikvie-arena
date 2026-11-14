@@ -140,7 +140,7 @@ const ahead=(u,dir,k)=>({x:u.x+dir.x*k,z:u.z+dir.z*k});
 function tele(M,e,dur,fn){e.t='tele';e.d=dur;fx(M,e);if(e.sh==='c')M.danger.push({x:e.x,z:e.z,r:e.r,until:M.time+dur});later(M,dur,fn)}
 
 // ---------- combat ----------
-function addShield(t,amt,src){t.shield=Math.min(maxShield(t),t.shield+amt*(1+(src?m(src,'shield'):0)/100))}
+function addShield(t,amt,src){t.shield=Math.min(maxShield(t),t.shield+amt*(1+(src?m(src,'shield'):0)/100)*(t.ball?BALL.carrierShield:1)*(t.atCart?CONVOY.shield:1))}
 function damage(M,t,amt,src,o={}){
   if(!t||t.dead||t.st.inv>0)return 0;
   if(t.invuln){if(!o.dot&&Math.random()<.2)fx(M,{t:'txt',x:r2(t.x),z:r2(t.z),s:'Imunní',c:'info'});return 0}
@@ -157,6 +157,7 @@ function damage(M,t,amt,src,o={}){
   if(src&&src.st.relic>0&&src.clsKey==='striker')amt*=1.25;
   if(src&&src.clsKey==='hook'&&t.hookBy===src.id&&t.hookT>M.time)amt*=1.2;
   if(t.vuln>M.time)amt*=1.25;
+  if(t.ball){amt*=BALL.carrierDmg;(t.bHits||(t.bHits=[])).push([M.time,amt])} // Relikviobal: the relic wears its carrier down
   if(src&&src.kind==='hero'&&!o.dot){const bb=basicMastery(src).b;if((bb[1]===1||bb[6]===1)&&myDot(src,t))amt*=1+(bb[1]===1?.06:0)+(bb[6]===1?.05:0)}
   // mastery milestones 30–100: Zesílení / Popravčí on the attacker, Odolnost on the target, Oslabení from basic hits
   if(src){if(src.empT>M.time)amt*=1+src.empK;if(src.exT>M.time&&t.hp<t.maxHp*.35)amt*=1.15;if(src.weakT>M.time)amt*=.9}
@@ -1062,7 +1063,8 @@ function botUpdate(M,u,dt){
     if(d2(u,p)>2.5)goal=p;
   }
   // Konvoj: stay with the cart, spread a little behind it on the own side; a fight far from it is left
-  else if(M.cart&&(!t||d>6||d2(u,M.cart)>CONVOY.r+1.5)){const sp=cartSpot(M.cart,u.team),spot={x:sp.x+((u.id%3)-1)*1.6,z:sp.z};if(d2(u,spot)>1.5)goal=spot}
+  // ranged heroes hold the cart and shoot from it; melee ones may step out after an enemy close by
+  else if(M.cart&&(!t||d>6||d2(u,M.cart)>CONVOY.r+1.5||u.C.pref>=6&&d2(u,M.cart)>CONVOY.r-1.5)){const sp=cartSpot(M.cart,u.team),spot={x:sp.x+((u.id%3)-1)*1.6,z:sp.z};if(d2(u,spot)>1.5)goal=spot}
   if(M.flags&&!u.bomb){const g=ctfGoal(M,u,t,d);if(g){goal=g.p;if(g.target)ai.target=g.target}}
   if(M.ball&&(!ai.retreat||M.ball.carrier===u.id)){const g=ballGoal(M,u,t,d);if(g){goal=g.p;if(g.target)ai.target=g.target}}
   if(!goal&&!ai.retreat&&ping&&!ping.tg&&ping.k==='here'&&(!t||d>8)&&d2(u,ping)>3)goal=ping;
@@ -1357,7 +1359,8 @@ function updRelic(M,dt){
 // Each team keeps a relic on a stand in front of its base. Touching the enemy relic picks it up; the carrier is slower
 // and cannot hide. Bringing it to your own stand while your relic is at home scores. A dropped relic returns home when
 // its team touches it, or by itself after 15 s.
-export const CTF={pick:1.7,score:2.6,ret:15,slow:.85};
+// Overtime (a draw on the clock): the next capture wins and counts even while the own relic is away.
+export const CTF={pick:1.7,score:2.6,ret:15,slow:.85,overtime:90};
 function ctfSetup(M){
   M.flags=M.map.bases.map((b,team)=>{const l=Math.hypot(b.x,b.z)||1,h=M.map.flags?.[team]||{x:b.x-b.x/l*10,z:b.z-b.z/l*10};
     return{team,home:{...h},x:h.x,z:h.z,state:'home',carrier:0,t:0}});
@@ -1372,8 +1375,8 @@ function updFlags(M,dt){
       f.x=c.x;f.z=c.z;c.st.cloak=0;
       // a capture: the carrier reaches its own stand while its own relic is at home
       const own=flagOf(M,c.team);
-      if(own.state==='home'&&d2(c,own.home)<CTF.score&&M.state==='play'){c.carry=null;c.caps=(c.caps||0)+1;M.score[c.team]++;homeFlag(M,f);
-        fx(M,{t:'flag',k:'cap',team:f.team,u:c.id});checkWin(M)}
+      if((own.state==='home'||M.overtime)&&d2(c,own.home)<CTF.score&&M.state==='play'){c.carry=null;c.caps=(c.caps||0)+1;M.score[c.team]++;homeFlag(M,f);
+        fx(M,{t:'flag',k:'cap',team:f.team,u:c.id});if(M.overtime)endMatch(M,c.team);else checkWin(M)}
       continue}
     if(f.state==='dropped'){f.t-=dt;if(f.t<=0){homeFlag(M,f);continue}}
     if(M.state!=='play')continue;
@@ -1400,7 +1403,7 @@ function updPoints(M,dt){
 // `idle` seconds alone drifts back towards the middle. The score is how far it got on each side (100 = the end, a win);
 // at the time limit the side it stands on wins. It slows down the further it gets (`slow` at the very end). Every 25 %
 // is a checkpoint: announced, a capture for the pushers, and the cart stands still for `hold` s so the defenders can regroup.
-export const CONVOY={r:4,spd:.45,extra:.2,contest:.6,slow:.35,hold:6,back:.25,idle:6,margin:12};
+export const CONVOY={shield:.5,r:6,spd:.45,extra:.2,contest:.6,slow:.35,hold:6,back:.25,idle:6,margin:12};
 // The track bends smoothly around pillars standing on it: a pillar in the +z half pushes it to +x, one in the −z half
 // to −x, so the track is the same for both teams (the maps are symmetric through the middle).
 export function newCart(map){const b=map.bases,x0=(b[0].x+b[1].x)/2,z0=(b[0].z+b[1].z)/2,L=map.r-CONVOY.margin;
@@ -1413,7 +1416,8 @@ export function cartAt(C,s,out={}){let o=0,side=1;for(const B of C.bumps){const 
 export const cartSpot=(C,team,off=1.6)=>cartAt(C,C.s-(team?-1:1)*off);
 function updCart(M,dt){
   const C=M.cart;if(M.state!=='play')return;
-  const c=[0,0];for(const u of M.units)if(u.kind==='hero'&&!u.dead&&d2(u,C)<CONVOY.r)c[u.team]++;
+  // the cart's field halves shields gained next to it, so a tank cannot hold it alone forever
+  const c=[0,0];for(const u of M.units){u.atCart=u.kind==='hero'&&!u.dead&&d2(u,C)<CONVOY.r;if(u.atCart)c[u.team]++}
   C.push=c[0]>c[1]?0:c[1]>c[0]?1:c[0]?2:-1;
   if(C.hold>0){C.hold-=dt;C.idle=0}
   else if(C.push===0||C.push===1){const t=C.push,sg=t?-1:1,k=c[t]-c[1-t],prog=Math.max(0,C.s*sg/C.L);C.idle=0;
@@ -1431,7 +1435,7 @@ function updCart(M,dt){
 // by running into the enemy goal; with the secondary attack the carrier throws it instead, and a thrown relic that lands in
 // a goal scores too (also an own goal). The carrier drops it when killed or stunned, so stuns are tackles. After a goal the
 // relic comes back to the middle in `reset` s. Team 0 defends the goal at −x and attacks the one at +x.
-export const BALL={pick:1.5,throwSpd:24,fric:2.2,drop:3,reset:3,noPickSelf:1,noPickThrow:.45,noPickOther:.12,slow:.9,throwCd:1.2,overtime:90};
+export const BALL={pick:1.5,throwSpd:24,fric:2.2,drop:3,reset:3,noPickSelf:1,noPickThrow:.45,noPickOther:.12,slow:.95,throwCd:1.2,overtime:90,carrierDmg:1.1,carrierShield:.5,burst:.45,burstT:2.5};
 const newBall=()=>({state:'wait',x:0,z:0,vx:0,vz:0,carrier:0,t:0,last:0,np:{}});
 // which team's goal a point is in (−1 outside both)
 export function goalOf(map,x,z){const G=map.goals;if(!G||Math.abs(z)>=G.w)return -1;return x<=-G.x+.3?0:x>=G.x-.3?1:-1}
@@ -1456,7 +1460,10 @@ function updBall(M,dt){
   if(B.state==='wait')B.state='loose';
   if(B.state==='reset'){B.t-=dt;if(B.t<=0){B.state='loose';B.x=0;B.z=0;B.vx=B.vz=0;B.np={};fx(M,{t:'ban',ti:'Relikvie je zpět ve středu',col:'var(--gold)',d:1.3})}return}
   if(B.state==='carried'){const c=M.units.find(u=>u.id===B.carrier);
-    if(!c||c.dead||c.remove||c.st.stun>0){dropBall(M,B,c);if(!c)B.state='loose'}
+    // knocked out: killed, stunned, or hit for burst × max HP within burstT seconds (so ranged heroes can win it back too)
+    if(c&&c.bHits){c.bHits=c.bHits.filter(h=>h[0]>M.time-BALL.burstT)}
+    const burst=c&&c.bHits&&c.bHits.reduce((a,h)=>a+h[1],0)>=c.maxHp*BALL.burst;
+    if(!c||c.dead||c.remove||c.st.stun>0||burst){if(c)c.bHits=null;dropBall(M,B,c);if(!c)B.state='loose'}
     else{B.x=c.x;B.z=c.z;c.st.cloak=0;const g=goalOf(M.map,c.x,c.z);if(g>=0&&g!==c.team)ballGoalScored(M,B,c.team,c.id,'carry');return}}
   if(B.state!=='loose')return;
   // a loose relic slides, slows down and bounces off pillars and walls
@@ -1470,7 +1477,7 @@ function updBall(M,dt){
   else B.vx=B.vz=0;
   const g=goalOf(M.map,B.x,B.z);if(g>=0){const u=M.units.find(x=>x.id===B.last);ballGoalScored(M,B,1-g,u&&u.team===1-g?u.id:0,'shot');return}
   for(const u of M.units){if(u.kind!=='hero'||u.dead||u.st.stun>0||u.ball||(B.np[u.id]||0)>M.time||d2(u,B)>BALL.pick)continue;
-    B.state='carried';B.carrier=u.id;B.last=u.id;u.ball=true;u.st.cloak=0;fx(M,{t:'txt',x:r2(u.x),z:r2(u.z),s:'Má relikvii',c:'info'});break}
+    B.state='carried';B.carrier=u.id;B.last=u.id;u.ball=true;u.bHits=null;u.st.cloak=0;fx(M,{t:'txt',x:r2(u.x),z:r2(u.z),s:'Má relikvii',c:'info'});break}
 }
 // rotating laser arms of a map (`sweepers`): a bar 2 × len long turning at spd rad/s; a touch deals dps, throws the unit
 // 3 m along the arm's motion and stuns it for a moment (a carrier drops the relic), then 1 s of grace
@@ -1493,7 +1500,7 @@ function ballGoal(M,u,t,d){
   const B=M.ball,G=M.map.goals,atk=u.team?-1:1,enemyGoal={x:atk*(G.x+1.2),z:0},ownGoal={x:-atk*(G.x-3),z:0},mates=heroesOf(M,u.team).filter(x=>!x.dead);
   const nearest=p=>mates.slice().sort((a,b)=>d2(a,p)-d2(b,p)).indexOf(u);
   if(B.state==='carried'&&B.carrier===u.id){
-    if(d2(u,enemyGoal)<13&&!blocked(M.map,u,enemyGoal,.3)&&!(u.scd>0)&&Math.random()<.08)secondary(M,u,{x:enemyGoal.x,z:rnd(-2.5,2.5)});
+    if(d2(u,enemyGoal)<16&&!blocked(M.map,u,enemyGoal,.3)&&!(u.scd>0)&&Math.random()<.08)secondary(M,u,{x:enemyGoal.x,z:rnd(-2.5,2.5)});
     return{p:enemyGoal}}
   if(B.state==='carried'){const c=M.units.find(x=>x.id===B.carrier);if(!c)return null;
     if(c.team===u.team){if(t&&d<6)return null;return{p:{x:c.x+atk*5,z:c.z+((u.id%3)-1)*4}}}
@@ -1576,8 +1583,9 @@ export function step(M,dt=TICK){
   if(M.state==='countdown'){M.countdown-=dt;if(M.countdown<=0){M.state='play';
     if(M.D.mutators)fx(M,{t:'ban',ti:'Mutace týdne',sub:[...M.emod].map(k=>MUTATORS[k]?.name).join(' + '),col:'var(--gold)',d:3.5})}}
   else if(M.state==='play'){M.timeLeft-=dt;if(M.timeLeft<=0){
-    // Relikviobal: a draw on the clock goes to overtime, the next goal wins (BALL.overtime s, then a draw)
-    if(M.ball&&!M.overtime&&M.score[0]===M.score[1]){M.overtime=true;M.timeLeft=BALL.overtime;fx(M,{t:'ban',ti:'Prodloužení',sub:'Další gól vyhrává',col:'var(--gold)',d:2.4})}
+    // Relikviobal and Únos relikvie: a draw on the clock goes to overtime, the next goal or capture wins (then a draw)
+    if((M.ball||M.flags)&&!M.overtime&&M.score[0]===M.score[1]){M.overtime=true;M.timeLeft=M.ball?BALL.overtime:CTF.overtime;
+      fx(M,{t:'ban',ti:'Prodloužení',sub:M.ball?'Další gól vyhrává':'Další únos vyhrává, vlastní relikvie nemusí být doma',col:'var(--gold)',d:2.8})}
     else{endMatch(M,M.D.pvp?undefined:1);return}}}
   for(let i=M.timers.length-1;i>=0;i--){const T=M.timers[i];T.t-=dt;if(T.t<=0){M.timers.splice(i,1);T.fn()}}
   M.danger=M.danger.filter(g=>g.until>M.time);
@@ -1609,7 +1617,7 @@ export function snapshotFor(M,uid,events){
   if(events?.some(e=>e.team!=null))events=events.filter(e=>e.team==null||(me&&e.team===me.team));
   const vis=u=>!me||u.team===me.team||u.st.cloak<=0||(!me.dead&&d2(u,me)<3.5);
   const boss=M.units.find(u=>u.kind==='boss');
-  return{type:'s',t:r2(M.time),st:M.state,cd:r2(M.countdown),tl:Math.ceil(M.timeLeft),sc:M.score,
+  return{type:'s',t:r2(M.time),st:M.state,cd:r2(M.countdown),tl:Math.ceil(M.timeLeft),ot:M.overtime?1:0,sc:M.score,
     rl:[M.relic.state==='up'?1:0,Math.ceil(M.relic.t)],
     pt:M.points.map(p=>[p.own,Math.round(p.prog)]),lv:M.lives,cv:M.cart?[r2(M.cart.s),M.cart.push,Math.ceil(M.cart.hold)]:null,
     bl:M.ball?[{wait:0,loose:0,carried:1,reset:2}[M.ball.state],r2(M.ball.x),r2(M.ball.z),M.ball.carrier,Math.ceil(M.ball.t)]:null,

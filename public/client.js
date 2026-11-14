@@ -1036,7 +1036,7 @@ function drawHUD(){
   const info=G.info,mode=info.mode,meInfo=G.roster.get(G.you),sk=mySkills();if(sk&&G.slotsFor!==sk.key)buildSlots();
   const clock=s.tl>1e6?'':`${Math.floor(s.tl/60)}:${String(s.tl%60).padStart(2,'0')}`;
   let mb='';
-  if(MODES[mode]?.pvp){setTxt('sL','Modří');setTxt('sR','Rudí');setTxt('s0',s.sc[0]);setTxt('s1',s.sc[1]);setTxt('scoreSub','do '+(G.info?.win||MODES[mode].win));
+  if(MODES[mode]?.pvp){setTxt('sL','Modří');setTxt('sR','Rudí');setTxt('s0',s.sc[0]);setTxt('s1',s.sc[1]);setTxt('scoreSub',s.ot?'prodloužení':'do '+(G.info?.win||MODES[mode].win));
     if(mode==='ctf'&&s.fg){const my=meInfo?.t??0;mb=`<div class="flags">${[my,1-my].map(team=>`<div class="fl${team}"><b>${team===my?'Vaše':'Soupeřova'} relikvie</b> ${flagText(s.fg[team])}</div>`).join('')}</div>`}
     if(mode==='elim'&&s.el){const [n,pause,,a0,a1,shrinkIn]=s.el,my=meInfo?.t??0,size=S.teamSize(mode),dots=(k,t)=>`<span class="t${t}">${'●'.repeat(k)}${'○'.repeat(Math.max(0,size-k))}</span>`;
       mb=`<div class="elimbar"><b>Kolo ${n}</b> ${dots(my?a1:a0,my)} <small>proti</small> ${dots(my?a0:a1,1-my)}<small>${pause?`další kolo za ${pause} s`:shrinkIn?`kruh se zmenší za ${shrinkIn} s`:'aréna se zmenšuje'}</small></div>`}

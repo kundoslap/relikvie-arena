@@ -2486,4 +2486,10 @@ export default {"Neonová aréna 3 proti 3, kooperace proti bossům, hodnocená 
 "Vzácný a epický zásobník šance na vyšší vzácnost zvyšují.":"The rare and the epic cache raise the chance of higher rarity.",
 "Získáno: {} ({}, sada {}).":"Received: {} ({}, set {}).",
 "Ozvěna · zdarma":"Echo · free",
-"Epický zásobník a setové implantáty":"Epic cache and set implants"};
+"Epický zásobník a setové implantáty":"Epic cache and set implants",
+"3 proti 3 na dlouhém hřišti plném překážek, lávy a otáčivých laserů. Seber relikvii ve středu a doběhni s ní do soupeřovy branky, nebo ji pravým tlačítkem hoď. Kdo ji nese, pustí ji, když padne, když ho něco omráčí, nebo když rychle ztratí velký kus zdraví. Vyhrává 5 gólů.":"3 vs 3 on a long field full of obstacles, lava and rotating lasers. Grab the relic in the middle and run it into the enemy goal, or throw it with the right mouse button. The carrier drops it when killed, stunned, or after losing a big chunk of health quickly. 5 goals win.",
+"Vyváženější Konvoj a Relikviobal":"Fairer Convoy and Relicball",
+"Další únos vyhrává, vlastní relikvie nemusí být doma":"Next capture wins, your own relic does not need to be home",
+"prodloužení":"overtime",
+"3 proti 3 v Pevnosti relikvií. Ukradni soupeřovu relikvii a dones ji ke své, která musí být doma. Vyhrávají 3 únosy, při remíze rozhodne prodloužení.":"3v3 in the Relic Fortress. Steal the enemy relic and bring it to yours, which must be at home. 3 captures win, a draw goes to overtime.",
+"Prodloužení v Únosu relikvie":"Overtime in Relic Raid"};
