@@ -323,6 +323,12 @@ h2.sec{margin:0;font-family:var(--display);font-size:26px;font-weight:800;letter
 .panel.featured h3{color:var(--gold)}
 .mc[aria-pressed="true"]{border-color:var(--gold);background:rgba(255,198,109,.08)}
 .chips{display:flex;flex-wrap:wrap;gap:6px}
+/* map previews (public/maps/<key>.jpg, a top-down shot of each arena) */
+.chip.mapc{flex:1 1 170px;max-width:240px;padding:6px 6px 8px}.chip.mapc b{display:block;font-weight:600;margin:0 2px}.chip.mapc small{margin:0 2px}
+.mapc img,.vote button img,.mappv img{display:block;width:100%;aspect-ratio:16/10;object-fit:cover;border-radius:2px;background:#05070e}
+.mapc img{margin-bottom:6px;opacity:.85}.mapc[aria-pressed="true"] img{opacity:1;outline:1px solid var(--gold)}
+.vote button img{margin-bottom:4px}
+.mappv{display:flex;gap:12px;align-items:center}.mappv img{width:220px;max-width:46%;flex:none;border:1px solid var(--line)}.mappv .help{margin:0}
 .chip{background:rgba(10,14,28,.7);border:1px solid var(--line);border-radius:3px;padding:7px 12px;font-size:13px;text-align:left}
 .chip small{display:block;color:var(--muted);font-size:11px}
 .chip[aria-pressed="true"]{border-color:var(--gold);color:var(--gold)}

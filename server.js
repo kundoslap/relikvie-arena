@@ -16,7 +16,7 @@ import {createStats} from './stats.js';
 
 const PORT=Number(process.env.PORT)||8080;
 const PUB=path.join(path.dirname(fileURLToPath(import.meta.url)),'public');
-const TYPES={'.woff2':'font/woff2','.woff':'font/woff','.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.png':'image/png','.svg':'image/svg+xml','.ico':'image/x-icon','.json':'application/json','.webp':'image/webp','.webmanifest':'application/manifest+json; charset=utf-8'};
+const TYPES={'.woff2':'font/woff2','.woff':'font/woff','.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.png':'image/png','.jpg':'image/jpeg','.svg':'image/svg+xml','.ico':'image/x-icon','.json':'application/json','.webp':'image/webp','.webmanifest':'application/manifest+json; charset=utf-8'};
 // Three.js and the two fonts come from npm (exact versions in package.json) and are served from here, so the game
 // loads nothing from other servers: no CDN can be down or blocked, and no player's address goes to a third party.
 // The version is in the address (/vendor/three@0.160.0/…), so browsers may keep these files for a year.

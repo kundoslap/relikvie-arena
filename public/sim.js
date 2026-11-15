@@ -393,10 +393,10 @@ const SK={
   technician:[
     (M,u,pt)=>{const tp=clampReach(M,u,pt,15),dir=aimDir(u,tp),dist=Math.max(1,d2(u,tp)),T=tech(M,u),R=4+m(u,'zoneR'),long=m(u,'zoneLong');
       shoot(M,u,dir,{dmg:0,speed:22,range:dist,color:0x7dff9a,size:2.2,noHit:true,onEnd:(p)=>{
-        M.zones.push({id:M.nextId++,x:p.x,z:p.z,r:R,t:5+(long?3:0),acc:0,dps:T*.5*(1+m(u,'zoneDps')/100),src:u,team:u.team,color:0x7dff9a,slow:!!long});
+        M.zones.push({id:M.nextId++,x:p.x,z:p.z,r:R,t:5+(long?3:0),acc:0,dps:T*.42*(1+m(u,'zoneDps')/100),src:u,team:u.team,color:0x7dff9a,slow:!!long});
         fx(M,{t:'ring',x:r2(p.x),z:r2(p.z),c:0x7dff9a,a:.5,b:R,d:.4})}})},
-    (M,u)=>{const hps=22+m(u,'restore'),sh=m(u,'restoreSh');fx(M,{t:'ring',x:r2(u.x),z:r2(u.z),c:0x6affd8,a:.5,b:7.5,d:.6});
-      for(const a of near(friends(M,u).filter(x=>x.kind==='hero'),u,7.5)){a.st.hot={hps,t:3,acc:0,src:u};a.st.bleed=null;a.st.slow=0;if(sh)addShield(a,sh,u);fx(M,{t:'burst',x:r2(a.x),z:r2(a.z),y:1.2,c:0x6affd8,n:14,s:1.5,u:4,l:.8})}},
+    (M,u)=>{const hps=18+m(u,'restore'),sh=m(u,'restoreSh');fx(M,{t:'ring',x:r2(u.x),z:r2(u.z),c:0x6affd8,a:.5,b:7.5,d:.6});
+      for(const a of near(friends(M,u).filter(x=>x.kind==='hero'),u,7.5)){a.st.hot={hps,t:3,acc:0,src:u};a.st.bleed=null;a.st.slow=0;a.st.hasteK=a.st.haste>0?Math.max(a.st.hasteK||1,1.2):1.2;a.st.haste=Math.max(a.st.haste||0,2.5);if(sh)addShield(a,sh,u);fx(M,{t:'burst',x:r2(a.x),z:r2(a.z),y:1.2,c:0x6affd8,n:14,s:1.5,u:4,l:.8})}},
     (M,u,pt)=>{const tp=clampReach(M,u,pt,13),R=4.5+m(u,'empR'),ov=m(u,'overload');aimDir(u,tp);fx(M,{t:'beam',a:[r2(u.x),1.3,r2(u.z)],b:[r2(tp.x),.4,r2(tp.z)],c:0x6acbff,w:.06,d:.25});
       later(M,.2,()=>{fx(M,{t:'emp',x:r2(tp.x),z:r2(tp.z),r:R});
         for(const e of near(foes(M,u),tp,R)){damage(M,e,tech(M,u)*1.1*(ov?1.4:1),u,{color:0x6acbff});e.energy=Math.max(0,(e.energy||0)-40);e.st.silence=Math.max(e.st.silence,1.1+(ov?1:0))}})},
@@ -1039,6 +1039,8 @@ function botSkills(M,u,t,d,aim,seen){
     if(d<14&&seen&&cast(M,u,2,{x:t.x+t.vx*.9,z:t.z+t.vz*.9}))return;
   }else{
     if(hurt.length&&cast(M,u,1,u))return;
+    // Obnova speeds up a relic carrier (own or a mate within reach) on its way home or to the goal
+    if((u.carry!=null||u.ball||near(friends(M,u).filter(x=>x.kind==='hero'&&(x.carry!=null||x.ball)),u,7).length)&&cast(M,u,1,u))return;
     if(u.st.bleed&&cast(M,u,1,u))return;
     if(!t)return;
     if(u.ult>=100&&d<14){cast(M,u,3,aim);return}
@@ -1513,7 +1515,9 @@ function updVents(M,dt){
 // conveyor belts (map.belts): whoever stands on one is carried along (a jump pad flight is not)
 function updBelts(M,dt){
   for(const B of M.map.belts){const b=B.b;for(const u of M.units){if(u.dead||u.kind==='boss'||u.dash?.jump)continue;
-    if(u.x<b[0]||u.x>b[2]||u.z<b[1]||u.z>b[3])continue;u.x+=B.v[0]*dt;u.z+=B.v[1]*dt;collide(u,M.map)}}
+    if(u.x<b[0]||u.x>b[2]||u.z<b[1]||u.z>b[3])continue;u.x+=B.v[0]*dt;u.z+=B.v[1]*dt;collide(u,M.map)}
+    // a loose relic rides along too
+    const L=M.ball;if(L&&L.state==='loose'&&L.x>=b[0]&&L.x<=b[2]&&L.z>=b[1]&&L.z<=b[3]){L.x+=B.v[0]*dt;L.z+=B.v[1]*dt}}
 }
 // Relikviobal bots: the carrier runs for the goal and throws from close; mates run ahead of it; against an enemy carrier
 // the two nearest chase it and one guards the goal; a loose relic draws the nearest two (three in the own half)

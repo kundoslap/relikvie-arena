@@ -891,7 +891,7 @@ function voteHTML(L){
   const n=L.vote.counts,max=Math.max(0,...Object.values(n)),total=Object.values(n).reduce((a,b)=>a+b,0);
   return`<div><div class="lbl">Hlasování o mapě${total?` · ${total} ${total===1?'hlas':total<5?'hlasy':'hlasů'}`:''}</div>
     <div class="vote" id="lVote">${Object.keys(n).map(k=>`<button type="button" data-vote="${k}" aria-pressed="${L.vote.mine===k}" class="${max&&n[k]===max?'lead':''}">
-      <b>${MAPS[k].name}</b><small>${n[k]} ${n[k]===1?'hlas':n[k]>1&&n[k]<5?'hlasy':'hlasů'}</small><i style="width:${total?n[k]/total*100:0}%"></i></button>`).join('')}</div>
+      <img src="/maps/${k}.jpg" alt="" loading="lazy" onerror="this.remove()"><b>${MAPS[k].name}</b><small>${n[k]} ${n[k]===1?'hlas':n[k]>1&&n[k]<5?'hlasy':'hlasů'}</small><i style="width:${total?n[k]/total*100:0}%"></i></button>`).join('')}</div>
     <p class="help">${L.vote.mine?'Hlas můžeš změnit.':'Klikni na mapu, kterou chceš hrát.'} Vyhraje mapa s nejvíc hlasy, při shodě rozhodne los. Bez hlasů zůstane ${MAPS[L.map].name}.</p></div>`;
 }
 function renderLobby(){
@@ -907,7 +907,7 @@ function renderLobby(){
     document.querySelectorAll('#lDiff button').forEach(b=>b.onclick=()=>wsSend({type:'cfg',diff:b.dataset.v}))}
   else $('#lobbyCfg').innerHTML=`<div style="display:grid;gap:10px">
     ${L.quick?`<div class="lbl" style="margin:0;color:var(--gold);font-size:13px">Rychlá hra · ${esc(M.name)}</div>`:seg('lMode',Object.entries(MODES).map(([k,m])=>[k,m.name]),L.mode)}
-    ${L.vote?voteHTML(L):seg('lMap',M.maps.map(k=>[k,MAPS[k].name]),L.map)}
+    ${L.vote?voteHTML(L):seg('lMap',M.maps.map(k=>[k,MAPS[k].name]),L.map)+`<div class="mappv"><img src="/maps/${L.map}.jpg" alt="" loading="lazy" onerror="this.remove()"><p class="help">${MAPS[L.map].desc}</p></div>`}
     ${L.mode==='boss'?seg('lBoss',Object.entries(BOSSES).map(([k,b])=>[k,b.name]),L.boss):''}
     ${seg('lDiff',[['easy','Lehká'],['normal','Normální'],['hard','Těžká']],L.diff)}
     ${L.rules?rulesHTML(L,seg):''}
