@@ -931,6 +931,9 @@ function steer(M,u,wx,wz){
   if(Math.random()<.01)u.ai.side=0;
   for(const h of M.map.hazards){const d=d2(u,h);if(d<h.r+.5){wx+=(u.x-h.x)/(d||1)*2;wz+=(u.z-h.z)/(d||1)*2}}
   for(const g of M.danger){if(g.own===u)continue;const d=d2(u,g);if(d<g.r+.8){wx+=(u.x-g.x)/(d||1)*3;wz+=(u.z-g.z)/(d||1)*3}}
+  // laser bars: step away from a bar that is close
+  for(const S of M.map.sweepers||[]){const P=sweepPose(S,M.time),cx=Math.cos(P.a),cz=Math.sin(P.a),dx=u.x-P.x,dz=u.z-P.z;
+    if(Math.abs(dx*cx+dz*cz)>S.len+1)continue;const off=-dx*cz+dz*cx;if(Math.abs(off)>SWEEP.w+u.radius+1.6)continue;const sg=Math.sign(off)||1;wx-=cz*sg*2.5;wz+=cx*sg*2.5}
   wl=Math.hypot(wx,wz);if(wl>1){wx/=wl;wz/=wl}
   return[wx,wz];
 }
@@ -1482,17 +1485,35 @@ function updBall(M,dt){
 // rotating laser arms of a map (`sweepers`): a bar 2 × len long turning at spd rad/s; a touch deals dps, throws the unit
 // 3 m along the arm's motion and stuns it for a moment (a carrier drops the relic), then 1 s of grace
 export const SWEEP={w:.9,kb:3,stun:.4,grace:1};
-export const sweepAngle=(S,t)=>S.ph+S.spd*t;
+// where a bar is at time t: centre, angle and (for a sliding gate) its velocity
+export function sweepPose(S,t){if(!S.mv)return{x:S.x,z:S.z,a:S.ph+S.spd*t,vx:0,vz:0};
+  const w=S.spd*t+S.ph,k=Math.sin(w),c=Math.cos(w)*S.spd;return{x:S.x+S.mv[0]*k,z:S.z+S.mv[1]*k,a:S.ang||0,vx:S.mv[0]*c,vz:S.mv[1]*c}}
+export const sweepAngle=(S,t)=>sweepPose(S,t).a;
 function updSweepers(M,dt){
   if(M.state!=='play')return;
-  for(const S of M.map.sweepers){const a=sweepAngle(S,M.time),cx=Math.cos(a),cz=Math.sin(a);
+  for(const S of M.map.sweepers){const P=sweepPose(S,M.time),a=P.a,cx=Math.cos(a),cz=Math.sin(a);
     for(const u of M.units){if(u.dead||u.kind==='boss'||(u.swT||0)>M.time||u.st.inv>0&&u.dash)continue;
-      const dx=u.x-S.x,dz=u.z-S.z,along=dx*cx+dz*cz;if(Math.abs(along)>S.len)continue;
+      const dx=u.x-P.x,dz=u.z-P.z,along=dx*cx+dz*cz;if(Math.abs(along)>S.len)continue;
       const off=-dx*cz+dz*cx;if(Math.abs(off)>SWEEP.w+u.radius)continue;
-      u.swT=M.time+SWEEP.grace;const sg=Math.sign(along)*Math.sign(S.spd)||1,tx=-cz*sg,tz=cx*sg;
+      // a turning arm throws along its turn, a sliding gate along its motion
+      u.swT=M.time+SWEEP.grace;const sg=S.mv?(Math.sign(-P.vx*cz+P.vz*cx)||Math.sign(off)||1):(Math.sign(along)*Math.sign(S.spd)||1),tx=-cz*sg,tz=cx*sg;
       damage(M,u,S.dps,null,{color:0x7dffb0});if(u.dead)continue;
       u.x+=tx*SWEEP.kb;u.z+=tz*SWEEP.kb;u.kbT=M.time;collide(u,M.map);if(u.kind==='hero')u.st.stun=Math.max(u.st.stun,SWEEP.stun);
       fx(M,{t:'burst',x:r2(u.x),z:r2(u.z),y:1,c:0x7dffb0,n:16,s:5,u:2,l:.4})}}
+}
+// flame vents (map.vents): 0 off, 1 glowing (VENT.warn s before the fire), 2 burning; the fire deals dps in 0.5 s ticks
+export const VENT={warn:1.2};
+export function ventState(V,t){const k=(((t+V.ph)%V.per)+V.per)%V.per;return k<V.on?2:k>V.per-VENT.warn?1:0}
+function updVents(M,dt){
+  if(M.state!=='play')return;M.ventAcc=(M.ventAcc||0)+dt;const tick=M.ventAcc>=.5;if(tick)M.ventAcc-=.5;
+  for(const V of M.map.vents){const s=ventState(V,M.time);if(!s)continue;M.danger.push({x:V.x,z:V.z,r:V.r,until:M.time+.05});
+    if(s<2||!tick)continue;
+    for(const u of M.units)if(!u.dead&&u.kind!=='boss'&&d2(u,V)<V.r+u.radius*.5){damage(M,u,V.dps*.5,null,{dot:true,color:0xff8a3d});if(!u.dead&&u.kind==='hero')u.st.cloak=0}}
+}
+// conveyor belts (map.belts): whoever stands on one is carried along (a jump pad flight is not)
+function updBelts(M,dt){
+  for(const B of M.map.belts){const b=B.b;for(const u of M.units){if(u.dead||u.kind==='boss'||u.dash?.jump)continue;
+    if(u.x<b[0]||u.x>b[2]||u.z<b[1]||u.z>b[3])continue;u.x+=B.v[0]*dt;u.z+=B.v[1]*dt;collide(u,M.map)}}
 }
 // Relikviobal bots: the carrier runs for the goal and throws from close; mates run ahead of it; against an enemy carrier
 // the two nearest chase it and one guards the goal; a loose relic draws the nearest two (three in the own half)
@@ -1598,7 +1619,7 @@ export function step(M,dt=TICK){
   if(M.mode==='control')updPoints(M,dt);
   if(M.cart)updCart(M,dt);
   if(M.ball)updBall(M,dt);
-  if(M.map.sweepers)updSweepers(M,dt);
+  if(M.map.sweepers)updSweepers(M,dt);if(M.map.vents)updVents(M,dt);if(M.map.belts)updBelts(M,dt);
   if(M.flags)updFlags(M,dt);
   if(M.elim)updElim(M,dt);
   if(M.D.waves)updWaves(M,dt);

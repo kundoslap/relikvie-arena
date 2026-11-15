@@ -395,11 +395,13 @@ export function buildArena(scene,mapKey,hiQ){
       const l=new THREE.PointLight(col,5,9,1.5);l.position.set(p.x,1.4,p.z);g.add(l);
       updaters.push((dt,t)=>{ring.rotation.y=t*1.4+pi;inner.rotation.x=t*2.1;inner.rotation.y=-t*.9;disc.material.opacity=.28+Math.sin(t*3+pi)*.08})}});
   // Neonový stadion: solid walls along `walls` (the pillars under them only collide), goal frames in the defending team's colour
-  if(F){const wm=new THREE.MeshStandardMaterial({color:0x101a26,metalness:.7,roughness:.35}),H=2.4;
+  // solid walls (Neonový stadion, Neonový přístav): drawn along `walls`, the pillars under them only collide
+  if(map.walls){const wm=new THREE.MeshStandardMaterial({color:0x101a26,metalness:.7,roughness:.35}),H=F?2.4:2.8;
     for(const [x1,z1,x2,z2] of map.walls){const L=Math.hypot(x2-x1,z2-z1),geo=new THREE.BoxGeometry(L+2.3,H,2.3),m=new THREE.Mesh(geo,wm);
       m.position.set((x1+x2)/2,H/2,(z1+z2)/2);m.rotation.y=-Math.atan2(z2-z1,x2-x1);m.castShadow=m.receiveShadow=true;g.add(m);
       const e=new THREE.LineSegments(new THREE.EdgesGeometry(geo),new THREE.LineBasicMaterial({color:HDR(T.accent,1.2)}));e.position.copy(m.position);e.rotation.copy(m.rotation);g.add(e);
-      const top=new THREE.Mesh(new THREE.BoxGeometry(L+2.32,.1,.25),new THREE.MeshBasicMaterial({color:HDR(T.accent,1.1)}));top.position.set(m.position.x,H+.05,m.position.z);top.rotation.y=m.rotation.y;g.add(top)}
+      const top=new THREE.Mesh(new THREE.BoxGeometry(L+2.32,.1,.25),new THREE.MeshBasicMaterial({color:HDR(T.accent,1.1)}));top.position.set(m.position.x,H+.05,m.position.z);top.rotation.y=m.rotation.y;g.add(top)}}
+  if(F){
     // the field lines: the halfway line, the centre circle and a box in front of each goal
     const lm=new THREE.MeshBasicMaterial({color:HDR(T.accent,.9),transparent:true,opacity:.35,depthWrite:false,blending:THREE.AdditiveBlending});
     const strip=(x,z,w,d)=>{const m=new THREE.Mesh(new THREE.PlaneGeometry(w,d),lm);m.rotation.x=-Math.PI/2;m.position.set(x,.04,z);g.add(m)};

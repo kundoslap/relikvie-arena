@@ -93,6 +93,11 @@ export const SECONDARY={
   hook:{name:'Trhnutí',cd:6,icon:'hook',desc:'Krátký hák na 9 m: 80 % útoku a přitáhne zasaženého soupeře o 3 m k tobě.'}};
 // "Novinky" in the hub, newest first; id marks what a player has already seen
 export const CHANGELOG=[
+  {id:'2026-12w',title:'Nové mapy: Neonový přístav a Překladiště',items:[
+    'Neonový přístav (Únos relikvie): kontejnerový přístav. Každá relikvie stojí v kontejnerové ohradě, jejíž brány hlídají plamenné trysky. V bočních cestách jedou dopravní pásy, přes které jezdí posuvná laserová brána, a ve středu se otáčí jeřáb.',
+    'Překladiště (Konvoj relikvie, Aréna, Ovládnutí): trať vozu vede středem mezi dvěma stohy nákladu. Na křídlech se otáčejí dva jeřáby, přes oba konce trati jezdí posuvné lasery, dopravní pásy vezou oba týmy k trati a u středu hoří čtyři trysky.',
+    'Nové pasti: plamenná tryska se 1,2 s předem rozžhaví, pak hoří a pálí 50 HP/s. Dopravní pás veze každého 3 m/s. Posuvná laserová brána zraní, odhodí a omráčí jako otáčivé rameno. Všechno je vidět i na minimapě.',
+    'Obě mapy jsou souměrné středem, takže oba týmy mají stejné pasti ve stejném pořadí. V Únosu se teď hlasuje o mapě.']},
   {id:'2026-12v',title:'Prodloužení v Únosu relikvie',items:[
     'Ve 120 zápasech botů končil Únos relikvie remízou skoro ve čtvrtině případů.',
     'Když je po čase nerozhodně, hraje se 90 s prodloužení. První únos vyhrává a v prodloužení se počítá, i když vaše relikvie zrovna doma není.',
@@ -883,6 +888,22 @@ function bastionPillars(){
   out.push([0,0,2.6],[0,-22,2],[0,22,2]);
   return out;
 }
+// Moving parts and traps (any map can have them; the simulation and the client read them from the map):
+// - sweepers: laser bars 2 × len long. Without `mv` a bar turns around (x,z) at spd rad/s; with mv:[dx,dz] it keeps the
+//   angle `ang` and slides back and forth between (x,z) − mv and (x,z) + mv (spd is the angular frequency).
+// - vents: flame jets on a cycle of `per` s (shifted by ph): they glow VENT.warn s ahead, then burn for `on` s (dps).
+// - belts: conveyor boxes b:[x0,z0,x1,z1] that carry everyone standing on them by v:[vx,vz] m/s.
+// The maps below are symmetric through the centre (a turn by 180°), so both teams get the same traps in the same order.
+const mirror=w=>w.map(([x1,z1,x2,z2])=>[-x1,-z1,-x2,-z2]);
+function wallsToPillars(walls,r=1.15){const pillars=[];for(const [x1,z1,x2,z2] of walls){const L=Math.hypot(x2-x1,z2-z1),n=Math.max(1,Math.round(L/1.6));
+  for(let i=0;i<=n;i++)pillars.push([Math.round((x1+(x2-x1)*i/n)*10)/10,Math.round((z1+(z2-z1)*i/n)*10)/10,r,1])}return pillars}
+// Neonový přístav (Únos relikvie): container walls. Each relic stands in a container yard open towards its base; the
+// gates on the north and south side are guarded by flame vents. The side lanes have conveyor belts (the north one runs
+// towards the red side, the south one towards the blue side) crossed by a sliding laser gate; a crane turns in the middle.
+const HARBOR_WALLS=(()=>{const blue=[[-36,-8,-30,-8],[-36,8,-30,8],[-22,-4,-22,4],[-18,-14,-6,-14],[-18,14,-6,14],[-26,-19,-26,-27],[-26,19,-26,27]];return[...blue,...mirror(blue)]})();
+// Překladiště (Konvoj relikvie, Aréna, Ovládnutí): the cart track runs north-south through the middle, bent by two
+// cargo stacks; two cranes turn on the flanks, laser gates slide across the track near both ends, belts feed each side
+// towards the track and four vents flank the centre.
 export const MAPS={
   core:{name:'Neonové jádro',desc:'Symetrická aréna se sloupy a relikvií ve středu.',r:34,
     pillars:[[-10,-9,2.2],[-10,9,2.2],[10,-9,2.2],[10,9,2.2],[0,-17,2.6],[0,17,2.6],[-19,-17,1.8],[-19,17,1.8],[19,-17,1.8],[19,17,1.8],[-16,0,1.6],[16,0,1.6]],
@@ -921,6 +942,20 @@ export const MAPS={
     sweepers:[{x:-22,z:0,len:6,spd:.9,ph:0,dps:45},{x:22,z:0,len:6,spd:.9,ph:Math.PI,dps:45}],
     hazards:[{x:-9,z:0,r:2.2,dps:30},{x:9,z:0,r:2.2,dps:30}],bases:[{x:-32,z:-12},{x:32,z:12}],points:[{x:0,z:0},{x:0,z:-10},{x:0,z:10}],bossAt:{x:0,z:0},
     theme:{floor:0x07101a,gridA:[.3,1,.7],gridB:[1,.35,.65],accent:0x7dffb0,fog:0x03070c,sky:[0x03070c,0x0a2230],pillar:'hex',amb:'motes',ambColor:0x9dffcf,rim:0x7dffb0,skyline:[0x7dffb0,0x3fb8ff,0xff3f8e,0xffc66d]}},
+  harbor:{name:'Neonový přístav',desc:'Kontejnerový přístav s pásy, posuvnými lasery, plamennými tryskami u bran a jeřábem ve středu. Jen pro Únos relikvie.',r:44,ctfOnly:true,
+    walls:HARBOR_WALLS,pillars:[...wallsToPillars(HARBOR_WALLS),[0,0,1.3],[-12,-6,1.4],[-12,6,1.4],[12,-6,1.4],[12,6,1.4]],
+    sweepers:[{x:0,z:0,len:8,spd:.6,ph:0,dps:40},{x:0,z:-24,len:3.6,ang:Math.PI/2,mv:[8,0],spd:.8,ph:0,dps:40},{x:0,z:24,len:3.6,ang:Math.PI/2,mv:[-8,0],spd:.8,ph:0,dps:40}],
+    vents:[{x:-25,z:-11,r:2,per:7,on:2,ph:0,dps:50},{x:25,z:11,r:2,per:7,on:2,ph:0,dps:50},{x:-25,z:11,r:2,per:7,on:2,ph:3.5,dps:50},{x:25,z:-11,r:2,per:7,on:2,ph:3.5,dps:50}],
+    belts:[{b:[-20,-27,20,-21],v:[3,0]},{b:[-20,21,20,27],v:[-3,0]}],
+    hazards:[],bases:[{x:-40,z:0},{x:40,z:0}],flags:[{x:-30,z:0},{x:30,z:0}],points:[{x:0,z:0},{x:0,z:-20},{x:0,z:20}],bossAt:{x:0,z:0},
+    theme:{floor:0x061018,gridA:[.2,.7,1],gridB:[1,.35,.5],accent:0x4fe3ff,fog:0x02070c,sky:[0x02070c,0x08223a],pillar:'box',amb:'motes',ambColor:0x8fe8ff,rim:0x4fe3ff,skyline:[0x4fe3ff,0xff4f7a,0xffc66d,0x2f6bff]}},
+  yard:{name:'Překladiště',desc:'Nákladní nádraží se dvěma jeřáby, posuvnými lasery přes trať, dopravními pásy a plamennými tryskami u středu.',r:34,
+    pillars:[[0,-12,1.6],[0,12,1.6],[-21,-7,1.6],[21,7,1.6],[-21,7,1.6],[21,-7,1.6],[-10,-23,1.8],[10,23,1.8],[-10,23,1.8],[10,-23,1.8]],
+    sweepers:[{x:-14,z:9,len:5,spd:.8,ph:0,dps:40},{x:14,z:-9,len:5,spd:.8,ph:0,dps:40},{x:0,z:-18,len:3,ang:Math.PI/2,mv:[6,0],spd:.7,ph:0,dps:40},{x:0,z:18,len:3,ang:Math.PI/2,mv:[-6,0],spd:.7,ph:0,dps:40}],
+    vents:[{x:-6,z:-4,r:1.8,per:6,on:1.8,ph:0,dps:50},{x:6,z:4,r:1.8,per:6,on:1.8,ph:0,dps:50},{x:-6,z:4,r:1.8,per:6,on:1.8,ph:3,dps:50},{x:6,z:-4,r:1.8,per:6,on:1.8,ph:3,dps:50}],
+    belts:[{b:[-21,-18,-9,-14],v:[3,0]},{b:[9,14,21,18],v:[-3,0]}],
+    hazards:[],bases:[{x:-27,z:0},{x:27,z:0}],points:[{x:0,z:0},{x:-16,z:-16},{x:16,z:16}],bossAt:{x:10,z:0},
+    theme:{floor:0x100b16,gridA:[1,.6,.2],gridB:[.7,.35,1],accent:0xffb03d,fog:0x07040b,sky:[0x07040b,0x24123a],pillar:'box',amb:'embers',ambColor:0xffb03d,rim:0xffb03d,skyline:[0xffb03d,0xb06bff,0xff4f7a,0x3fb8ff]}},
   // Bouřková elektrárna: warned lightning strikes (STORM below); four generators around the centre, open flanks
   storm:{name:'Bouřková elektrárna',desc:'Do arény bijí ohlášené blesky. Uhni, nebo zásah přežij a nabij si ultimátku.',r:34,storm:true,
     pillars:[[-8,-8,2],[8,8,2],[-8,8,2],[8,-8,2],[-18,0,2.2],[18,0,2.2],[0,-19,1.8],[0,19,1.8],[-22,-15,1.5],[22,15,1.5],[-22,15,1.5],[22,-15,1.5]],
@@ -973,11 +1008,11 @@ export const onPeak=(map,u)=>{const P=map.levels?.find(L=>L.peak);return!!P&&hei
 
 // ---------- modes ----------
 export const MODES={
-  arena:{name:'Aréna',desc:'3 proti 3. Body za zničení soupeřů a za relikvii ve středu. Vyhrává 20 bodů.',pvp:true,maps:['core','forge','archive','observ','citadel','storm'],max:6,win:20},
-  control:{name:'Ovládnutí',desc:'3 proti 3 o tři body. Každý držený bod přidává skóre, vyhrává 100.',pvp:true,maps:['core','forge','archive','observ','citadel','storm'],max:6,win:100},
-  convoy:{name:'Konvoj relikvie',desc:'3 proti 3 o vznášející se vůz s relikvií ve středu. Trať vede napříč arénou a každý tým má na jednom jejím konci svůj cíl. Vůz jede k cíli toho týmu, který má u vozu víc hrdinů. Vyhrává, kdo ho dotlačí na konec, jinak ten, na čí straně stojí, když dojde čas.',pvp:true,maps:['core','forge','archive','observ','storm'],max:6,win:100,fixedWin:true},
+  arena:{name:'Aréna',desc:'3 proti 3. Body za zničení soupeřů a za relikvii ve středu. Vyhrává 20 bodů.',pvp:true,maps:['core','forge','archive','observ','citadel','storm','yard'],max:6,win:20},
+  control:{name:'Ovládnutí',desc:'3 proti 3 o tři body. Každý držený bod přidává skóre, vyhrává 100.',pvp:true,maps:['core','forge','archive','observ','citadel','storm','yard'],max:6,win:100},
+  convoy:{name:'Konvoj relikvie',desc:'3 proti 3 o vznášející se vůz s relikvií ve středu. Trať vede napříč arénou a každý tým má na jednom jejím konci svůj cíl. Vůz jede k cíli toho týmu, který má u vozu víc hrdinů. Vyhrává, kdo ho dotlačí na konec, jinak ten, na čí straně stojí, když dojde čas.',pvp:true,maps:['core','forge','archive','observ','storm','yard'],max:6,win:100,fixedWin:true},
   relicball:{name:'Relikviobal',desc:'3 proti 3 na dlouhém hřišti plném překážek, lávy a otáčivých laserů. Seber relikvii ve středu a doběhni s ní do soupeřovy branky, nebo ji pravým tlačítkem hoď. Kdo ji nese, pustí ji, když padne, když ho něco omráčí, nebo když rychle ztratí velký kus zdraví. Vyhrává 5 gólů.',pvp:true,maps:['pitch'],max:6,win:5},
-  ctf:{name:'Únos relikvie',desc:'3 proti 3 v Pevnosti relikvií. Ukradni soupeřovu relikvii a dones ji ke své, která musí být doma. Vyhrávají 3 únosy, při remíze rozhodne prodloužení.',pvp:true,maps:['bastion'],max:6,win:3},
+  ctf:{name:'Únos relikvie',desc:'3 proti 3 v Pevnosti relikvií nebo v Neonovém přístavu. Ukradni soupeřovu relikvii a dones ji ke své, která musí být doma. Vyhrávají 3 únosy, při remíze rozhodne prodloužení.',pvp:true,maps:['bastion','harbor'],max:6,win:3},
   mutant:{name:'Mutace týdne',desc:'3 proti 3 podle pravidel Arény, ale s dvěma mutacemi, které se mění každé pondělí. Vyhrává 20 bodů.',pvp:true,mutators:true,maps:['core','forge','archive','observ','citadel','storm'],max:6,win:20},
   elim:{name:'Eliminace',desc:'3 proti 3 na kola bez oživení. Kolo vyhrává tým, který zůstane stát. Po 40 s se aréna začne zmenšovat a mimo kruh to pálí. Vyhrávají 4 kola.',pvp:true,rounds:true,maps:['core','forge','archive','observ','citadel','storm'],max:6,win:4,time:900},
   duel:{name:'Souboj',desc:'1 proti 1 bez relikvie a bodů. Vyhrává, kdo první pětkrát zničí soupeře.',pvp:true,team:1,maps:['archive','core','sanctum'],max:2,win:5},

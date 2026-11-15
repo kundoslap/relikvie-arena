@@ -252,12 +252,54 @@ function updCartMesh(dt,t){
   K.hover.position.y=Math.sin(t*2.2)*.1;K.relic.rotation.y+=dt*1.5;
   const q=cv[1],col=q===0||q===1?TEAM_COL[q]:q===2?0xffffff:0xffc66d;K.ring.material.color.copy(HDR(col,q<0?.9:1.8));K.ring.material.opacity=q===2?.55+.45*Math.sin(t*10):1;
 }
+// Moving parts and traps of a map (shared timing with the simulation through the match clock): flame vents glow before
+// they burn, conveyor belts show running chevrons in their direction
+let trapMeshes=[];
+function chevronTex(col){const c=document.createElement('canvas');c.width=c.height=64;const x=c.getContext('2d');x.strokeStyle=col;x.lineWidth=7;x.lineCap='round';
+  for(const o of [10,34]){x.beginPath();x.moveTo(o,14);x.lineTo(o+16,32);x.lineTo(o,50);x.stroke()}
+  const t=new THREE.CanvasTexture(c);t.wrapS=t.wrapT=THREE.RepeatWrapping;return t}
+function buildTraps(map){
+  const dark=new THREE.MeshStandardMaterial({color:0x14161e,metalness:.8,roughness:.45});
+  for(const V of map.vents||[]){const g=new THREE.Group();g.position.set(V.x,0,V.z);
+    const plate=new THREE.Mesh(new THREE.CylinderGeometry(V.r,V.r+.15,.12,24),dark);plate.position.y=.06;
+    const grate=new THREE.Mesh(new THREE.RingGeometry(V.r*.25,V.r*.85,6,2),addMat(0xff8a3d,.8));grate.rotation.x=-Math.PI/2;grate.position.y=.14;
+    const ring=new THREE.Mesh(RING_GEO,addMat(0xff8a3d,1.8));ring.rotation.x=-Math.PI/2;ring.position.y=.15;ring.scale.setScalar(V.r);
+    const fire=new THREE.Mesh(new THREE.ConeGeometry(V.r*.95,4.6,18,1,true),addMat(0xff5a10,.9)),core=new THREE.Mesh(new THREE.ConeGeometry(V.r*.45,3.2,12,1,true),addMat(0xffb04a,1.2));fire.material.opacity=.55;core.material.opacity=.7;
+    fire.position.y=2.3;core.position.y=1.6;fire.visible=core.visible=false;
+    const light=new THREE.PointLight(0xff7a2a,0,11,1.5);light.position.y=1.6;
+    g.add(plate,grate,ring,fire,core,light);scene.add(g);trapMeshes.push({g,V,ring,grate,fire,core,light})}
+  for(const B of map.belts||[]){const [x0,z0,x1,z1]=B.b,g=new THREE.Group(),sp=Math.hypot(...B.v),a=Math.atan2(B.v[1],B.v[0]),along=Math.abs(Math.cos(a))>.5,len=along?x1-x0:z1-z0,wid=along?z1-z0:x1-x0;
+    g.position.set((x0+x1)/2,0,(z0+z1)/2);g.rotation.y=-a;
+    const base=new THREE.Mesh(new THREE.BoxGeometry(len,.1,wid),dark);base.position.y=.05;base.receiveShadow=true;
+    const tex=chevronTex('#ffc66d');tex.repeat.set(len/wid*2,2);const top=new THREE.Mesh(new THREE.PlaneGeometry(len,wid),new THREE.MeshBasicMaterial({map:tex,color:HDR(0xffc66d,.9),transparent:true,opacity:.55,depthWrite:false,blending:THREE.AdditiveBlending}));
+    top.rotation.x=-Math.PI/2;top.position.y=.11;g.add(base,top);
+    for(const k of [-1,1]){const rail=new THREE.Mesh(new THREE.BoxGeometry(len,.14,.16),new THREE.MeshBasicMaterial({color:HDR(0xffc66d,1.6)}));rail.position.set(0,.12,k*wid/2);g.add(rail)}
+    scene.add(g);trapMeshes.push({g,tex,spd:sp/(wid/2)})}
+}
+function updTraps(dt,t){
+  for(const T of trapMeshes){
+    if(T.tex){T.tex.offset.x-=T.spd*dt;continue}if(!T.V)continue;
+    const st=S.ventState(T.V,sweepT),on=st===2;
+    T.ring.material.opacity=on?1:st===1?.55+.45*Math.sin(t*22):.35;T.grate.material.opacity=on?.9:st===1?.6:.25;
+    T.fire.visible=T.core.visible=on;T.light.intensity=on?10:st===1?4:0;
+    if(on){T.fire.scale.set(1+.08*Math.sin(t*31),.85+.2*Math.sin(t*17+T.V.x),1+.08*Math.cos(t*27));T.core.scale.y=.8+.25*Math.sin(t*23);T.fire.rotation.y+=dt*3}}
+}
 // Relikviobal: the relic (over its carrier's head or loose on the floor) and the map's rotating laser arms
 let ballMesh=null,sweepMeshes=[],sweepT=0;
-function removeBall(){if(ballMesh){scene.remove(ballMesh.g);scene.remove(ballMesh.mark);ballMesh=null}for(const W of sweepMeshes)scene.remove(W.g);sweepMeshes=[]}
+function removeBall(){if(ballMesh){scene.remove(ballMesh.g);scene.remove(ballMesh.mark);ballMesh=null}for(const W of sweepMeshes)scene.remove(W.g);sweepMeshes=[];for(const T of trapMeshes)scene.remove(T.g);trapMeshes=[]}
 function buildBall(info){
   removeBall();const map=MAPS[info.map];
+  buildTraps(map);
   for(const W of map.sweepers||[]){const g=new THREE.Group();g.position.set(W.x,0,W.z);
+    // a sliding gate: a floor rail with a post at each end (static) and the bar with an emitter at both ends (moving)
+    if(W.mv){const rail=new THREE.Group(),c=Math.cos(W.ang||0),s=Math.sin(W.ang||0),L=Math.hypot(...W.mv),ra=Math.atan2(W.mv[1],W.mv[0]);
+      const strip=new THREE.Mesh(new THREE.PlaneGeometry(2*L+2*W.len*Math.abs(Math.cos((W.ang||0)-ra))+1,.35),addMat(0x7dffb0,.9));strip.rotation.x=-Math.PI/2;strip.rotation.z=-ra;strip.position.set(W.x,.05,W.z);strip.material.opacity=.45;rail.add(strip);
+      for(const k of [-1,1]){const p=new THREE.Mesh(new THREE.CylinderGeometry(.25,.35,.8,8),new THREE.MeshStandardMaterial({color:0x13202a,metalness:.7,roughness:.35}));p.position.set(W.x+W.mv[0]*k,.4,W.z+W.mv[1]*k);rail.add(p)}
+      scene.add(rail);trapMeshes.push({g:rail});
+      const arm=new THREE.Group(),beam=new THREE.Mesh(new THREE.BoxGeometry(W.len*2,.3,.3),new THREE.MeshBasicMaterial({color:HDR(0x7dffb0,2.6)}));beam.position.y=.95;
+      const glow=new THREE.Mesh(new THREE.PlaneGeometry(W.len*2,1.8),addMat(0x7dffb0,.8));glow.rotation.x=-Math.PI/2;glow.position.y=.06;glow.material.opacity=.3;arm.add(beam,glow);
+      for(const k of [-1,1]){const e=new THREE.Mesh(new THREE.BoxGeometry(.6,1.5,.6),new THREE.MeshStandardMaterial({color:0x13202a,metalness:.7,roughness:.35,emissive:0x0b3322}));e.position.set(k*(W.len+.3),.75,0);arm.add(e)}
+      g.add(arm);scene.add(g);sweepMeshes.push({g,arm,W});continue}
     const hub=new THREE.Mesh(new THREE.CylinderGeometry(.9,1.1,1.3,12),new THREE.MeshStandardMaterial({color:0x13202a,metalness:.7,roughness:.35}));hub.position.y=.65;
     const cap=new THREE.Mesh(new THREE.CylinderGeometry(.5,.5,.12,12),new THREE.MeshBasicMaterial({color:HDR(0x7dffb0,2)}));cap.position.y=1.36;
     const arm=new THREE.Group(),beam=new THREE.Mesh(new THREE.BoxGeometry(W.len*2,.3,.3),new THREE.MeshBasicMaterial({color:HDR(0x7dffb0,2.6)}));beam.position.y=.95;
@@ -273,7 +315,8 @@ function buildBall(info){
 function updBallMesh(dt,t){
   // the arms turn on the match clock (smoothed between snapshots)
   const st=G.last?.t;if(st!=null){sweepT+=dt;if(Math.abs(sweepT-st)>.35)sweepT=st;else sweepT+=(st-sweepT)*Math.min(1,dt*2)}
-  for(const M of sweepMeshes)M.arm.rotation.y=-S.sweepAngle(M.W,sweepT);
+  for(const M of sweepMeshes){const P=S.sweepPose(M.W,sweepT);M.g.position.set(P.x,0,P.z);M.arm.rotation.y=-P.a}
+  updTraps(dt,t);
   if(!ballMesh)return;const b=G.last?.bl,K=ballMesh;if(!b){K.g.visible=K.mark.visible=false;return}
   const [st2,x,z,car]=b,v=st2===1?views.get(car):null;K.g.visible=st2!==2;K.mark.visible=st2===0;
   K.g.scale.setScalar(v&&!v.dead?.6:1);
@@ -1078,7 +1121,12 @@ function drawHUD(){
   mg.clearRect(0,0,W,W);mg.save();mg.beginPath();mg.arc(cx,cx,cx-2,0,Math.PI*2);mg.clip();
   mg.strokeStyle='rgba(143,166,255,.5)';mg.lineWidth=3;mg.beginPath();if(map.field)mg.rect(toM(-map.field.hx),toM(-map.field.hz),2*map.field.hx*sc,2*map.field.hz*sc);else mg.arc(cx,cx,map.r*sc,0,Math.PI*2);mg.stroke();
   if(map.goals){const Gl=map.goals;for(const sd of [-1,1]){mg.fillStyle=teamHex(sd<0?0:1);mg.fillRect(toM(sd<0?-Gl.x-Gl.depth:Gl.x),toM(-Gl.w),Gl.depth*sc,2*Gl.w*sc)}}
-  for(const W of map.sweepers||[]){const a=S.sweepAngle(W,sweepT),dx=Math.cos(a)*W.len,dz=Math.sin(a)*W.len;mg.strokeStyle='#7dffb0';mg.lineWidth=3;mg.beginPath();mg.moveTo(toM(W.x-dx),toM(W.z-dz));mg.lineTo(toM(W.x+dx),toM(W.z+dz));mg.stroke()}
+  for(const B of map.belts||[]){mg.fillStyle='rgba(255,198,109,.18)';mg.fillRect(toM(B.b[0]),toM(B.b[1]),(B.b[2]-B.b[0])*sc,(B.b[3]-B.b[1])*sc);
+    const cx2=(B.b[0]+B.b[2])/2,cz2=(B.b[1]+B.b[3])/2,a=Math.atan2(B.v[1],B.v[0]),ax=Math.cos(a),az=Math.sin(a);mg.strokeStyle='rgba(255,198,109,.8)';mg.lineWidth=2;
+    for(const o of [-6,0,6]){const px=cx2+ax*o,pz=cz2+az*o;mg.beginPath();mg.moveTo(toM(px-ax*1.5-az*1.5),toM(pz-az*1.5+ax*1.5));mg.lineTo(toM(px),toM(pz));mg.lineTo(toM(px-ax*1.5+az*1.5),toM(pz-az*1.5-ax*1.5));mg.stroke()}}
+  for(const V of map.vents||[]){const st=S.ventState(V,sweepT);mg.beginPath();mg.arc(toM(V.x),toM(V.z),Math.max(2.5,V.r*sc),0,Math.PI*2);
+    if(st===2){mg.fillStyle='rgba(255,106,26,.9)';mg.fill()}else{mg.strokeStyle=st===1?'#ffb347':'rgba(255,138,61,.45)';mg.lineWidth=2;mg.stroke()}}
+  for(const W of map.sweepers||[]){const P=S.sweepPose(W,sweepT),dx=Math.cos(P.a)*W.len,dz=Math.sin(P.a)*W.len;mg.strokeStyle='#7dffb0';mg.lineWidth=3;mg.beginPath();mg.moveTo(toM(P.x-dx),toM(P.z-dz));mg.lineTo(toM(P.x+dx),toM(P.z+dz));mg.stroke()}
   map.bases.forEach((b,i)=>{mg.globalAlpha=.25;mg.fillStyle=teamHex(i);mg.beginPath();mg.arc(toM(b.x),toM(b.z),4*sc,0,Math.PI*2);mg.fill();mg.globalAlpha=1});
   mg.fillStyle='rgba(255,106,26,.45)';for(const h of map.hazards){mg.beginPath();mg.arc(toM(h.x),toM(h.z),h.r*sc,0,Math.PI*2);mg.fill()}
   (map.portals||[]).forEach((pair,i)=>{mg.strokeStyle=i?'#ff7de9':'#7df9ff';mg.lineWidth=3;for(const p of pair){mg.beginPath();mg.arc(toM(p.x),toM(p.z),Math.max(3,1.6*sc),0,Math.PI*2);mg.stroke()}});
